@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/s
 import { ACTIONS, createGame, dispatchGame, viewForPlayer, isAlive, responseProgress } from './src/game/coup.js';
 import { reconstructGame } from './src/game/handover.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
+import { trackPresence } from './src/lib/realtime.js';
 import { createSoundManager } from './src/lib/sounds.js';
 import { CHAT_MAX_LENGTH, appendChatMessage, createChatGuard, normalizeChatText } from './src/rooms/chat.js';
 import {
@@ -880,13 +881,19 @@ async function connectRoom(kind) {
       subscribedOnce = true;
       state.online = true;
       state.connection = 'connected';
-      await channel.track({
+      const presenceStatus = await trackPresence(channel, {
         playerId: state.myId,
         name: state.name,
         onlineAt: new Date().toISOString(),
         connectionId,
         publicKey: encryptionIdentity.publicKey,
       });
+      if (roomChannel !== channel) return;
+      if (presenceStatus === 'error') {
+        state.error = 'O canal abriu, mas não foi possível registrar sua cadeira. Tente entrar novamente.';
+        leaveTable();
+        return;
+      }
       if (!firstSubscription) {
         sendRoom('join_request', { id: state.myId, name: state.name, resume: true });
         if (state.isHost) {
