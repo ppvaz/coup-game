@@ -16,6 +16,24 @@ export const isAlive = (player) => activeCards(player).length > 0;
 export const activePlayers = (state) => state.players.filter(isAlive);
 export const currentPlayer = (state) => state.players.find((player) => player.id === state.currentPlayerId);
 
+export function responseProgress(state) {
+  if (!['challenge_action', 'block', 'challenge_block'].includes(state.phase)) return null;
+
+  let responders;
+  if (state.phase === 'challenge_block') {
+    responders = responderIds(state, state.pending.block.playerId);
+  } else if (state.phase === 'block' && state.pending.targetId != null) {
+    const target = state.players.find((player) => player.id === state.pending.targetId);
+    responders = target && isAlive(target) ? [target.id] : [];
+  } else {
+    responders = responderIds(state, state.pending.actorId);
+  }
+
+  const remaining = state.responseQueue.length;
+  const total = Math.max(responders.length, remaining);
+  return { submitted: Math.max(0, total - remaining), remaining, total };
+}
+
 export function createDeck(random = Math.random) {
   const cards = ROLES.flatMap((role) => [0, 1, 2].map((copy) => ({ id: `${role}-${copy}`, role, revealed: false })));
   for (let index = cards.length - 1; index > 0; index--) {

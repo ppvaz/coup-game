@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ROLES, createGame, dispatchGame, isAlive, viewForPlayer } from '../src/game/coup.js';
+import { ROLES, createGame, dispatchGame, isAlive, responseProgress, viewForPlayer } from '../src/game/coup.js';
 
 const seats = [
   { id: 'a', name: 'Ana' },
@@ -40,6 +40,32 @@ test('ação de personagem abre janela de contestação', () => {
   assert.equal(next.phase, 'challenge_action');
   assert.deepEqual(next.responseQueue, ['b', 'c']);
   assert.equal(next.players[0].coins, 2);
+});
+
+test('acompanha quantas respostas coletivas chegaram e quantas faltam', () => {
+  let state = createGame(seats, { random: () => 0.42 });
+  assert.equal(responseProgress(state), null);
+
+  state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'tax' });
+  assert.deepEqual(responseProgress(state), { submitted: 0, remaining: 2, total: 2 });
+
+  state = dispatchGame(state, { type: 'pass', actorId: 'b' });
+  assert.deepEqual(responseProgress(state), { submitted: 1, remaining: 1, total: 2 });
+});
+
+test('reinicia o progresso ao passar da janela de bloqueio para sua contestação', () => {
+  let state = createGame(seats, { random: () => 0.42 });
+  state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'foreign_aid' });
+  assert.deepEqual(responseProgress(state), { submitted: 0, remaining: 2, total: 2 });
+
+  state = dispatchGame(state, { type: 'pass', actorId: 'b' });
+  assert.deepEqual(responseProgress(state), { submitted: 1, remaining: 1, total: 2 });
+
+  state = dispatchGame(state, { type: 'block', actorId: 'c', role: 'Duque' });
+  assert.deepEqual(responseProgress(state), { submitted: 0, remaining: 2, total: 2 });
+
+  state = dispatchGame(state, { type: 'pass', actorId: 'a' });
+  assert.deepEqual(responseProgress(state), { submitted: 1, remaining: 1, total: 2 });
 });
 
 test('dez moedas obrigam golpe', () => {

@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/supabase.js';
-import { ACTIONS, createGame, dispatchGame, viewForPlayer, isAlive } from './src/game/coup.js';
+import { ACTIONS, createGame, dispatchGame, viewForPlayer, isAlive, responseProgress } from './src/game/coup.js';
 import { reconstructGame } from './src/game/handover.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
 import { createSoundManager } from './src/lib/sounds.js';
@@ -1194,7 +1194,17 @@ function modalContext() {
 }
 
 function waitingModal(title, copy) {
-  return `<div class="modal-wrap"><div class="modal"><div class="eyebrow">Aguardando a mesa</div><h2>${escapeHTML(title)}</h2>${otherPlayersHTML([state.myId])}<p class="modal-copy">${escapeHTML(copy)}</p>${timerHTML()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal"><div class="eyebrow">Aguardando a mesa</div><h2>${escapeHTML(title)}</h2>${otherPlayersHTML([state.myId])}<p class="modal-copy">${escapeHTML(copy)}</p>${timerHTML()}${responseProgressHTML()}</div></div>`;
+}
+
+function responseProgressHTML() {
+  if (!state.online) return '';
+  const progress = responseProgress(state.game);
+  if (!progress) return '';
+  const receivedLabel = progress.submitted === 1 ? 'recebida' : 'recebidas';
+  const pendingLabel = progress.remaining === 1 ? 'pendente' : 'pendentes';
+  const label = `${progress.submitted} ${receivedLabel}, ${progress.remaining} ${pendingLabel}`;
+  return `<div class="modal-response-progress" aria-label="Progresso das respostas: ${label}"><span class="received" title="Respostas ${receivedLabel}"><i aria-hidden="true">✓</i><b>${progress.submitted}</b><small>${receivedLabel}</small></span><span class="pending" title="Respostas ${pendingLabel}"><i aria-hidden="true">◷</i><b>${progress.remaining}</b><small>${pendingLabel}</small></span></div>`;
 }
 
 function modalHTML() {
@@ -1243,7 +1253,7 @@ function targetModal() {
 function challengeActionModal() {
   const pending = state.game.pending;
   const target = pending.targetId ? ` para${modalActionTargetHTML(pending)}` : '';
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Alegação de personagem</div><h2>${modalPlayerHTML(pending.actorId)} diz ser ${pending.claimedRole}${target}</h2>${otherPlayersHTML([pending.actorId, pending.targetId])}<p class="modal-copy">Se contestar e ele provar a carta, você perde uma influência. Se for blefe, ele perde.</p>${timerHTML()}<div class="response-actions"><button class="danger" id="challenge">Contestar alegação</button><button class="primary" id="allow">Permitir ação</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Alegação de personagem</div><h2>${modalPlayerHTML(pending.actorId)} diz ser ${pending.claimedRole}${target}</h2>${otherPlayersHTML([pending.actorId, pending.targetId])}<p class="modal-copy">Se contestar e ele provar a carta, você perde uma influência. Se for blefe, ele perde.</p>${timerHTML()}${responseProgressHTML()}<div class="response-actions"><button class="danger" id="challenge">Contestar alegação</button><button class="primary" id="allow">Permitir ação</button></div></div>${modalContext()}</div></div>`;
 }
 
 function blockChoiceModal() {
@@ -1252,14 +1262,14 @@ function blockChoiceModal() {
   const intent = pending.targetId
     ? `quer${modalActionTargetHTML(pending)}`
     : `quer ${ACTIONS[pending.action].label.toLowerCase()}`;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${modalPlayerHTML(pending.actorId)} ${intent}</h2>${otherPlayersHTML([pending.actorId, pending.targetId])}<p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p>${timerHTML()}<div class="card-grid">${roles.map((role) => `<button class="role-card" data-block-role="${role}" style="--portrait:url('${PORTRAITS[role]}')"><h3>${role}</h3><p>${BLOCK_HINTS[role]}</p></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${modalPlayerHTML(pending.actorId)} ${intent}</h2>${otherPlayersHTML([pending.actorId, pending.targetId])}<p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p>${timerHTML()}${responseProgressHTML()}<div class="card-grid">${roles.map((role) => `<button class="role-card" data-block-role="${role}" style="--portrait:url('${PORTRAITS[role]}')"><h3>${role}</h3><p>${BLOCK_HINTS[role]}</p></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext()}</div></div>`;
 }
 
 function blockClaimModal() {
   const pending = state.game.pending;
   const block = pending.block;
   const eyebrow = pending.action === 'assassinate' ? 'Alvo do assassinato · Bloqueio declarado' : 'Bloqueio declarado';
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">${eyebrow}</div><h2>${modalPlayerHTML(block.playerId)} diz ser ${block.role}</h2>${otherPlayersHTML([block.playerId, pending.actorId])}<p class="modal-copy">${playerName(block.playerId)} bloqueou ${ACTIONS[pending.action].label.toLowerCase()}. Você pode aceitar ou contestar a alegação.</p>${timerHTML()}<div class="response-actions"><button class="danger" id="contest-block">Contestar bloqueio</button><button class="primary" id="accept-block">Aceitar bloqueio</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">${eyebrow}</div><h2>${modalPlayerHTML(block.playerId)} diz ser ${block.role}</h2>${otherPlayersHTML([block.playerId, pending.actorId])}<p class="modal-copy">${playerName(block.playerId)} bloqueou ${ACTIONS[pending.action].label.toLowerCase()}. Você pode aceitar ou contestar a alegação.</p>${timerHTML()}${responseProgressHTML()}<div class="response-actions"><button class="danger" id="contest-block">Contestar bloqueio</button><button class="primary" id="accept-block">Aceitar bloqueio</button></div></div>${modalContext()}</div></div>`;
 }
 
 function revealModal() {
