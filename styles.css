@@ -238,10 +238,22 @@ h1 em {
   border-color: rgba(217, 181, 107, 0.55);
   color: var(--ivory);
 }
-.sound-toggle span {
+.sound-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
   min-width: 12px;
   color: var(--gold);
   font-size: 15px;
+  line-height: 1;
+}
+.sound-icon.muted::after {
+  position: absolute;
+  width: 1px;
+  height: 18px;
+  content: '';
+  background: currentColor;
+  transform: rotate(42deg);
 }
 .sound-toggle small {
   font-size: 8px;
