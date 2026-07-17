@@ -299,14 +299,21 @@ h1 em {
 }
 .sound-icon svg {
   display: block;
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
   overflow: visible;
-  fill: currentColor;
+  fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.45;
+  stroke-width: 1.7;
+}
+.sound-speaker {
+  fill: currentColor;
+  stroke: none;
+}
+.sound-icon.muted .sound-waves {
+  opacity: 0;
 }
 .sound-icon.muted::before,
 .sound-icon.muted::after {
