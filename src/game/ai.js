@@ -18,13 +18,20 @@ export function awaitedPlayerId(state) {
 export function botCommand(state, botId, random = Math.random) {
   const bot = state.players.find((player) => player.id === botId);
   switch (state.phase) {
-    case 'turn': return declareCommand(state, bot, random);
-    case 'challenge_action': return challengeOrPass(state, bot, state.pending.claimedRole, random);
-    case 'challenge_block': return challengeOrPass(state, bot, state.pending.block.role, random);
-    case 'block': return blockOrPass(state, bot, random);
-    case 'choose_influence': return { type: 'reveal_influence', actorId: bot.id, cardId: chooseLoss(bot) };
-    case 'exchange': return { type: 'choose_exchange', actorId: bot.id, cardIds: chooseExchange(state) };
-    default: throw new Error(`Bot sem jogada para a fase ${state.phase}.`);
+    case 'turn':
+      return declareCommand(state, bot, random);
+    case 'challenge_action':
+      return challengeOrPass(state, bot, state.pending.claimedRole, random);
+    case 'challenge_block':
+      return challengeOrPass(state, bot, state.pending.block.role, random);
+    case 'block':
+      return blockOrPass(state, bot, random);
+    case 'choose_influence':
+      return { type: 'reveal_influence', actorId: bot.id, cardId: chooseLoss(bot) };
+    case 'exchange':
+      return { type: 'choose_exchange', actorId: bot.id, cardIds: chooseExchange(state) };
+    default:
+      throw new Error(`Bot sem jogada para a fase ${state.phase}.`);
   }
 }
 
@@ -45,7 +52,9 @@ function declareCommand(state, bot, random) {
 }
 
 function challengeOrPass(state, bot, claimedRole, random) {
-  const revealedCopies = state.players.flatMap((player) => player.cards).filter((card) => card.revealed && card.role === claimedRole).length;
+  const revealedCopies = state.players
+    .flatMap((player) => player.cards)
+    .filter((card) => card.revealed && card.role === claimedRole).length;
   const held = activeCards(bot).filter((card) => card.role === claimedRole).length;
   const evidence = held + revealedCopies;
   let chance = evidence >= 3 ? 1 : evidence === 2 ? 0.68 : evidence === 1 ? 0.22 : 0.1;
@@ -71,7 +80,8 @@ function chooseExchange(state) {
   const count = state.pending.exchangeCount;
   const sorted = [...state.exchangeOptions].sort((left, right) => keepRank(left.role) - keepRank(right.role));
   const chosen = [];
-  for (const card of sorted) if (chosen.length < count && !chosen.some((pick) => pick.role === card.role)) chosen.push(card);
+  for (const card of sorted)
+    if (chosen.length < count && !chosen.some((pick) => pick.role === card.role)) chosen.push(card);
   for (const card of sorted) if (chosen.length < count && !chosen.includes(card)) chosen.push(card);
   return chosen.map((card) => card.id);
 }

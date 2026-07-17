@@ -1,1 +1,467 @@
-:root{--ink:#080807;--panel:rgba(18,16,14,.82);--line:rgba(229,192,116,.22);--gold:#d9b56b;--ivory:#eee6d6;--muted:#9d968b;--red:#7b2628;--green:#6e8768}*{box-sizing:border-box}body{margin:0;background:#080807;color:var(--ivory);font-family:"DM Sans",sans-serif;min-height:100vh;overflow-x:hidden}button,input{font:inherit}button{cursor:pointer}.shell{min-height:100vh;background:linear-gradient(90deg,rgba(6,6,5,.91),rgba(6,6,5,.42) 52%,rgba(6,6,5,.84)),url('assets/council-chamber.png') center/cover fixed}.topbar{height:74px;display:flex;align-items:center;justify-content:space-between;padding:0 5vw;border-bottom:1px solid var(--line);background:rgba(7,7,6,.55);backdrop-filter:blur(18px)}.brand{font:700 25px "Cormorant Garamond";letter-spacing:.2em}.brand span{color:var(--gold)}.status{display:flex;align-items:center;gap:10px;color:#b9b1a3;font-size:12px;letter-spacing:.12em;text-transform:uppercase}.dot{width:7px;height:7px;border-radius:50%;background:#73a675;box-shadow:0 0 12px #73a675}.landing{display:grid;grid-template-columns:1.1fr .9fr;gap:7vw;align-items:center;min-height:calc(100vh - 74px);padding:6vh 8vw}.eyebrow{display:flex;align-items:center;gap:12px;text-transform:uppercase;letter-spacing:.2em;font-size:11px;color:var(--gold)}.eyebrow:before{content:"";width:36px;height:1px;background:var(--gold)}h1{font:600 clamp(62px,9vw,130px)/.78 "Cormorant Garamond";letter-spacing:-.045em;margin:28px 0;color:#f4ecdc}h1 em{font-weight:500;color:var(--gold)}.lead{font:500 22px/1.55 "Cormorant Garamond";max-width:530px;color:#c8c0b2}.feature-row{display:flex;gap:28px;margin-top:38px;color:#a59d90;font-size:13px}.feature-row b{display:block;color:#e0d7c7;font:600 26px "Cormorant Garamond"}.glass{background:linear-gradient(145deg,rgba(31,27,23,.91),rgba(13,12,11,.87));border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.55);backdrop-filter:blur(20px);padding:34px}.glass h2{font:600 32px "Cormorant Garamond";margin:0 0 6px}.sub{color:var(--muted);font-size:13px;margin-bottom:28px}.mode{display:flex;padding:16px;border:1px solid rgba(255,255,255,.09);margin:10px 0;gap:14px;align-items:center;background:rgba(255,255,255,.025);transition:.2s}.mode:hover,.mode.active{border-color:var(--gold);background:rgba(217,181,107,.08)}.mode-icon{width:42px;height:42px;border:1px solid var(--line);display:grid;place-items:center;color:var(--gold);font-family:serif}.mode strong{display:block;font-size:14px}.mode small{color:var(--muted)}.field{margin:22px 0 14px}.field label{display:block;text-transform:uppercase;letter-spacing:.15em;font-size:10px;color:var(--muted);margin-bottom:8px}.field input{width:100%;padding:14px;background:#0b0a09;border:1px solid rgba(255,255,255,.12);color:#fff;outline:none}.field input:focus{border-color:var(--gold)}.primary{width:100%;border:0;padding:16px;background:var(--gold);color:#18130c;text-transform:uppercase;font-weight:700;letter-spacing:.14em;font-size:11px}.primary:hover{background:#eccb84}.fine{font-size:10px;color:#777168;text-align:center;margin:13px 0 0}.game{min-height:100vh;background:radial-gradient(circle at 50% 42%,rgba(36,25,17,.1),rgba(5,5,4,.75)),url('assets/council-chamber.png') center/cover fixed}.gamebar{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 3vw;background:rgba(5,5,4,.78);border-bottom:1px solid var(--line)}.round{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted)}.ghost{background:none;border:1px solid var(--line);color:#bbb2a4;padding:9px 13px;font-size:11px}.board{position:relative;min-height:calc(100vh - 64px);padding:24px 3vw 170px}.opponents{display:flex;justify-content:center;gap:16px;flex-wrap:wrap}.player{width:190px;padding:14px;background:rgba(12,11,10,.8);border:1px solid rgba(255,255,255,.09);position:relative}.player.turn{border-color:var(--gold);box-shadow:0 0 25px rgba(217,181,107,.12)}.player.dead{opacity:.38;filter:grayscale(1)}.avatar{width:35px;height:35px;border-radius:50%;background:linear-gradient(135deg,#8c6644,#331c1b);display:grid;place-items:center;font:600 18px "Cormorant Garamond";float:left;margin-right:10px}.player strong{font-size:12px}.coins{color:var(--gold);font-size:11px;margin-top:4px}.influence{display:flex;gap:5px;clear:both;padding-top:12px}.mini-card{height:30px;flex:1;background:linear-gradient(135deg,#3c2520,#110e0c);border:1px solid rgba(217,181,107,.24)}.mini-card.lost{opacity:.25}.center{max-width:640px;margin:55px auto;text-align:center}.turn-copy{font:500 15px "Cormorant Garamond";color:#c5baa9}.turn-copy b{font-size:23px;color:#f2e9d8}.log{margin:22px auto 0;max-width:520px;height:92px;overflow:auto;text-align:left;padding:12px 16px;border-left:1px solid var(--line);color:#91897d;font-size:11px;line-height:1.8}.log div:last-child{color:#ddd3c4}.hand{position:fixed;left:0;right:0;bottom:0;min-height:160px;background:linear-gradient(180deg,rgba(7,7,6,.62),#080807 28%);display:flex;justify-content:center;align-items:flex-end;gap:12px;padding:20px 3vw}.role-card{width:130px;height:165px;padding:14px;background:linear-gradient(145deg,#472420,#171210 68%);border:1px solid #8a6a3d;box-shadow:0 14px 30px #000;text-align:left;position:relative}.role-card.lost{filter:grayscale(1);opacity:.45}.role-card small{font-size:8px;letter-spacing:.16em;color:var(--gold)}.role-card h3{font:600 21px "Cormorant Garamond";margin:55px 0 4px}.role-card p{font-size:9px;color:#b3aa9c;margin:0}.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;width:min(680px,65vw);align-self:center}.action{padding:12px 8px;background:#151310;border:1px solid rgba(255,255,255,.1);color:#d8d0c2;text-align:left}.action:hover:not(:disabled){border-color:var(--gold);background:#241d14}.action:disabled{opacity:.3;cursor:not-allowed}.action b{display:block;font:600 14px "Cormorant Garamond"}.action small{font-size:8px;color:#8e867a}.modal-wrap{position:fixed;inset:0;background:rgba(0,0,0,.76);display:grid;place-items:center;z-index:5}.modal{width:min(440px,90vw);background:#151310;border:1px solid var(--gold);padding:28px}.modal h2{font:600 29px "Cormorant Garamond";margin:0}.targets{display:grid;gap:8px;margin:22px 0}.target{padding:13px;background:#0c0b0a;border:1px solid rgba(255,255,255,.1);color:#ddd;text-align:left}.target:hover{border-color:var(--gold)}.winner{font:600 44px "Cormorant Garamond";color:var(--gold)}@media(max-width:800px){.landing{grid-template-columns:1fr;padding:48px 6vw}.landing>div:first-child{display:none}.glass{padding:24px}.board{padding-bottom:310px}.player{width:145px}.actions{position:fixed;bottom:170px;left:3vw;right:3vw;width:auto;grid-template-columns:repeat(2,1fr)}.role-card{width:115px;height:145px}.hand{justify-content:flex-start;overflow-x:auto}.feature-row{gap:16px}}
+:root {
+  --ink: #080807;
+  --panel: rgba(18, 16, 14, 0.82);
+  --line: rgba(229, 192, 116, 0.22);
+  --gold: #d9b56b;
+  --ivory: #eee6d6;
+  --muted: #9d968b;
+  --red: #7b2628;
+  --green: #6e8768;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #080807;
+  color: var(--ivory);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+.shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(90deg, rgba(6, 6, 5, 0.91), rgba(6, 6, 5, 0.42) 52%, rgba(6, 6, 5, 0.84)),
+    url('assets/council-chamber.png') center/cover fixed;
+}
+.topbar {
+  height: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 5vw;
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 7, 6, 0.55);
+  backdrop-filter: blur(18px);
+}
+.brand {
+  font: 700 25px 'Cormorant Garamond';
+  letter-spacing: 0.2em;
+}
+.brand span {
+  color: var(--gold);
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #b9b1a3;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #73a675;
+  box-shadow: 0 0 12px #73a675;
+}
+.landing {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 7vw;
+  align-items: center;
+  min-height: calc(100vh - 74px);
+  padding: 6vh 8vw;
+}
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 11px;
+  color: var(--gold);
+}
+.eyebrow:before {
+  content: '';
+  width: 36px;
+  height: 1px;
+  background: var(--gold);
+}
+h1 {
+  font: 600 clamp(62px, 9vw, 130px)/0.78 'Cormorant Garamond';
+  letter-spacing: -0.045em;
+  margin: 28px 0;
+  color: #f4ecdc;
+}
+h1 em {
+  font-weight: 500;
+  color: var(--gold);
+}
+.lead {
+  font: 500 22px/1.55 'Cormorant Garamond';
+  max-width: 530px;
+  color: #c8c0b2;
+}
+.feature-row {
+  display: flex;
+  gap: 28px;
+  margin-top: 38px;
+  color: #a59d90;
+  font-size: 13px;
+}
+.feature-row b {
+  display: block;
+  color: #e0d7c7;
+  font: 600 26px 'Cormorant Garamond';
+}
+.glass {
+  background: linear-gradient(145deg, rgba(31, 27, 23, 0.91), rgba(13, 12, 11, 0.87));
+  border: 1px solid var(--line);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(20px);
+  padding: 34px;
+}
+.glass h2 {
+  font: 600 32px 'Cormorant Garamond';
+  margin: 0 0 6px;
+}
+.sub {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 28px;
+}
+.mode {
+  display: flex;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  margin: 10px 0;
+  gap: 14px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.025);
+  transition: 0.2s;
+}
+.mode:hover,
+.mode.active {
+  border-color: var(--gold);
+  background: rgba(217, 181, 107, 0.08);
+}
+.mode-icon {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  color: var(--gold);
+  font-family: serif;
+}
+.mode strong {
+  display: block;
+  font-size: 14px;
+}
+.mode small {
+  color: var(--muted);
+}
+.field {
+  margin: 22px 0 14px;
+}
+.field label {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.field input {
+  width: 100%;
+  padding: 14px;
+  background: #0b0a09;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  outline: none;
+}
+.field input:focus {
+  border-color: var(--gold);
+}
+.primary {
+  width: 100%;
+  border: 0;
+  padding: 16px;
+  background: var(--gold);
+  color: #18130c;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+}
+.primary:hover {
+  background: #eccb84;
+}
+.fine {
+  font-size: 10px;
+  color: #777168;
+  text-align: center;
+  margin: 13px 0 0;
+}
+.game {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(36, 25, 17, 0.1), rgba(5, 5, 4, 0.75)),
+    url('assets/council-chamber.png') center/cover fixed;
+}
+.gamebar {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 3vw;
+  background: rgba(5, 5, 4, 0.78);
+  border-bottom: 1px solid var(--line);
+}
+.round {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+.ghost {
+  background: none;
+  border: 1px solid var(--line);
+  color: #bbb2a4;
+  padding: 9px 13px;
+  font-size: 11px;
+}
+.board {
+  position: relative;
+  min-height: calc(100vh - 64px);
+  padding: 24px 3vw 170px;
+}
+.opponents {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.player {
+  width: 190px;
+  padding: 14px;
+  background: rgba(12, 11, 10, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  position: relative;
+}
+.player.turn {
+  border-color: var(--gold);
+  box-shadow: 0 0 25px rgba(217, 181, 107, 0.12);
+}
+.player.dead {
+  opacity: 0.38;
+  filter: grayscale(1);
+}
+.avatar {
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8c6644, #331c1b);
+  display: grid;
+  place-items: center;
+  font: 600 18px 'Cormorant Garamond';
+  float: left;
+  margin-right: 10px;
+}
+.player strong {
+  font-size: 12px;
+}
+.coins {
+  color: var(--gold);
+  font-size: 11px;
+  margin-top: 4px;
+}
+.influence {
+  display: flex;
+  gap: 5px;
+  clear: both;
+  padding-top: 12px;
+}
+.mini-card {
+  height: 30px;
+  flex: 1;
+  background: linear-gradient(135deg, #3c2520, #110e0c);
+  border: 1px solid rgba(217, 181, 107, 0.24);
+}
+.mini-card.lost {
+  opacity: 0.25;
+}
+.center {
+  max-width: 640px;
+  margin: 55px auto;
+  text-align: center;
+}
+.turn-copy {
+  font: 500 15px 'Cormorant Garamond';
+  color: #c5baa9;
+}
+.turn-copy b {
+  font-size: 23px;
+  color: #f2e9d8;
+}
+.log {
+  margin: 22px auto 0;
+  max-width: 520px;
+  height: 92px;
+  overflow: auto;
+  text-align: left;
+  padding: 12px 16px;
+  border-left: 1px solid var(--line);
+  color: #91897d;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.log div:last-child {
+  color: #ddd3c4;
+}
+.hand {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 160px;
+  background: linear-gradient(180deg, rgba(7, 7, 6, 0.62), #080807 28%);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 20px 3vw;
+}
+.role-card {
+  width: 130px;
+  height: 165px;
+  padding: 14px;
+  background: linear-gradient(145deg, #472420, #171210 68%);
+  border: 1px solid #8a6a3d;
+  box-shadow: 0 14px 30px #000;
+  text-align: left;
+  position: relative;
+}
+.role-card.lost {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.role-card small {
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  color: var(--gold);
+}
+.role-card h3 {
+  font: 600 21px 'Cormorant Garamond';
+  margin: 55px 0 4px;
+}
+.role-card p {
+  font-size: 9px;
+  color: #b3aa9c;
+  margin: 0;
+}
+.actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  width: min(680px, 65vw);
+  align-self: center;
+}
+.action {
+  padding: 12px 8px;
+  background: #151310;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #d8d0c2;
+  text-align: left;
+}
+.action:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: #241d14;
+}
+.action:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.action b {
+  display: block;
+  font: 600 14px 'Cormorant Garamond';
+}
+.action small {
+  font-size: 8px;
+  color: #8e867a;
+}
+.modal-wrap {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.76);
+  display: grid;
+  place-items: center;
+  z-index: 5;
+}
+.modal {
+  width: min(440px, 90vw);
+  background: #151310;
+  border: 1px solid var(--gold);
+  padding: 28px;
+}
+.modal h2 {
+  font: 600 29px 'Cormorant Garamond';
+  margin: 0;
+}
+.targets {
+  display: grid;
+  gap: 8px;
+  margin: 22px 0;
+}
+.target {
+  padding: 13px;
+  background: #0c0b0a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ddd;
+  text-align: left;
+}
+.target:hover {
+  border-color: var(--gold);
+}
+.winner {
+  font: 600 44px 'Cormorant Garamond';
+  color: var(--gold);
+}
+@media (max-width: 800px) {
+  .landing {
+    grid-template-columns: 1fr;
+    padding: 48px 6vw;
+  }
+  .landing > div:first-child {
+    display: none;
+  }
+  .glass {
+    padding: 24px;
+  }
+  .board {
+    padding-bottom: 310px;
+  }
+  .player {
+    width: 145px;
+  }
+  .actions {
+    position: fixed;
+    bottom: 170px;
+    left: 3vw;
+    right: 3vw;
+    width: auto;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .role-card {
+    width: 115px;
+    height: 145px;
+  }
+  .hand {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+  .feature-row {
+    gap: 16px;
+  }
+}

@@ -55,15 +55,15 @@ http://SEU-IP:8099/sala/SW8X4
 
 O objetivo é ser o último jogador com influência. Cada jogador começa com duas influências e duas moedas.
 
-| Ação | Efeito | Pode ser bloqueada |
-| --- | --- | --- |
-| Renda | Recebe 1 moeda | Não |
-| Ajuda Externa | Recebe 2 moedas | Duque, por qualquer rival |
-| Imposto | Alegue Duque e receba 3 moedas | Contestável |
-| Roubo | Alegue Capitão e retire até 2 moedas de um alvo | Capitão ou Embaixador, pelo alvo |
-| Troca | Alegue Embaixador e troque influências | Contestável |
-| Assassinato | Alegue Assassina, pague 3 moedas e elimine uma influência | Condessa, pelo alvo |
-| Golpe | Pague 7 moedas e elimine uma influência | Não |
+| Ação          | Efeito                                                    | Pode ser bloqueada               |
+| ------------- | --------------------------------------------------------- | -------------------------------- |
+| Renda         | Recebe 1 moeda                                            | Não                              |
+| Ajuda Externa | Recebe 2 moedas                                           | Duque, por qualquer rival        |
+| Imposto       | Alegue Duque e receba 3 moedas                            | Contestável                      |
+| Roubo         | Alegue Capitão e retire até 2 moedas de um alvo           | Capitão ou Embaixador, pelo alvo |
+| Troca         | Alegue Embaixador e troque influências                    | Contestável                      |
+| Assassinato   | Alegue Assassina, pague 3 moedas e elimine uma influência | Condessa, pelo alvo              |
+| Golpe         | Pague 7 moedas e elimine uma influência                   | Não                              |
 
 Com 10 moedas ou mais, o Golpe é obrigatório. Uma alegação de personagem pode ser um blefe e pode ser contestada. Quem perde uma contestação revela uma influência; se a alegação era verdadeira, a carta volta ao baralho e é substituída.
 

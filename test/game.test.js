@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ROLES, createGame, dispatchGame, viewForPlayer } from '../src/game/coup.js';
 
-const seats = [{ id: 'a', name: 'Ana' }, { id: 'b', name: 'Bia' }, { id: 'c', name: 'Caio' }];
+const seats = [
+  { id: 'a', name: 'Ana' },
+  { id: 'b', name: 'Bia' },
+  { id: 'c', name: 'Caio' },
+];
 
 const setHand = (state, playerId, roles) => {
   const player = state.players.find((candidate) => candidate.id === playerId);
@@ -10,7 +14,8 @@ const setHand = (state, playerId, roles) => {
 };
 const activeRoles = (player) => player.cards.filter((card) => !card.revealed).map((card) => card.role);
 const revealedCount = (player) => player.cards.filter((card) => card.revealed).length;
-const passAll = (state, actorIds) => actorIds.reduce((current, actorId) => dispatchGame(current, { type: 'pass', actorId }), state);
+const passAll = (state, actorIds) =>
+  actorIds.reduce((current, actorId) => dispatchGame(current, { type: 'pass', actorId }), state);
 
 test('mantém mãos adversárias secretas', () => {
   const state = createGame(seats, { random: () => 0.42 });
@@ -39,7 +44,10 @@ test('ação de personagem abre janela de contestação', () => {
 test('dez moedas obrigam golpe', () => {
   const state = createGame(seats, { random: () => 0.42 });
   state.players[0].coins = 10;
-  assert.throws(() => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'income' }), /Golpe é obrigatório/);
+  assert.throws(
+    () => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'income' }),
+    /Golpe é obrigatório/,
+  );
 });
 
 test('contestação perdida: a carta provada é trocada e o contestador perde influência', () => {
@@ -156,15 +164,24 @@ test('roubo leva no máximo as moedas do alvo', () => {
 test('não permite roubar alvo sem moedas', () => {
   const state = createGame(seats, { random: () => 0.42 });
   state.players[1].coins = 0;
-  assert.throws(() => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'steal', targetId: 'b' }), /não possui moedas/);
+  assert.throws(
+    () => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'steal', targetId: 'b' }),
+    /não possui moedas/,
+  );
 });
 
 test('não permite mirar a si mesmo nem agir sem moedas suficientes', () => {
   const state = createGame(seats, { random: () => 0.42 });
   state.players[0].coins = 7;
-  assert.throws(() => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'coup', targetId: 'a' }), /si mesmo/);
+  assert.throws(
+    () => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'coup', targetId: 'a' }),
+    /si mesmo/,
+  );
   const poor = createGame(seats, { random: () => 0.42 });
-  assert.throws(() => dispatchGame(poor, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' }), /insuficientes/);
+  assert.throws(
+    () => dispatchGame(poor, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' }),
+    /insuficientes/,
+  );
 });
 
 test('troca do embaixador devolve as cartas não escolhidas ao baralho', () => {
@@ -176,10 +193,19 @@ test('troca do embaixador devolve as cartas não escolhidas ao baralho', () => {
   assert.equal(state.exchangeOptions.length, 4);
   assert.equal(viewForPlayer(state, 'b').exchangeOptions.length, 0);
   const chosen = state.exchangeOptions.slice(2).map((card) => card.id);
-  assert.throws(() => dispatchGame(state, { type: 'choose_exchange', actorId: 'a', cardIds: [chosen[0]] }), /Quantidade/);
-  assert.throws(() => dispatchGame(state, { type: 'choose_exchange', actorId: 'a', cardIds: [chosen[0], chosen[0]] }), /Quantidade/);
+  assert.throws(
+    () => dispatchGame(state, { type: 'choose_exchange', actorId: 'a', cardIds: [chosen[0]] }),
+    /Quantidade/,
+  );
+  assert.throws(
+    () => dispatchGame(state, { type: 'choose_exchange', actorId: 'a', cardIds: [chosen[0], chosen[0]] }),
+    /Quantidade/,
+  );
   state = dispatchGame(state, { type: 'choose_exchange', actorId: 'a', cardIds: chosen });
-  assert.deepEqual(state.players[0].cards.map((card) => card.id), chosen);
+  assert.deepEqual(
+    state.players[0].cards.map((card) => card.id),
+    chosen,
+  );
   assert.equal(state.deck.length, deckSize);
   const all = [...state.deck, ...state.players.flatMap((player) => player.cards)];
   for (const role of ROLES) assert.equal(all.filter((card) => card.role === role).length, 3);
@@ -188,16 +214,24 @@ test('troca do embaixador devolve as cartas não escolhidas ao baralho', () => {
 
 test('resposta fora de ordem é rejeitada e eliminados saem da fila', () => {
   let state = createGame(seats, { random: () => 0.42 });
-  state.players[2].cards.forEach((card) => { card.revealed = true; });
+  state.players[2].cards.forEach((card) => {
+    card.revealed = true;
+  });
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'tax' });
   assert.deepEqual(state.responseQueue, ['b']);
-  const ordered = dispatchGame(createGame(seats, { random: () => 0.42 }), { type: 'declare_action', actorId: 'a', action: 'tax' });
+  const ordered = dispatchGame(createGame(seats, { random: () => 0.42 }), {
+    type: 'declare_action',
+    actorId: 'a',
+    action: 'tax',
+  });
   assert.throws(() => dispatchGame(ordered, { type: 'pass', actorId: 'c' }), /próximo/);
 });
 
 test('turno pula jogadores eliminados', () => {
   let state = createGame(seats, { random: () => 0.42 });
-  state.players[1].cards.forEach((card) => { card.revealed = true; });
+  state.players[1].cards.forEach((card) => {
+    card.revealed = true;
+  });
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'income' });
   assert.equal(state.currentPlayerId, 'c');
 });
@@ -239,7 +273,10 @@ test('quem perde a contestação escolhe a influência e a ação continua para 
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' });
   state = dispatchGame(state, { type: 'challenge', actorId: 'b' });
   assert.equal(state.phase, 'choose_influence');
-  assert.throws(() => dispatchGame(state, { type: 'reveal_influence', actorId: 'a', cardId: 'a-Duque-1' }), /não deve revelar/);
+  assert.throws(
+    () => dispatchGame(state, { type: 'reveal_influence', actorId: 'a', cardId: 'a-Duque-1' }),
+    /não deve revelar/,
+  );
   state = dispatchGame(state, { type: 'reveal_influence', actorId: 'b', cardId: 'b-Duque-1' });
   assert.deepEqual(activeRoles(state.players[1]), ['Condessa']);
   assert.equal(state.phase, 'block');
@@ -258,5 +295,8 @@ test('última influência perdida define o vencedor', () => {
   assert.equal(state.status, 'finished');
   assert.equal(state.phase, 'finished');
   assert.equal(state.winnerId, 'a');
-  assert.throws(() => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'income' }), /não está em andamento/);
+  assert.throws(
+    () => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'income' }),
+    /não está em andamento/,
+  );
 });

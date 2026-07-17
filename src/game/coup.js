@@ -119,13 +119,25 @@ function resolveAction(state) {
   const actor = assertActor(state, pending.actorId);
   const target = pending.targetId == null ? null : state.players.find((player) => player.id === pending.targetId);
   if (target && !isAlive(target)) {
-    state.log.push({ type: 'action_fizzled', action: pending.action, actorId: actor.id, targetId: target.id, at: Date.now() });
+    state.log.push({
+      type: 'action_fizzled',
+      action: pending.action,
+      actorId: actor.id,
+      targetId: target.id,
+      at: Date.now(),
+    });
     return finishTurn(state);
   }
   switch (pending.action) {
-    case 'income': actor.coins += 1; break;
-    case 'foreign_aid': actor.coins += 2; break;
-    case 'tax': actor.coins += 3; break;
+    case 'income':
+      actor.coins += 1;
+      break;
+    case 'foreign_aid':
+      actor.coins += 2;
+      break;
+    case 'tax':
+      actor.coins += 3;
+      break;
     case 'steal': {
       const amount = Math.min(2, target.coins);
       target.coins -= amount;
@@ -144,7 +156,13 @@ function resolveAction(state) {
       return;
     }
   }
-  state.log.push({ type: 'action_resolved', action: pending.action, actorId: actor.id, targetId: target?.id, at: Date.now() });
+  state.log.push({
+    type: 'action_resolved',
+    action: pending.action,
+    actorId: actor.id,
+    targetId: target?.id,
+    at: Date.now(),
+  });
   finishTurn(state);
 }
 
@@ -152,9 +170,9 @@ function beginBlocksOrResolve(state) {
   const action = ACTIONS[state.pending.action];
   if (!action.blockedBy) return resolveAction(state);
   // O contestador pode ter sido eliminado ao perder a contestação; um morto não bloqueia.
-  const blockers = (state.pending.targetId == null
-    ? responderIds(state, state.pending.actorId)
-    : [state.pending.targetId]).filter((id) => isAlive(state.players.find((player) => player.id === id)));
+  const blockers = (
+    state.pending.targetId == null ? responderIds(state, state.pending.actorId) : [state.pending.targetId]
+  ).filter((id) => isAlive(state.players.find((player) => player.id === id)));
   if (!blockers.length) return resolveAction(state);
   state.phase = 'block';
   state.responseQueue = blockers;
@@ -181,19 +199,33 @@ export function dispatchGame(source, command) {
   const actor = assertActor(state, command.actorId);
 
   if (command.type === 'declare_action') {
-    if (state.phase !== 'turn' || command.actorId !== state.currentPlayerId) throw new Error('Não é o turno deste jogador.');
+    if (state.phase !== 'turn' || command.actorId !== state.currentPlayerId)
+      throw new Error('Não é o turno deste jogador.');
     const action = ACTIONS[command.action];
     if (!action) throw new Error('Ação desconhecida.');
-    if (actor.coins >= 10 && command.action !== 'coup') throw new Error('Com 10 moedas ou mais, o Golpe é obrigatório.');
+    if (actor.coins >= 10 && command.action !== 'coup')
+      throw new Error('Com 10 moedas ou mais, o Golpe é obrigatório.');
     if (action.cost && actor.coins < action.cost) throw new Error('Moedas insuficientes.');
     if (action.targeted) {
       if (command.targetId === actor.id) throw new Error('O jogador não pode escolher a si mesmo.');
       assertActor(state, command.targetId);
     }
-    if (command.action === 'steal' && state.players.find((p) => p.id === command.targetId).coins === 0) throw new Error('O alvo não possui moedas.');
+    if (command.action === 'steal' && state.players.find((p) => p.id === command.targetId).coins === 0)
+      throw new Error('O alvo não possui moedas.');
     if (action.cost) actor.coins -= action.cost;
-    state.pending = { action: command.action, actorId: actor.id, targetId: command.targetId ?? null, claimedRole: action.role ?? null };
-    state.log.push({ type: 'action_declared', action: command.action, actorId: actor.id, targetId: command.targetId, at: Date.now() });
+    state.pending = {
+      action: command.action,
+      actorId: actor.id,
+      targetId: command.targetId ?? null,
+      claimedRole: action.role ?? null,
+    };
+    state.log.push({
+      type: 'action_declared',
+      action: command.action,
+      actorId: actor.id,
+      targetId: command.targetId,
+      at: Date.now(),
+    });
     if (command.action === 'income' || command.action === 'coup') resolveAction(state);
     else if (action.role) {
       state.phase = 'challenge_action';
@@ -203,7 +235,8 @@ export function dispatchGame(source, command) {
   }
 
   if (command.type === 'pass') {
-    if (!['challenge_action', 'block', 'challenge_block'].includes(state.phase)) throw new Error('Não há resposta pendente.');
+    if (!['challenge_action', 'block', 'challenge_block'].includes(state.phase))
+      throw new Error('Não há resposta pendente.');
     if (state.responseQueue[0] !== actor.id) throw new Error('Este jogador não é o próximo a responder.');
     state.responseQueue.shift();
     if (state.responseQueue.length) return state;
@@ -222,7 +255,14 @@ export function dispatchGame(source, command) {
     const challengedId = state.phase === 'challenge_action' ? state.pending.actorId : state.pending.block.playerId;
     const claimedRole = state.phase === 'challenge_action' ? state.pending.claimedRole : state.pending.block.role;
     const truthful = proveRole(state, challengedId, claimedRole);
-    state.log.push({ type: 'challenge_resolved', challengerId: actor.id, challengedId, claimedRole, truthful, at: Date.now() });
+    state.log.push({
+      type: 'challenge_resolved',
+      challengerId: actor.id,
+      challengedId,
+      claimedRole,
+      truthful,
+      at: Date.now(),
+    });
     const onAction = state.phase === 'challenge_action';
     if (truthful) loseInfluence(state, actor.id, onAction ? 'continue_action' : 'action_blocked');
     else loseInfluence(state, challengedId, onAction ? 'finish_turn' : 'resolve_action');
@@ -230,7 +270,8 @@ export function dispatchGame(source, command) {
   }
 
   if (command.type === 'block') {
-    if (state.phase !== 'block' || state.responseQueue[0] !== actor.id) throw new Error('Este jogador não pode bloquear agora.');
+    if (state.phase !== 'block' || state.responseQueue[0] !== actor.id)
+      throw new Error('Este jogador não pode bloquear agora.');
     const allowed = ACTIONS[state.pending.action].blockedBy ?? [];
     if (!allowed.includes(command.role)) throw new Error('Esse personagem não bloqueia esta ação.');
     state.pending.block = { playerId: actor.id, role: command.role };
@@ -241,7 +282,8 @@ export function dispatchGame(source, command) {
   }
 
   if (command.type === 'reveal_influence') {
-    if (state.phase !== 'choose_influence' || state.pending.lossPlayerId !== actor.id) throw new Error('Este jogador não deve revelar uma influência agora.');
+    if (state.phase !== 'choose_influence' || state.pending.lossPlayerId !== actor.id)
+      throw new Error('Este jogador não deve revelar uma influência agora.');
     const card = actor.cards.find((candidate) => candidate.id === command.cardId && !candidate.revealed);
     if (!card) throw new Error('Influência inválida.');
     card.revealed = true;
@@ -254,8 +296,13 @@ export function dispatchGame(source, command) {
   }
 
   if (command.type === 'choose_exchange') {
-    if (state.phase !== 'exchange' || state.pending.actorId !== actor.id) throw new Error('Este jogador não está trocando cartas.');
-    if (command.cardIds.length !== state.pending.exchangeCount || new Set(command.cardIds).size !== command.cardIds.length) throw new Error('Quantidade inválida de cartas.');
+    if (state.phase !== 'exchange' || state.pending.actorId !== actor.id)
+      throw new Error('Este jogador não está trocando cartas.');
+    if (
+      command.cardIds.length !== state.pending.exchangeCount ||
+      new Set(command.cardIds).size !== command.cardIds.length
+    )
+      throw new Error('Quantidade inválida de cartas.');
     const chosen = command.cardIds.map((id) => state.exchangeOptions.find((card) => card.id === id));
     if (chosen.some((card) => !card)) throw new Error('Carta inválida na troca.');
     const revealed = actor.cards.filter((card) => card.revealed);
@@ -275,9 +322,11 @@ export function viewForPlayer(state, viewerId) {
   const view = clone(state);
   view.players = view.players.map((player) => ({
     ...player,
-    cards: player.cards.map((card, index) => player.id === viewerId || card.revealed
-      ? card
-      : { id: `hidden-${player.id}-${index}`, role: null, revealed: false }),
+    cards: player.cards.map((card, index) =>
+      player.id === viewerId || card.revealed
+        ? card
+        : { id: `hidden-${player.id}-${index}`, role: null, revealed: false },
+    ),
   }));
   view.deck = view.deck.map((_, index) => ({ id: `deck-${index}`, role: null, revealed: false }));
   if (state.pending?.actorId !== viewerId) view.exchangeOptions = [];

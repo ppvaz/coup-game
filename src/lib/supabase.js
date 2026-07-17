@@ -13,9 +13,10 @@ function isProjectUrl(value) {
 }
 
 export const isSupabaseConfigured = Boolean(anonKey && isProjectUrl(url));
-export const supabaseConfigError = url && !isProjectUrl(url)
-  ? 'Use a Project URL do Supabase (https://SEU-PROJETO.supabase.co), não a URL do dashboard.'
-  : null;
+export const supabaseConfigError =
+  url && !isProjectUrl(url)
+    ? 'Use a Project URL do Supabase (https://SEU-PROJETO.supabase.co), não a URL do dashboard.'
+    : null;
 
 export const supabase = isSupabaseConfigured
   ? createClient(url, anonKey, {

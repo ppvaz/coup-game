@@ -30,7 +30,9 @@ test('bot com dez moedas sempre declara golpe', () => {
 
 test('bot nunca tenta roubar quando ninguém tem moedas', () => {
   const state = createGame(bots, { random: makeRng(7) });
-  state.players.forEach((player, index) => { if (index > 0) player.coins = 0; });
+  state.players.forEach((player, index) => {
+    if (index > 0) player.coins = 0;
+  });
   const rng = makeRng(13);
   for (let attempt = 0; attempt < 50; attempt++) {
     assert.notEqual(botCommand(state, 'x', rng).action, 'steal');

@@ -41,7 +41,13 @@ export function dispatchRoom(source, command) {
       if (!player) throw new Error('Pedido de entrada não encontrado.');
       if (room.seats.length >= room.maxPlayers) throw new Error('A sala está cheia.');
       room.pending = room.pending.filter((candidate) => candidate.id !== command.playerId);
-      room.seats.push({ ...player, kind: 'human', connected: true, joinedAt: Date.now(), joinsNextGame: room.status !== 'lobby' });
+      room.seats.push({
+        ...player,
+        kind: 'human',
+        connected: true,
+        joinedAt: Date.now(),
+        joinsNextGame: room.status !== 'lobby',
+      });
       break;
     }
     case 'reject_join':
@@ -51,7 +57,13 @@ export function dispatchRoom(source, command) {
     case 'add_bot': {
       if (!isHost || room.status !== 'lobby') throw new Error('Bots só podem ser adicionados pelo anfitrião no lobby.');
       if (room.seats.length >= room.maxPlayers) throw new Error('A sala está cheia.');
-      room.seats.push({ id: command.bot.id, name: command.bot.name, kind: 'bot', connected: true, joinedAt: Date.now() });
+      room.seats.push({
+        id: command.bot.id,
+        name: command.bot.name,
+        kind: 'bot',
+        connected: true,
+        joinedAt: Date.now(),
+      });
       break;
     }
     case 'remove_seat':
@@ -82,7 +94,8 @@ export function dispatchRoom(source, command) {
       break;
     case 'transfer_host':
       if (!isHost) throw new Error('Apenas o anfitrião atual pode transferir a mesa.');
-      if (!room.seats.some((candidate) => candidate.id === command.playerId && candidate.connected)) throw new Error('Novo anfitrião inválido.');
+      if (!room.seats.some((candidate) => candidate.id === command.playerId && candidate.connected))
+        throw new Error('Novo anfitrião inválido.');
       room.hostId = command.playerId;
       break;
     default:
@@ -90,7 +103,9 @@ export function dispatchRoom(source, command) {
   }
 
   if (!room.seats.some((candidate) => candidate.id === room.hostId && candidate.connected)) {
-    const successor = room.seats.filter((candidate) => candidate.kind === 'human' && candidate.connected).sort((a, b) => a.joinedAt - b.joinedAt)[0];
+    const successor = room.seats
+      .filter((candidate) => candidate.kind === 'human' && candidate.connected)
+      .sort((a, b) => a.joinedAt - b.joinedAt)[0];
     if (successor) room.hostId = successor.id;
   }
   room.version += 1;

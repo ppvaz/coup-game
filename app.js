@@ -10,21 +10,58 @@ import condessaPortrait from './assets/characters/condessa.png';
 import councilChamberDark from './assets/council-chamber.png';
 import councilChamberLight from './assets/council-chamber-light.png';
 
-const PORTRAITS = { Duque: duquePortrait, Assassina: assassinaPortrait, 'Capitão': capitaoPortrait, Embaixador: embaixadorPortrait, Condessa: condessaPortrait };
+const PORTRAITS = {
+  Duque: duquePortrait,
+  Assassina: assassinaPortrait,
+  Capitão: capitaoPortrait,
+  Embaixador: embaixadorPortrait,
+  Condessa: condessaPortrait,
+};
 const PRIORITY_ASSETS = [councilChamberDark, councilChamberLight, ...Object.values(PORTRAITS)];
-for (const source of PRIORITY_ASSETS) { const image = new Image(); image.fetchPriority = 'high'; image.decoding = 'async'; image.src = source; }
+for (const source of PRIORITY_ASSETS) {
+  const image = new Image();
+  image.fetchPriority = 'high';
+  image.decoding = 'async';
+  image.src = source;
+}
 
-const ROLE_HINTS = { Duque: 'Receba 3 moedas', Assassina: 'Elimine por 3 moedas', 'Capitão': 'Roube até 2 moedas', Embaixador: 'Troque cartas', Condessa: 'Bloqueia assassinato' };
+const ROLE_HINTS = {
+  Duque: 'Receba 3 moedas',
+  Assassina: 'Elimine por 3 moedas',
+  Capitão: 'Roube até 2 moedas',
+  Embaixador: 'Troque cartas',
+  Condessa: 'Bloqueia assassinato',
+};
 const ACTION_ORDER = ['income', 'foreign_aid', 'tax', 'steal', 'exchange', 'assassinate', 'coup'];
-const ACTION_HINTS = { income: '+1 moeda', foreign_aid: '+2 moedas', tax: 'Duque · +3', steal: 'Capitão · alvo', exchange: 'Embaixador', assassinate: '3 moedas · alvo', coup: '7 moedas · alvo' };
-const BLOCK_HINTS = { Duque: 'Impede Ajuda Externa', Condessa: 'Impede Assassinato', 'Capitão': 'Impede Roubo', Embaixador: 'Impede Roubo' };
+const ACTION_HINTS = {
+  income: '+1 moeda',
+  foreign_aid: '+2 moedas',
+  tax: 'Duque · +3',
+  steal: 'Capitão · alvo',
+  exchange: 'Embaixador',
+  assassinate: '3 moedas · alvo',
+  coup: '7 moedas · alvo',
+};
+const BLOCK_HINTS = {
+  Duque: 'Impede Ajuda Externa',
+  Condessa: 'Impede Assassinato',
+  Capitão: 'Impede Roubo',
+  Embaixador: 'Impede Roubo',
+};
 const NAMES = ['Lorenzo', 'Beatrice', 'Vittorio'];
 
-const escapeHTML = (value) => String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+const escapeHTML = (value) =>
+  String(value).replace(
+    /[&<>'"]/g,
+    (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char],
+  );
 const $ = (selector) => document.querySelector(selector);
 
 const roomPathMatch = location.pathname.match(/^\/sala\/([A-Z2-9]{5})\/?$/i);
-const inviteCode = (roomPathMatch?.[1] || new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
+const inviteCode = (roomPathMatch?.[1] || new URLSearchParams(location.search).get('room') || '')
+  .toUpperCase()
+  .replace(/[^A-Z2-9]/g, '')
+  .slice(0, 5);
 
 let state = {
   screen: 'lobby',
@@ -95,11 +132,13 @@ function applyCommand(command) {
 
 function syncViews() {
   if (!state.online || !state.isHost || !state.game) return;
-  const views = Object.fromEntries(state.game.players.map((player) => {
-    const view = viewForPlayer(state.game, player.id);
-    view.log = view.log.slice(-20);
-    return [player.id, view];
-  }));
+  const views = Object.fromEntries(
+    state.game.players.map((player) => {
+      const view = viewForPlayer(state.game, player.id);
+      view.log = view.log.slice(-20);
+      return [player.id, view];
+    }),
+  );
   sendRoom('game_state', { views });
 }
 
@@ -113,7 +152,10 @@ function scheduleBots() {
 }
 
 function startLocal() {
-  const seats = [{ id: 'me', name: state.name, kind: 'human' }, ...NAMES.map((name, index) => ({ id: `bot-${index}`, name, kind: 'bot' }))];
+  const seats = [
+    { id: 'me', name: state.name, kind: 'human' },
+    ...NAMES.map((name, index) => ({ id: `bot-${index}`, name, kind: 'bot' })),
+  ];
   state.myId = 'me';
   state.game = createGame(seats);
   state.screen = 'game';
@@ -134,7 +176,9 @@ function startOnline() {
 
 function connectRoom(kind) {
   if (!isSupabaseConfigured) {
-    state.error = supabaseConfigError || 'Multiplayer online ainda não foi configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.';
+    state.error =
+      supabaseConfigError ||
+      'Multiplayer online ainda não foi configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.';
     render();
     return;
   }
@@ -143,11 +187,16 @@ function connectRoom(kind) {
   state.myId = crypto.randomUUID();
   state.isHost = kind === 'create';
   const code = kind === 'create' ? generateRoomCode() : state.joinCode;
-  roomChannel = supabase.channel(`la-corte:${code}`, { config: { broadcast: { self: false }, presence: { key: state.myId } } })
+  roomChannel = supabase
+    .channel(`la-corte:${code}`, { config: { broadcast: { self: false }, presence: { key: state.myId } } })
     .on('broadcast', { event: 'join_request' }, ({ payload }) => {
       if (!state.isHost || !state.room) return;
       try {
-        state.room = dispatchRoom(state.room, { type: 'join', actorId: payload.id, player: { id: payload.id, name: String(payload.name ?? '').slice(0, 18) } });
+        state.room = dispatchRoom(state.room, {
+          type: 'join',
+          actorId: payload.id,
+          player: { id: payload.id, name: String(payload.name ?? '').slice(0, 18) },
+        });
       } catch {
         return;
       }
@@ -181,7 +230,8 @@ function connectRoom(kind) {
     })
     .subscribe((status) => {
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        state.error = 'Não foi possível conectar ao Supabase. Confira a Project URL e a chave pública configuradas na Vercel.';
+        state.error =
+          'Não foi possível conectar ao Supabase. Confira a Project URL e a chave pública configuradas na Vercel.';
         state.screen = 'lobby';
         render();
         return;
@@ -228,7 +278,8 @@ function leaveTable() {
 function describeLog(entry) {
   const n = playerName;
   switch (entry.type) {
-    case 'game_started': return 'A corte está reunida. O jogo começou.';
+    case 'game_started':
+      return 'A corte está reunida. O jogo começou.';
     case 'action_declared': {
       const action = ACTIONS[entry.action];
       const claim = action.role ? ` alegando ser ${action.role}` : '';
@@ -237,38 +288,67 @@ function describeLog(entry) {
     }
     case 'action_resolved':
       switch (entry.action) {
-        case 'income': return `${n(entry.actorId)} recolheu 1 moeda.`;
-        case 'foreign_aid': return `${n(entry.actorId)} recebeu ajuda externa (+2).`;
-        case 'tax': return `${n(entry.actorId)} cobrou 3 moedas como Duque.`;
-        case 'steal': return `${n(entry.actorId)} roubou moedas de ${n(entry.targetId)}.`;
-        default: return `${n(entry.actorId)} resolveu ${ACTIONS[entry.action].label.toLowerCase()}.`;
+        case 'income':
+          return `${n(entry.actorId)} recolheu 1 moeda.`;
+        case 'foreign_aid':
+          return `${n(entry.actorId)} recebeu ajuda externa (+2).`;
+        case 'tax':
+          return `${n(entry.actorId)} cobrou 3 moedas como Duque.`;
+        case 'steal':
+          return `${n(entry.actorId)} roubou moedas de ${n(entry.targetId)}.`;
+        default:
+          return `${n(entry.actorId)} resolveu ${ACTIONS[entry.action].label.toLowerCase()}.`;
       }
-    case 'challenge_resolved': return entry.truthful
-      ? `${n(entry.challengerId)} contestou, mas ${n(entry.challengedId)} provou ser ${entry.claimedRole}.`
-      : `${n(entry.challengerId)} contestou ${n(entry.challengedId)}: era um blefe.`;
-    case 'block_declared': return `${n(entry.playerId)} bloqueou alegando ser ${entry.role}.`;
-    case 'action_blocked': return `O bloqueio de ${n(entry.playerId)} foi aceito.`;
-    case 'influence_lost': return `${n(entry.playerId)} perdeu uma influência (${entry.role}).`;
-    case 'exchange_resolved': return `${n(entry.playerId)} reorganizou suas influências.`;
-    case 'action_fizzled': return `A ação de ${n(entry.actorId)} se perdeu: o alvo já havia caído.`;
-    case 'game_finished': return `${n(entry.winnerId)} domina a corte.`;
-    default: return '';
+    case 'challenge_resolved':
+      return entry.truthful
+        ? `${n(entry.challengerId)} contestou, mas ${n(entry.challengedId)} provou ser ${entry.claimedRole}.`
+        : `${n(entry.challengerId)} contestou ${n(entry.challengedId)}: era um blefe.`;
+    case 'block_declared':
+      return `${n(entry.playerId)} bloqueou alegando ser ${entry.role}.`;
+    case 'action_blocked':
+      return `O bloqueio de ${n(entry.playerId)} foi aceito.`;
+    case 'influence_lost':
+      return `${n(entry.playerId)} perdeu uma influência (${entry.role}).`;
+    case 'exchange_resolved':
+      return `${n(entry.playerId)} reorganizou suas influências.`;
+    case 'action_fizzled':
+      return `A ação de ${n(entry.actorId)} se perdeu: o alvo já havia caído.`;
+    case 'game_finished':
+      return `${n(entry.winnerId)} domina a corte.`;
+    default:
+      return '';
   }
 }
 
 const LOG_ICONS = {
-  action_declared: '♛', action_resolved: '+', challenge_resolved: '⚔', block_declared: '♛',
-  action_blocked: '♛', influence_lost: '†', exchange_resolved: '↻', action_fizzled: '·',
-  game_started: '·', game_finished: '♛',
+  action_declared: '♛',
+  action_resolved: '+',
+  challenge_resolved: '⚔',
+  block_declared: '♛',
+  action_blocked: '♛',
+  influence_lost: '†',
+  exchange_resolved: '↻',
+  action_fizzled: '·',
+  game_started: '·',
+  game_finished: '♛',
 };
-const logIcon = (entry) => (entry.type === 'action_resolved' && entry.action === 'steal' ? '◆' : LOG_ICONS[entry.type] ?? '·');
+const logIcon = (entry) =>
+  entry.type === 'action_resolved' && entry.action === 'steal' ? '◆' : (LOG_ICONS[entry.type] ?? '·');
 
 // ---------- Renderização ----------
 
 function render() {
   const root = $('#app');
-  if (state.screen === 'lobby') { root.innerHTML = lobbyHTML(); bindLobby(); return; }
-  if (state.screen === 'room' || state.screen === 'waiting_game') { root.innerHTML = roomHTML(); bindRoom(); return; }
+  if (state.screen === 'lobby') {
+    root.innerHTML = lobbyHTML();
+    bindLobby();
+    return;
+  }
+  if (state.screen === 'room' || state.screen === 'waiting_game') {
+    root.innerHTML = roomHTML();
+    bindRoom();
+    return;
+  }
   root.innerHTML = gameHTML();
   bindGame();
 }
@@ -286,25 +366,33 @@ function roomHTML() {
 function gameHTML() {
   const game = state.game;
   const winner = game.status === 'finished' ? game.players.find((player) => player.id === game.winnerId) : null;
-  const again = !state.online || state.isHost
-    ? '<button class="primary" id="again" style="width:220px;margin-top:24px">Jogar novamente</button>'
-    : '<p class="waiting">Aguardando o anfitrião abrir outra mesa…</p>';
-  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()}</div><button class="ghost" id="leave">Sair da mesa</button></nav><section class="board"><div class="opponents">${game.players.filter((player) => player.id !== state.myId).map(playerHTML).join('')}</div><div class="center"><div class="turn-copy">${winner ? `<div class="winner">${escapeHTML(winner.name)} domina a corte</div>` : `É a vez de<br><b>${playerName(game.currentPlayerId)}</b>`}</div>${historyHTML()}${winner ? again : ''}</div></section>${!winner ? handHTML() : ''}${modalHTML()}</main>`;
+  const again =
+    !state.online || state.isHost
+      ? '<button class="primary" id="again" style="width:220px;margin-top:24px">Jogar novamente</button>'
+      : '<p class="waiting">Aguardando o anfitrião abrir outra mesa…</p>';
+  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()}</div><button class="ghost" id="leave">Sair da mesa</button></nav><section class="board"><div class="opponents">${game.players
+    .filter((player) => player.id !== state.myId)
+    .map(playerHTML)
+    .join(
+      '',
+    )}</div><div class="center"><div class="turn-copy">${winner ? `<div class="winner">${escapeHTML(winner.name)} domina a corte</div>` : `É a vez de<br><b>${playerName(game.currentPlayerId)}</b>`}</div>${historyHTML()}${winner ? again : ''}</div></section>${!winner ? handHTML() : ''}${modalHTML()}</main>`;
 }
 
 function historyHTML() {
   const entries = state.game.log.slice(-5);
-  return `<section class="chronicle"><header><span>Crônica da corte</span><small>Rodada ${roundNumber()}</small></header><div class="chronicle-list">${entries.map((entry, index) => {
-    const text = describeLog(entry);
-    const first = text.split(' ')[0];
-    const detail = text.slice(first.length);
-    return `<article class="chronicle-entry ${index === entries.length - 1 ? 'latest' : ''}"><i>${logIcon(entry)}</i><p><strong>${first}</strong>${detail}</p></article>`;
-  }).join('')}</div></section>`;
+  return `<section class="chronicle"><header><span>Crônica da corte</span><small>Rodada ${roundNumber()}</small></header><div class="chronicle-list">${entries
+    .map((entry, index) => {
+      const text = describeLog(entry);
+      const first = text.split(' ')[0];
+      const detail = text.slice(first.length);
+      return `<article class="chronicle-entry ${index === entries.length - 1 ? 'latest' : ''}"><i>${logIcon(entry)}</i><p><strong>${first}</strong>${detail}</p></article>`;
+    })
+    .join('')}</div></section>`;
 }
 
 function playerHTML(player) {
   const isTurn = state.game.currentPlayerId === player.id && state.game.status === 'playing';
-  return `<div class="player ${isTurn ? 'turn' : ''} ${!isAlive(player) ? 'dead' : ''}"><div class="avatar">${escapeHTML(player.name[0] ?? '?')}</div><strong title="${escapeHTML(player.name)}">${escapeHTML(player.name)}</strong><div class="coins">◆ ${player.coins} moedas</div><div class="influence">${player.cards.map((card) => card.revealed ? `<i class="mini-card revealed" style="--mini-portrait:url('${PORTRAITS[card.role]}')"><span>${card.role}</span></i>` : '<i class="mini-card hidden" aria-label="Influência não revelada"><span>?</span></i>').join('')}</div></div>`;
+  return `<div class="player ${isTurn ? 'turn' : ''} ${!isAlive(player) ? 'dead' : ''}"><div class="avatar">${escapeHTML(player.name[0] ?? '?')}</div><strong title="${escapeHTML(player.name)}">${escapeHTML(player.name)}</strong><div class="coins">◆ ${player.coins} moedas</div><div class="influence">${player.cards.map((card) => (card.revealed ? `<i class="mini-card revealed" style="--mini-portrait:url('${PORTRAITS[card.role]}')"><span>${card.role}</span></i>` : '<i class="mini-card hidden" aria-label="Influência não revelada"><span>?</span></i>')).join('')}</div></div>`;
 }
 
 function handHTML() {
@@ -313,16 +401,16 @@ function handHTML() {
   const myTurn = game.phase === 'turn' && game.currentPlayerId === state.myId;
   const must = self.coins >= 10;
   const someoneToRob = game.players.some((player) => player.id !== state.myId && isAlive(player) && player.coins > 0);
-  const disabled = (key) => !myTurn
-    || (must && key !== 'coup')
-    || (ACTIONS[key].cost ?? 0) > self.coins
-    || (key === 'steal' && !someoneToRob);
+  const disabled = (key) =>
+    !myTurn || (must && key !== 'coup') || (ACTIONS[key].cost ?? 0) > self.coins || (key === 'steal' && !someoneToRob);
   return `<footer class="hand"><div class="self-status"><span>Seu tesouro</span><b>◆ ${self.coins}</b><small>moedas</small></div>${self.cards.map((card) => `<div class="role-card ${card.revealed ? 'lost' : ''}" style="--portrait:url('${PORTRAITS[card.role]}')"><h3>${card.role}</h3><p>${card.revealed ? 'Influência revelada' : ROLE_HINTS[card.role]}</p></div>`).join('')}<div class="actions">${ACTION_ORDER.map((key) => `<button class="action" data-action="${key}" ${disabled(key) ? 'disabled' : ''}><b>${ACTIONS[key].label}</b><small>${ACTION_HINTS[key]}</small></button>`).join('')}</div></footer>`;
 }
 
 function modalContext() {
   const events = state.game.log.slice(-3).reverse();
-  const revealed = state.game.players.flatMap((player) => player.cards.filter((card) => card.revealed).map((card) => card.role));
+  const revealed = state.game.players.flatMap((player) =>
+    player.cards.filter((card) => card.revealed).map((card) => card.role),
+  );
   return `<aside class="modal-context"><div class="context-title">Contexto da mesa</div><div class="context-revealed"><small>REVELADAS</small><div>${revealed.length ? revealed.map((role) => `<span>${role}</span>`).join('') : '<em>Nenhuma influência revelada</em>'}</div></div><div class="context-events">${events.map((entry) => `<p>— ${describeLog(entry)}</p>`).join('')}</div></aside>`;
 }
 
@@ -349,11 +437,21 @@ function modalHTML() {
   }
   if (game.phase === 'choose_influence') {
     if (game.pending.lossPlayerId === state.myId) return revealModal();
-    return state.online ? waitingModal('Influência em jogo', `${state.game.players.find((p) => p.id === game.pending.lossPlayerId)?.name ?? '?'} escolhe qual carta revelar.`) : '';
+    return state.online
+      ? waitingModal(
+          'Influência em jogo',
+          `${state.game.players.find((p) => p.id === game.pending.lossPlayerId)?.name ?? '?'} escolhe qual carta revelar.`,
+        )
+      : '';
   }
   if (game.phase === 'exchange') {
     if (game.pending.actorId === state.myId) return exchangeModal();
-    return state.online ? waitingModal('Troca em andamento', `${state.game.players.find((p) => p.id === game.pending.actorId)?.name ?? '?'} escolhe as cartas que ficam.`) : '';
+    return state.online
+      ? waitingModal(
+          'Troca em andamento',
+          `${state.game.players.find((p) => p.id === game.pending.actorId)?.name ?? '?'} escolhe as cartas que ficam.`,
+        )
+      : '';
   }
   return '';
 }
@@ -394,17 +492,31 @@ function exchangeModal() {
 
 function bindLobby() {
   $('.fine')?.remove();
-  const enter = $('#enter'), name = $('#name'), roomCode = $('#room-code');
+  const enter = $('#enter'),
+    name = $('#name'),
+    roomCode = $('#room-code');
   const valid = () => name.value.trim() && (state.mode !== 'join' || roomCode?.value.trim().length === 5);
   enter.disabled = !valid();
-  document.querySelectorAll('[data-mode]').forEach((button) => button.onclick = () => { state.mode = button.dataset.mode; state.error = null; render(); });
-  name.oninput = (event) => { state.name = event.target.value; enter.disabled = !valid(); };
+  document.querySelectorAll('[data-mode]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        state.mode = button.dataset.mode;
+        state.error = null;
+        render();
+      }),
+  );
+  name.oninput = (event) => {
+    state.name = event.target.value;
+    enter.disabled = !valid();
+  };
   roomCode?.addEventListener('input', (event) => {
     event.target.value = event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '');
     state.joinCode = event.target.value;
     enter.disabled = !valid();
   });
-  name.onkeydown = (event) => { if (event.key === 'Enter' && valid()) enter.click(); };
+  name.onkeydown = (event) => {
+    if (event.key === 'Enter' && valid()) enter.click();
+  };
   enter.onclick = () => {
     const value = name.value.trim();
     if (!value || !valid()) return;
@@ -427,7 +539,10 @@ function bindRoom() {
       await navigator.clipboard.writeText(link);
       state.shareCopied = true;
       render();
-      setTimeout(() => { state.shareCopied = false; render(); }, 1800);
+      setTimeout(() => {
+        state.shareCopied = false;
+        render();
+      }, 1800);
     } catch {
       window.prompt('Copie este convite:', link);
     }
@@ -436,31 +551,65 @@ function bindRoom() {
 
 function bindGame() {
   $('#leave').onclick = leaveTable;
-  $('#again')?.addEventListener('click', () => state.online ? startOnline() : startLocal());
-  document.querySelectorAll('[data-action]').forEach((button) => button.onclick = () => {
-    const key = button.dataset.action;
-    if (ACTIONS[key].targeted) { state.targetAction = key; render(); return; }
-    dispatch({ type: 'declare_action', actorId: state.myId, action: key });
+  $('#again')?.addEventListener('click', () => (state.online ? startOnline() : startLocal()));
+  document.querySelectorAll('[data-action]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        const key = button.dataset.action;
+        if (ACTIONS[key].targeted) {
+          state.targetAction = key;
+          render();
+          return;
+        }
+        dispatch({ type: 'declare_action', actorId: state.myId, action: key });
+      }),
+  );
+  document.querySelectorAll('[data-target]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        dispatch({
+          type: 'declare_action',
+          actorId: state.myId,
+          action: state.targetAction,
+          targetId: button.dataset.target,
+        });
+      }),
+  );
+  $('#cancel')?.addEventListener('click', () => {
+    state.targetAction = null;
+    render();
   });
-  document.querySelectorAll('[data-target]').forEach((button) => button.onclick = () => {
-    dispatch({ type: 'declare_action', actorId: state.myId, action: state.targetAction, targetId: button.dataset.target });
-  });
-  $('#cancel')?.addEventListener('click', () => { state.targetAction = null; render(); });
   $('#challenge')?.addEventListener('click', () => dispatch({ type: 'challenge', actorId: state.myId }));
   $('#allow')?.addEventListener('click', () => dispatch({ type: 'pass', actorId: state.myId }));
-  document.querySelectorAll('[data-block-role]').forEach((button) => button.onclick = () => dispatch({ type: 'block', actorId: state.myId, role: button.dataset.blockRole }));
+  document
+    .querySelectorAll('[data-block-role]')
+    .forEach(
+      (button) =>
+        (button.onclick = () => dispatch({ type: 'block', actorId: state.myId, role: button.dataset.blockRole })),
+    );
   $('#allow-block')?.addEventListener('click', () => dispatch({ type: 'pass', actorId: state.myId }));
   $('#contest-block')?.addEventListener('click', () => dispatch({ type: 'challenge', actorId: state.myId }));
   $('#accept-block')?.addEventListener('click', () => dispatch({ type: 'pass', actorId: state.myId }));
-  document.querySelectorAll('[data-reveal]').forEach((button) => button.onclick = () => dispatch({ type: 'reveal_influence', actorId: state.myId, cardId: button.dataset.reveal }));
-  document.querySelectorAll('[data-pick]').forEach((button) => button.onclick = () => {
-    const id = button.dataset.pick;
-    const count = state.game.pending.exchangeCount;
-    if (state.exchangePicks.includes(id)) state.exchangePicks = state.exchangePicks.filter((pick) => pick !== id);
-    else if (state.exchangePicks.length < count) state.exchangePicks = [...state.exchangePicks, id];
-    render();
-  });
-  $('#confirm-exchange')?.addEventListener('click', () => dispatch({ type: 'choose_exchange', actorId: state.myId, cardIds: state.exchangePicks }));
+  document
+    .querySelectorAll('[data-reveal]')
+    .forEach(
+      (button) =>
+        (button.onclick = () =>
+          dispatch({ type: 'reveal_influence', actorId: state.myId, cardId: button.dataset.reveal })),
+    );
+  document.querySelectorAll('[data-pick]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        const id = button.dataset.pick;
+        const count = state.game.pending.exchangeCount;
+        if (state.exchangePicks.includes(id)) state.exchangePicks = state.exchangePicks.filter((pick) => pick !== id);
+        else if (state.exchangePicks.length < count) state.exchangePicks = [...state.exchangePicks, id];
+        render();
+      }),
+  );
+  $('#confirm-exchange')?.addEventListener('click', () =>
+    dispatch({ type: 'choose_exchange', actorId: state.myId, cardIds: state.exchangePicks }),
+  );
 }
 
 render();
