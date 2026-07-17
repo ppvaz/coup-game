@@ -12,7 +12,7 @@ const code = () => Array.from({ length: 5 }, () => alphabet[Math.floor(Math.rand
 
 const server = createServer((req, res) => {
   const pathname = decodeURIComponent(new URL(req.url, `http://${req.headers.host}`).pathname);
-  const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
+  const relative = pathname === '/' || /^\/sala\/[A-Z2-9]{5}\/?$/i.test(pathname) ? 'index.html' : pathname.slice(1);
   const file = normalize(join(root, relative));
   if (!file.startsWith(root) || !existsSync(file) || !statSync(file).isFile()) { res.writeHead(404); res.end('Not found'); return; }
   res.writeHead(200, { 'Content-Type': mime[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
