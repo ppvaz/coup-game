@@ -1231,7 +1231,7 @@ function waitingModal(title, copy) {
 function responseProgressHTML() {
   if (!state.online) return '';
   const progress = responseProgress(state.game);
-  if (!progress) return '';
+  if (!progress || progress.total <= 1) return '';
   const receivedLabel = progress.submitted === 1 ? 'recebida' : 'recebidas';
   const pendingLabel = progress.remaining === 1 ? 'pendente' : 'pendentes';
   const label = `${progress.submitted} ${receivedLabel}, ${progress.remaining} ${pendingLabel}`;
