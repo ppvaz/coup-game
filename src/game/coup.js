@@ -197,6 +197,10 @@ export function dispatchGame(source, command) {
   const state = clone(source);
   if (state.status !== 'playing') throw new Error('A partida não está em andamento.');
   const actor = assertActor(state, command.actorId);
+  const commit = () => {
+    state.version += 1;
+    return state;
+  };
 
   if (command.type === 'declare_action') {
     if (state.phase !== 'turn' || command.actorId !== state.currentPlayerId)
@@ -231,7 +235,7 @@ export function dispatchGame(source, command) {
       state.phase = 'challenge_action';
       state.responseQueue = responderIds(state, actor.id);
     } else beginBlocksOrResolve(state);
-    return state;
+    return commit();
   }
 
   if (command.type === 'pass') {
@@ -239,14 +243,14 @@ export function dispatchGame(source, command) {
       throw new Error('Não há resposta pendente.');
     if (state.responseQueue[0] !== actor.id) throw new Error('Este jogador não é o próximo a responder.');
     state.responseQueue.shift();
-    if (state.responseQueue.length) return state;
+    if (state.responseQueue.length) return commit();
     if (state.phase === 'challenge_action') beginBlocksOrResolve(state);
     else if (state.phase === 'block') resolveAction(state);
     else {
       state.log.push({ type: 'action_blocked', ...state.pending.block, at: Date.now() });
       finishTurn(state);
     }
-    return state;
+    return commit();
   }
 
   if (command.type === 'challenge') {
@@ -266,7 +270,7 @@ export function dispatchGame(source, command) {
     const onAction = state.phase === 'challenge_action';
     if (truthful) loseInfluence(state, actor.id, onAction ? 'continue_action' : 'action_blocked');
     else loseInfluence(state, challengedId, onAction ? 'finish_turn' : 'resolve_action');
-    return state;
+    return commit();
   }
 
   if (command.type === 'block') {
@@ -278,7 +282,7 @@ export function dispatchGame(source, command) {
     state.phase = 'challenge_block';
     state.responseQueue = responderIds(state, actor.id);
     state.log.push({ type: 'block_declared', playerId: actor.id, role: command.role, at: Date.now() });
-    return state;
+    return commit();
   }
 
   if (command.type === 'reveal_influence') {
@@ -292,7 +296,7 @@ export function dispatchGame(source, command) {
     state.pending.lossPlayerId = null;
     state.pending.afterLoss = null;
     runAfterLoss(state, afterLoss);
-    return state;
+    return commit();
   }
 
   if (command.type === 'choose_exchange') {
@@ -312,7 +316,7 @@ export function dispatchGame(source, command) {
     state.exchangeOptions = [];
     state.log.push({ type: 'exchange_resolved', playerId: actor.id, at: Date.now() });
     finishTurn(state);
-    return state;
+    return commit();
   }
 
   throw new Error('Comando desconhecido.');

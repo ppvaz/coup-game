@@ -31,6 +31,7 @@ test('renda resolve imediatamente e passa o turno', () => {
   assert.equal(next.players[0].coins, 3);
   assert.equal(next.currentPlayerId, 'b');
   assert.equal(next.phase, 'turn');
+  assert.equal(next.version, state.version + 1);
 });
 
 test('ação de personagem abre janela de contestação', () => {

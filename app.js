@@ -1,6 +1,16 @@
 import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/supabase.js';
 import { ACTIONS, createGame, dispatchGame, viewForPlayer, isAlive } from './src/game/coup.js';
-import { createRoom, dispatchRoom, generateRoomCode } from './src/rooms/room.js';
+import { reconstructGame } from './src/game/handover.js';
+import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
+import {
+  HOST_GRACE_MS,
+  createRoom,
+  dispatchRoom,
+  generateRoomCode,
+  hostElection,
+  syncRoomPresence,
+} from './src/rooms/room.js';
+import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import duquePortrait from './assets/characters/duque.png';
 import assassinaPortrait from './assets/characters/assassina.png';
@@ -71,6 +81,7 @@ const inviteCode = (roomPathMatch?.[1] || new URLSearchParams(location.search).g
   .toUpperCase()
   .replace(/[^A-Z2-9]/g, '')
   .slice(0, 5);
+const resumeSnapshot = loadOnlineSession(sessionStorage, inviteCode);
 
 let state = {
   screen: 'lobby',
@@ -86,10 +97,39 @@ let state = {
   game: null,
   targetAction: null,
   exchangePicks: [],
+  connection: 'idle',
+  presenceReady: false,
+  hostIssue: null,
 };
+if (resumeSnapshot) {
+  state = {
+    ...state,
+    mode: 'join',
+    name: resumeSnapshot.name,
+    online: true,
+    isHost: resumeSnapshot.room.hostId === resumeSnapshot.myId,
+    myId: resumeSnapshot.myId,
+    room: resumeSnapshot.room,
+    game: resumeSnapshot.game,
+    screen: resumeSnapshot.game ? 'game' : 'room',
+    connection: 'connecting',
+  };
+}
 let roomChannel = null;
 let botTimer = null;
 let clock = { key: '', deadline: 0, total: 0 };
+let hostElectionTimer = null;
+let handoverTimer = null;
+let handover = null;
+let encryptionIdentity = null;
+let connectionId = null;
+if (resumeSnapshot?.game) {
+  clock = {
+    key: 'restored',
+    deadline: Date.now() + Math.max(0, resumeSnapshot.clockRemaining ?? 0),
+    total: resumeSnapshot.clockTotal || 1,
+  };
+}
 
 const themeToggle = $('#theme-toggle');
 function paintThemeToggle() {
@@ -110,6 +150,29 @@ const me = () => state.game.players.find((player) => player.id === state.myId);
 const playerName = (id) => escapeHTML(state.game.players.find((player) => player.id === id)?.name ?? '?');
 const roundNumber = () => Math.floor((state.game.turn - 1) / state.game.players.length) + 1;
 const sendRoom = (event, payload = {}) => roomChannel?.send({ type: 'broadcast', event, payload });
+
+function publicRoom() {
+  return state.room ? { ...state.room, game: null } : null;
+}
+
+function persistSession() {
+  if (!state.online || !state.room || !state.myId) return;
+  saveOnlineSession(sessionStorage, {
+    code: state.room.code,
+    myId: state.myId,
+    name: state.name,
+    room: publicRoom(),
+    game: state.game,
+    clockRemaining: Math.max(0, clock.deadline - Date.now()),
+    clockTotal: clock.total,
+  });
+}
+
+function broadcastRoom() {
+  if (!state.isHost || !state.room) return;
+  sendRoom('room', { room: publicRoom() });
+  persistSession();
+}
 
 // ---------- Fluxo de comandos: um único motor para bots e multiplayer ----------
 
@@ -141,19 +204,37 @@ function applyCommand(command) {
   scheduleBots();
 }
 
-function syncViews() {
-  if (!state.online || !state.isHost || !state.game) return;
-  const views = Object.fromEntries(
-    state.game.players.map((player) => {
+function presenceEntry(playerId, targetConnectionId) {
+  const entries = roomChannel?.presenceState()?.[playerId] ?? [];
+  return targetConnectionId ? entries.find((entry) => entry.connectionId === targetConnectionId) : entries.at(-1);
+}
+
+async function syncViews() {
+  if (!state.online || !state.isHost || !state.game || !encryptionIdentity) return;
+  const sends = [];
+  for (const player of state.game.players.filter((candidate) => candidate.id !== state.myId)) {
+    for (const recipient of roomChannel?.presenceState()?.[player.id] ?? []) {
+      if (!recipient.publicKey || !recipient.connectionId) continue;
       const view = viewForPlayer(state.game, player.id);
       view.log = view.log.slice(-20);
       // Restante em ms, não timestamp: o relógio do convidado pode divergir do host.
       view.clockRemaining = clock.deadline - Date.now();
       view.clockTotal = clock.total;
-      return [player.id, view];
-    }),
-  );
-  sendRoom('game_state', { views });
+      sends.push(
+        encryptFor(encryptionIdentity, recipient.publicKey, view).then((encrypted) =>
+          sendRoom('game_state', {
+            recipientId: player.id,
+            recipientConnectionId: recipient.connectionId,
+            senderId: state.myId,
+            senderConnectionId: connectionId,
+            encrypted,
+          }),
+        ),
+      );
+    }
+  }
+  await Promise.allSettled(sends);
+  persistSession();
 }
 
 function resetClock() {
@@ -218,15 +299,193 @@ function startOnline() {
   const seats = state.room.seats.map((seat) => ({ id: seat.id, name: seat.name, kind: 'human' }));
   state.game = createGame(seats);
   state.screen = 'game';
+  state.room = { ...state.room, status: 'playing', version: state.room.version + 1, updatedAt: Date.now() };
   resetClock();
   sendRoom('game_started', {});
+  broadcastRoom();
   render();
   syncViews();
 }
 
 // ---------- Sala online (Supabase Realtime, host autoritativo) ----------
 
-function connectRoom(kind) {
+function clearHostElection() {
+  clearTimeout(hostElectionTimer);
+  hostElectionTimer = null;
+}
+
+function acceptRoom(incoming) {
+  if (!incoming?.code || incoming.code !== (state.room?.code ?? state.joinCode)) return false;
+  if (state.room && incoming.version < state.room.version) return false;
+  state.room = incoming;
+  state.isHost = incoming.hostId === state.myId;
+  state.online = true;
+  if (incoming.status === 'playing') state.screen = state.game ? 'game' : 'waiting_game';
+  else if (state.screen !== 'game') state.screen = 'room';
+  persistSession();
+  return true;
+}
+
+function handlePresenceSync() {
+  if (!roomChannel || !state.room || !state.online) return;
+  const connectedIds = Object.keys(roomChannel.presenceState());
+  // O snapshot inicial pode chegar antes do nosso próprio track. Não tratamos
+  // esse instante como uma queda coletiva.
+  if (!connectedIds.includes(state.myId)) return;
+
+  state.presenceReady = true;
+  const previousVersion = state.room.version;
+  state.room = syncRoomPresence(state.room, connectedIds);
+  if (state.isHost && state.room.version !== previousVersion) {
+    broadcastRoom();
+    syncViews();
+  }
+  if (handover) {
+    state.hostIssue = { status: 'promoting', candidateId: state.myId, candidateName: state.name };
+    render();
+    return;
+  }
+
+  const election = hostElection(state.room);
+  clearHostElection();
+  if (election.status === 'stable') {
+    state.hostIssue = null;
+    render();
+    persistSession();
+    return;
+  }
+
+  const candidate = state.room.seats.find((seat) => seat.id === election.candidateId);
+  state.hostIssue = {
+    status: election.status,
+    candidateId: election.candidateId,
+    candidateName: candidate?.name ?? 'outro jogador',
+  };
+
+  if (election.status === 'waiting') {
+    hostElectionTimer = setTimeout(handlePresenceSync, election.remainingMs + 30);
+  } else if (election.status === 'ready' && election.candidateId === state.myId) {
+    beginHostPromotion();
+    return;
+  }
+  render();
+  persistSession();
+}
+
+function beginHostPromotion() {
+  if (handover || !state.room || state.room.hostId === state.myId) return;
+  const previousHostId = state.room.hostId;
+  try {
+    state.room = dispatchRoom(state.room, {
+      type: 'promote_host',
+      actorId: state.myId,
+      now: Date.now(),
+      graceMs: HOST_GRACE_MS,
+    });
+  } catch {
+    handlePresenceSync();
+    return;
+  }
+
+  state.hostIssue = { status: 'promoting', candidateId: state.myId, candidateName: state.name };
+  if (!state.game || state.room.status !== 'playing') {
+    finishHostPromotion();
+    return;
+  }
+
+  handover = { id: crypto.randomUUID(), previousHostId, responses: new Map() };
+  sendRoom('handover_request', {
+    requestId: handover.id,
+    successorId: state.myId,
+    successorConnectionId: connectionId,
+    previousHostId,
+  });
+  clearTimeout(handoverTimer);
+  handoverTimer = setTimeout(finishHostPromotion, 1_400);
+  render();
+}
+
+function finishHostPromotion() {
+  clearTimeout(handoverTimer);
+  handoverTimer = null;
+  if (handover && state.game) {
+    try {
+      state.game = reconstructGame(
+        state.myId,
+        state.game,
+        [...handover.responses].map(([playerId, view]) => ({ playerId, view })),
+      );
+    } catch (error) {
+      console.error('Não foi possível reconstruir a partida:', error);
+      state.room = { ...state.room, hostId: handover.previousHostId };
+      state.hostIssue = { status: 'failed', candidateName: state.name };
+      handover = null;
+      render();
+      return;
+    }
+  }
+
+  handover = null;
+  state.isHost = true;
+  state.connection = 'connected';
+  state.hostIssue = null;
+  if (state.game) {
+    state.screen = 'game';
+    resetClock();
+  }
+  sendRoom('host_changed', { room: publicRoom() });
+  broadcastRoom();
+  render();
+  syncViews();
+  persistSession();
+}
+
+async function replyToHandover(payload) {
+  if (
+    !payload?.requestId ||
+    !payload.successorId ||
+    payload.successorId === state.myId ||
+    !state.game ||
+    !encryptionIdentity ||
+    payload.previousHostId !== state.room?.hostId
+  )
+    return;
+  const election = hostElection(state.room);
+  if (election.candidateId !== payload.successorId || election.status === 'stable') return;
+  const successor = presenceEntry(payload.successorId, payload.successorConnectionId);
+  if (!successor?.publicKey) return;
+  const encrypted = await encryptFor(encryptionIdentity, successor.publicKey, state.game);
+  sendRoom('handover_response', {
+    requestId: payload.requestId,
+    successorId: payload.successorId,
+    successorConnectionId: payload.successorConnectionId,
+    playerId: state.myId,
+    senderConnectionId: connectionId,
+    encrypted,
+  });
+}
+
+async function collectHandover(payload) {
+  if (
+    !handover ||
+    payload?.requestId !== handover.id ||
+    payload.successorId !== state.myId ||
+    payload.successorConnectionId !== connectionId ||
+    !encryptionIdentity
+  )
+    return;
+  if (!state.room.seats.some((seat) => seat.id === payload.playerId && seat.connected)) return;
+  const sender = presenceEntry(payload.playerId, payload.senderConnectionId);
+  if (!sender?.publicKey) return;
+  try {
+    const view = await decryptFrom(encryptionIdentity, sender.publicKey, payload.encrypted);
+    handover?.responses.set(payload.playerId, view);
+  } catch {
+    // Resposta corrompida ou destinada a outra eleição: é ignorada.
+  }
+}
+
+async function connectRoom(kind) {
   if (!isSupabaseConfigured) {
     state.error =
       supabaseConfigError ||
@@ -234,13 +493,35 @@ function connectRoom(kind) {
     render();
     return;
   }
+  const resume = kind === 'resume';
   state.error = null;
+  state.connection = 'connecting';
+  state.presenceReady = false;
   roomChannel?.unsubscribe();
-  state.myId = crypto.randomUUID();
-  state.isHost = kind === 'create';
-  const code = kind === 'create' ? generateRoomCode() : state.joinCode;
-  roomChannel = supabase
-    .channel(`la-corte:${code}`, { config: { broadcast: { self: false }, presence: { key: state.myId } } })
+  const nextConnectionId = crypto.randomUUID();
+  connectionId = nextConnectionId;
+  render();
+  try {
+    const identity = await createEncryptionIdentity();
+    if (connectionId !== nextConnectionId) return;
+    encryptionIdentity = identity;
+  } catch {
+    state.error = 'Este navegador não oferece a criptografia necessária para o multiplayer.';
+    state.connection = 'idle';
+    state.screen = 'lobby';
+    render();
+    return;
+  }
+  if (!resume) {
+    state.myId = crypto.randomUUID();
+    state.isHost = kind === 'create';
+  }
+  const code = kind === 'create' ? generateRoomCode() : state.room?.code || state.joinCode;
+  const channel = supabase.channel(`la-corte:${code}`, {
+    config: { broadcast: { self: false }, presence: { key: state.myId, enabled: true } },
+  });
+  let subscribedOnce = false;
+  roomChannel = channel
     .on('broadcast', { event: 'join_request' }, ({ payload }) => {
       if (!state.isHost || !state.room) return;
       try {
@@ -252,14 +533,19 @@ function connectRoom(kind) {
       } catch {
         return;
       }
-      sendRoom('room', { room: { ...state.room, game: null } });
+      broadcastRoom();
+      syncViews();
       render();
     })
     .on('broadcast', { event: 'room' }, ({ payload }) => {
-      if (state.isHost) return;
-      state.room = payload.room;
-      state.online = true;
-      if (state.screen === 'lobby') state.screen = 'room';
+      if (acceptRoom(payload.room)) render();
+    })
+    .on('broadcast', { event: 'host_changed' }, ({ payload }) => {
+      if (!acceptRoom(payload.room)) return;
+      handover = null;
+      clearTimeout(handoverTimer);
+      state.hostIssue = null;
+      state.connection = 'connected';
       render();
     })
     .on('broadcast', { event: 'game_started' }, () => {
@@ -267,17 +553,33 @@ function connectRoom(kind) {
       state.screen = 'waiting_game';
       render();
     })
-    .on('broadcast', { event: 'game_state' }, ({ payload }) => {
+    .on('broadcast', { event: 'game_state' }, async ({ payload }) => {
       if (state.isHost) return;
-      const view = payload.views?.[state.myId];
-      if (!view) return;
+      if (
+        payload?.recipientId !== state.myId ||
+        payload.recipientConnectionId !== connectionId ||
+        payload.senderId !== state.room?.hostId ||
+        !encryptionIdentity
+      )
+        return;
+      const sender = presenceEntry(payload.senderId, payload.senderConnectionId);
+      if (!sender?.publicKey) return;
+      let view;
+      try {
+        view = await decryptFrom(encryptionIdentity, sender.publicKey, payload.encrypted);
+      } catch {
+        return;
+      }
+      if (state.game && view.version < state.game.version) return;
       state.game = view;
       state.screen = 'game';
+      state.connection = 'connected';
       clock = {
         key: 'remote',
         deadline: Date.now() + Math.max(0, view.clockRemaining ?? 0),
         total: view.clockTotal || 1,
       };
+      persistSession();
       render();
     })
     .on('broadcast', { event: 'command' }, ({ payload }) => {
@@ -285,22 +587,61 @@ function connectRoom(kind) {
       if (!payload?.command || payload.command.actorId !== payload.playerId) return;
       applyCommand(payload.command);
     })
-    .subscribe((status) => {
+    .on('broadcast', { event: 'handover_request' }, ({ payload }) => replyToHandover(payload))
+    .on('broadcast', { event: 'handover_response' }, ({ payload }) => collectHandover(payload))
+    .on('presence', { event: 'sync' }, handlePresenceSync)
+    .subscribe(async (status) => {
+      if (roomChannel !== channel) return;
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        state.error =
-          'Não foi possível conectar ao Supabase. Confira a Project URL e a chave pública configuradas na Vercel.';
-        state.screen = 'lobby';
+        if (state.room) {
+          state.connection = 'reconnecting';
+        } else {
+          state.error =
+            'Não foi possível conectar ao Supabase. Confira a Project URL e a chave pública configuradas na Vercel.';
+          state.screen = 'lobby';
+          state.connection = 'idle';
+        }
         render();
         return;
       }
       if (status !== 'SUBSCRIBED') return;
+      const firstSubscription = !subscribedOnce;
+      subscribedOnce = true;
       state.online = true;
-      if (state.isHost) {
+      state.connection = 'connected';
+      await channel.track({
+        playerId: state.myId,
+        name: state.name,
+        onlineAt: new Date().toISOString(),
+        connectionId,
+        publicKey: encryptionIdentity.publicKey,
+      });
+      if (!firstSubscription) {
+        sendRoom('join_request', { id: state.myId, name: state.name, resume: true });
+        if (state.isHost) {
+          broadcastRoom();
+          syncViews();
+        }
+        handlePresenceSync();
+        render();
+        persistSession();
+        return;
+      }
+      if (kind === 'create') {
         state.room = createRoom({ code, hostId: state.myId, hostName: state.name });
         state.screen = 'room';
         history.replaceState(null, '', `/sala/${code}`);
-        sendRoom('room', { room: { ...state.room, game: null } });
+        broadcastRoom();
         render();
+      } else if (resume) {
+        history.replaceState(null, '', `/sala/${code}`);
+        render();
+        sendRoom('join_request', { id: state.myId, name: state.name, resume: true });
+        if (state.isHost) {
+          broadcastRoom();
+          syncViews();
+        }
+        handlePresenceSync();
       } else {
         state.screen = 'room';
         render();
@@ -313,11 +654,16 @@ function connectRoom(kind) {
           }
         }, 6000);
       }
+      persistSession();
     });
+  render();
 }
 
 function leaveTable() {
   clearTimeout(botTimer);
+  clearHostElection();
+  clearTimeout(handoverTimer);
+  handover = null;
   clock = { key: '', deadline: 0, total: 0 };
   state.online = false;
   state.room = null;
@@ -325,8 +671,15 @@ function leaveTable() {
   state.screen = 'lobby';
   state.targetAction = null;
   state.exchangePicks = [];
-  roomChannel?.unsubscribe();
+  state.connection = 'idle';
+  state.hostIssue = null;
+  clearOnlineSession(sessionStorage);
+  const channel = roomChannel;
   roomChannel = null;
+  connectionId = null;
+  encryptionIdentity = null;
+  channel?.untrack();
+  channel?.unsubscribe();
   history.replaceState(null, '', '/');
   render();
 }
@@ -398,17 +751,42 @@ const logIcon = (entry) =>
 function render() {
   const root = $('#app');
   if (state.screen === 'lobby') {
-    root.innerHTML = lobbyHTML();
+    root.innerHTML = lobbyHTML() + connectionUIHTML();
     bindLobby();
     return;
   }
   if (state.screen === 'room' || state.screen === 'waiting_game') {
-    root.innerHTML = roomHTML();
+    root.innerHTML = roomHTML() + connectionUIHTML();
     bindRoom();
     return;
   }
-  root.innerHTML = gameHTML();
+  root.innerHTML = gameHTML() + connectionUIHTML();
   bindGame();
+}
+
+function connectionUIHTML() {
+  const offline = (state.room?.seats ?? []).filter((seat) => seat.kind === 'human' && !seat.connected);
+  const banner =
+    offline.length && !state.hostIssue
+      ? `<div class="disconnect-banner" role="status"><i></i><span>${offline.map((seat) => escapeHTML(seat.name)).join(', ')} ${offline.length === 1 ? 'está desconectado' : 'estão desconectados'} — a mesa continua.</span></div>`
+      : '';
+
+  let overlay = '';
+  if (['connecting', 'reconnecting'].includes(state.connection)) {
+    const reconnecting = Boolean(state.room);
+    overlay = `<div class="connection-overlay" role="alert"><div class="connection-card"><i class="connection-spinner"></i><div class="eyebrow">${reconnecting ? 'Reconectando à corte' : 'Abrindo a corte'}</div><h2>${reconnecting ? 'Sua cadeira está reservada' : 'Conectando à sala'}</h2><p>${reconnecting ? 'Recuperando a sala e sua visão da partida…' : 'Preparando um canal privado para sua mesa…'}</p></div></div>`;
+  } else if (state.hostIssue) {
+    const candidate = escapeHTML(state.hostIssue.candidateName ?? 'outro jogador');
+    const content = {
+      waiting: ['Anfitrião desconectado', `Aguardando o retorno. Se ele não voltar, ${candidate} assume a mesa.`],
+      ready: ['Trocando o anfitrião', `${candidate} foi escolhido para manter a partida em andamento.`],
+      promoting: ['Reconstruindo a mesa', `${candidate} está reunindo as mãos privadas e assumindo como anfitrião.`],
+      failed: ['Não foi possível recuperar a mesa', 'Recarregue a página para tentar retomar sua cadeira.'],
+      unavailable: ['Mesa sem jogadores conectados', 'A partida será retomada quando alguém voltar.'],
+    }[state.hostIssue.status] ?? ['Reconectando a mesa', 'Aguarde um instante…'];
+    overlay = `<div class="connection-overlay" role="alert"><div class="connection-card"><i class="connection-spinner"></i><div class="eyebrow">Continuidade da partida</div><h2>${content[0]}</h2><p>${content[1]}</p></div></div>`;
+  }
+  return banner + overlay;
 }
 
 function lobbyHTML() {
@@ -418,7 +796,7 @@ function lobbyHTML() {
 function roomHTML() {
   const room = state.room;
   const seats = room?.seats || [];
-  return `<main class="shell"><nav class="topbar"><div class="brand">LA <span>CORTE</span></div><button class="ghost" id="leave-room">Sair da sala</button></nav><section class="room-lobby glass"><div class="eyebrow">Sala privada</div><div class="room-code">${escapeHTML(room?.code || '•••••')}</div><p class="sub">Compartilhe este link; o código já acompanha o convite.</p><button class="copy-invite" id="copy-invite">${state.shareCopied ? '✓ Link copiado' : '↗ Copiar link da sala'}</button><div class="room-seats">${seats.map((seat) => `<div class="room-seat"><span class="avatar">${escapeHTML(seat.name[0] ?? '?')}</span><strong title="${escapeHTML(seat.name)}">${escapeHTML(seat.name)}</strong>${seat.id === room.hostId ? '<small>ANFITRIÃO</small>' : ''}</div>`).join('')}</div>${state.screen === 'waiting_game' ? '<p class="waiting">Aguardando o anfitrião distribuir as cartas…</p>' : state.isHost ? `<button class="primary" id="start-room" ${seats.length < 2 ? 'disabled' : ''}>Iniciar partida</button>` : '<p class="waiting">Aguardando o anfitrião iniciar…</p>'}</section></main>`;
+  return `<main class="shell"><nav class="topbar"><div class="brand">LA <span>CORTE</span></div><button class="ghost" id="leave-room">Sair da sala</button></nav><section class="room-lobby glass"><div class="eyebrow">Sala privada</div><div class="room-code">${escapeHTML(room?.code || '•••••')}</div><p class="sub">Compartilhe este link; o código já acompanha o convite.</p><button class="copy-invite" id="copy-invite">${state.shareCopied ? '✓ Link copiado' : '↗ Copiar link da sala'}</button><div class="room-seats">${seats.map((seat) => `<div class="room-seat ${seat.connected ? '' : 'offline'}"><span class="avatar">${escapeHTML(seat.name[0] ?? '?')}</span><strong title="${escapeHTML(seat.name)}">${escapeHTML(seat.name)}</strong>${seat.id === room.hostId ? '<small>ANFITRIÃO</small>' : seat.connected ? '' : '<small>DESCONECTADO</small>'}</div>`).join('')}</div>${state.screen === 'waiting_game' ? '<p class="waiting">Aguardando o anfitrião distribuir as cartas…</p>' : state.isHost ? `<button class="primary" id="start-room" ${seats.length < 2 ? 'disabled' : ''}>Iniciar partida</button>` : '<p class="waiting">Aguardando o anfitrião iniciar…</p>'}</section></main>`;
 }
 
 function gameHTML() {
@@ -450,7 +828,8 @@ function historyHTML() {
 
 function playerHTML(player) {
   const isTurn = state.game.currentPlayerId === player.id && state.game.status === 'playing';
-  return `<div class="player ${isTurn ? 'turn' : ''} ${!isAlive(player) ? 'dead' : ''}"><div class="avatar">${escapeHTML(player.name[0] ?? '?')}</div><strong title="${escapeHTML(player.name)}">${escapeHTML(player.name)}</strong><div class="coins">◆ ${player.coins} moedas</div><div class="influence">${player.cards.map((card) => (card.revealed ? `<i class="mini-card revealed" style="--mini-portrait:url('${PORTRAITS[card.role]}')"><span>${card.role}</span></i>` : '<i class="mini-card hidden" aria-label="Influência não revelada"><span>?</span></i>')).join('')}</div></div>`;
+  const connected = state.room?.seats.find((seat) => seat.id === player.id)?.connected ?? true;
+  return `<div class="player ${isTurn ? 'turn' : ''} ${!isAlive(player) ? 'dead' : ''} ${connected ? '' : 'offline'}"><div class="avatar">${escapeHTML(player.name[0] ?? '?')}</div><strong title="${escapeHTML(player.name)}">${escapeHTML(player.name)}</strong>${connected ? '' : '<small class="offline-label">DESCONECTADO</small>'}<div class="coins">◆ ${player.coins} moedas</div><div class="influence">${player.cards.map((card) => (card.revealed ? `<i class="mini-card revealed" style="--mini-portrait:url('${PORTRAITS[card.role]}')"><span>${card.role}</span></i>` : '<i class="mini-card hidden" aria-label="Influência não revelada"><span>?</span></i>')).join('')}</div></div>`;
 }
 
 function handHTML() {
@@ -588,7 +967,6 @@ function bindLobby() {
 function bindRoom() {
   $('#leave-room').onclick = leaveTable;
   $('#start-room')?.addEventListener('click', () => {
-    state.room = { ...state.room, status: 'playing' };
     startOnline();
   });
   $('#copy-invite')?.addEventListener('click', async () => {
@@ -671,3 +1049,4 @@ function bindGame() {
 }
 
 render();
+if (resumeSnapshot) connectRoom('resume');

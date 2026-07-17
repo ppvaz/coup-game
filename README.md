@@ -74,15 +74,18 @@ npm test
 npm run check
 ```
 
-Os testes cobrem o motor genérico de Coup, códigos de sala, controle do anfitrião e migração de host.
+Os testes cobrem o motor genérico de Coup, códigos de sala, presença, retomada da cadeira, eleição e migração de host, reconstrução da partida e criptografia das visões privadas.
 
 ## Estrutura
 
 ```text
 app.js             Interface e integração da mesa
 src/lib/supabase.js Cliente Supabase Realtime e configuração de conexão
+src/lib/secure-channel.js Criptografia das visões privadas no Broadcast
 src/game/coup.js   Máquina de estados genérica das regras
+src/game/handover.js Reconstrução segura na troca de anfitrião
 src/rooms/room.js  Estado genérico de sala, assentos e host
+src/rooms/session.js Retomada da cadeira após recarregar a aba
 assets/            Cenários, personagens e favicon originais
 test/              Testes do motor e das salas
 ```

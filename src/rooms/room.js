@@ -1,5 +1,7 @@
 const clone = (value) => structuredClone(value);
 
+export const HOST_GRACE_MS = 8_000;
+
 export function generateRoomCode(random = Math.random) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({ length: 5 }, () => alphabet[Math.floor(random() * alphabet.length)]).join('');
@@ -16,6 +18,44 @@ export function createRoom({ code = generateRoomCode(), hostId, hostName, maxPla
     pending: [],
     game: null,
     updatedAt: Date.now(),
+  };
+}
+
+export function syncRoomPresence(source, connectedIds, now = Date.now()) {
+  const room = clone(source);
+  const connected = new Set(connectedIds);
+  let changed = false;
+
+  for (const seat of room.seats.filter((candidate) => candidate.kind === 'human')) {
+    const isConnected = connected.has(seat.id);
+    if (seat.connected === isConnected) continue;
+    seat.connected = isConnected;
+    changed = true;
+    if (isConnected) delete seat.disconnectedAt;
+    else seat.disconnectedAt = now;
+  }
+
+  if (changed) {
+    room.version += 1;
+    room.updatedAt = now;
+  }
+  return room;
+}
+
+export function hostElection(room, now = Date.now(), graceMs = HOST_GRACE_MS) {
+  const host = room.seats.find((candidate) => candidate.id === room.hostId);
+  if (host?.connected) return { status: 'stable', candidateId: null, remainingMs: 0 };
+
+  const successor = room.seats
+    .filter((candidate) => candidate.kind === 'human' && candidate.connected)
+    .sort((a, b) => a.joinedAt - b.joinedAt || a.id.localeCompare(b.id))[0];
+  if (!successor) return { status: 'unavailable', candidateId: null, remainingMs: Infinity };
+
+  const remainingMs = Math.max(0, (host?.disconnectedAt ?? now) + graceMs - now);
+  return {
+    status: remainingMs > 0 ? 'waiting' : 'ready',
+    candidateId: successor.id,
+    remainingMs,
   };
 }
 
@@ -73,7 +113,7 @@ export function dispatchRoom(source, command) {
     case 'disconnect':
       if (!seat) return room;
       seat.connected = false;
-      seat.disconnectedAt = Date.now();
+      seat.disconnectedAt = command.now ?? Date.now();
       break;
     case 'reconnect':
       if (!seat) throw new Error('Assento não encontrado.');
@@ -98,18 +138,19 @@ export function dispatchRoom(source, command) {
         throw new Error('Novo anfitrião inválido.');
       room.hostId = command.playerId;
       break;
+    case 'promote_host': {
+      const election = hostElection(room, command.now, command.graceMs);
+      if (election.status !== 'ready' || election.candidateId !== command.actorId)
+        throw new Error('Este jogador ainda não pode assumir como anfitrião.');
+      room.hostId = command.actorId;
+      break;
+    }
     default:
       throw new Error('Comando de sala desconhecido.');
   }
 
-  if (!room.seats.some((candidate) => candidate.id === room.hostId && candidate.connected)) {
-    const successor = room.seats
-      .filter((candidate) => candidate.kind === 'human' && candidate.connected)
-      .sort((a, b) => a.joinedAt - b.joinedAt)[0];
-    if (successor) room.hostId = successor.id;
-  }
   room.version += 1;
-  room.updatedAt = Date.now();
+  room.updatedAt = command.now ?? Date.now();
   return room;
 }
 

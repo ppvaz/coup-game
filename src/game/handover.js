@@ -11,10 +11,7 @@ export function reconstructGame(successorId, ownView, handovers, random = Math.r
   delete state.clockTotal;
 
   const known = new Map();
-  known.set(
-    successorId,
-    state.players.find((player) => player.id === successorId).cards,
-  );
+  known.set(successorId, state.players.find((player) => player.id === successorId).cards);
   for (const { playerId, view } of handovers) {
     const publicCards = state.players.find((player) => player.id === playerId)?.cards;
     const cards = view?.players?.find?.((player) => player.id === playerId)?.cards;

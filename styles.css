@@ -258,6 +258,22 @@ h1 em {
   opacity: 0.38;
   filter: grayscale(1);
 }
+.player.offline,
+.room-seat.offline {
+  border-color: rgba(177, 91, 76, 0.5);
+}
+.player.offline .avatar,
+.room-seat.offline .avatar {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.offline-label {
+  display: block;
+  color: #c97768;
+  font-size: 7px;
+  letter-spacing: 0.12em;
+  margin-top: 2px;
+}
 .avatar {
   width: 35px;
   height: 35px;
@@ -398,6 +414,76 @@ h1 em {
   display: grid;
   place-items: center;
   z-index: 5;
+}
+.disconnect-banner {
+  position: fixed;
+  top: 76px;
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(201, 119, 104, 0.45);
+  background: rgba(22, 15, 13, 0.94);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  color: #e3c3bb;
+  font-size: 11px;
+}
+.disconnect-banner i {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #c97768;
+  box-shadow: 0 0 10px rgba(201, 119, 104, 0.7);
+}
+.connection-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 5, 4, 0.86);
+  backdrop-filter: blur(8px);
+}
+.connection-card {
+  width: min(430px, 92vw);
+  padding: 34px;
+  border: 1px solid rgba(217, 181, 107, 0.55);
+  background: #151310;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+  text-align: center;
+}
+.connection-card h2 {
+  margin: 8px 0 10px;
+  color: var(--ivory);
+  font: 600 31px 'Cormorant Garamond';
+}
+.connection-card p {
+  margin: 0;
+  color: #aaa194;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.connection-spinner {
+  display: block;
+  width: 26px;
+  height: 26px;
+  margin: 0 auto 20px;
+  border: 1px solid rgba(217, 181, 107, 0.22);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: connection-spin 0.9s linear infinite;
+}
+@keyframes connection-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .modal {
   width: min(440px, 90vw);
