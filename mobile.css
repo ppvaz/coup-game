@@ -174,18 +174,22 @@
 /* Fixa a proporção da carta da mão mesmo onde o layout mobile da .hand a redimensiona. */
 .card-grid .role-card {
   grid-row: auto;
+  display: flex;
   width: 130px;
   height: 165px;
   padding: 14px;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
 }
 .card-grid .role-card h3 {
-  bottom: 46px;
+  position: static;
+  margin: 0;
   line-height: 1;
 }
 .card-grid .role-card p {
-  display: flex;
-  min-height: 28px;
-  align-items: flex-end;
+  position: static;
+  margin: 0;
   line-height: 1.35;
 }
 .card-grid .role-card[aria-pressed='true'] {
