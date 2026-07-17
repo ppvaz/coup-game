@@ -7,6 +7,7 @@ import {
   generateRoomCode,
   hostElection,
   nextGameSeats,
+  roomClosure,
   syncRoomPresence,
 } from '../src/rooms/room.js';
 
@@ -61,6 +62,37 @@ test('sincroniza quedas e retornos a partir da presença sem trocar o host', () 
   assert.equal(hostElection(room, 900).status, 'stable');
 });
 
+test('encerra a mesa quando sobra um jogador após a carência de todos os demais', () => {
+  let room = createRoom({ hostId: 'a', hostName: 'Ana' });
+  assert.equal(roomClosure(room, 50_000).status, 'stable');
+
+  room = dispatchRoom(room, { type: 'join', actorId: 'b', player: { id: 'b', name: 'Bia' } });
+  room = dispatchRoom(room, { type: 'join', actorId: 'c', player: { id: 'c', name: 'Caio' } });
+  room = syncRoomPresence(room, ['a', 'c'], 1_000);
+  room = syncRoomPresence(room, ['a'], 1_300);
+
+  assert.deepEqual(roomClosure(room, 1_000 + HOST_GRACE_MS), {
+    status: 'waiting',
+    survivorId: 'a',
+    remainingMs: 300,
+  });
+  assert.deepEqual(roomClosure(room, 1_300 + HOST_GRACE_MS), {
+    status: 'ready',
+    survivorId: 'a',
+    remainingMs: 0,
+  });
+});
+
+test('cancela o encerramento se outro jogador retornar durante a carência', () => {
+  let room = createRoom({ hostId: 'a', hostName: 'Ana' });
+  room = dispatchRoom(room, { type: 'join', actorId: 'b', player: { id: 'b', name: 'Bia' } });
+  room = syncRoomPresence(room, ['a'], 1_000);
+  assert.equal(roomClosure(room, 1_000 + HOST_GRACE_MS - 1).status, 'waiting');
+
+  room = syncRoomPresence(room, ['a', 'b'], 1_500);
+  assert.equal(roomClosure(room, 1_000 + HOST_GRACE_MS).status, 'stable');
+});
+
 test('entrada tardia aguarda a próxima partida e participa da sala', () => {
   let room = createRoom({ code: 'ABCDE', hostId: 'host', hostName: 'Ana' });
   room = dispatchRoom(room, { type: 'join', actorId: 'bia', player: { id: 'bia', name: 'Bia' } });
@@ -101,9 +133,11 @@ test('jogador tardio só pode assumir a sala depois do fim da partida', () => {
     },
   });
   room = dispatchRoom(room, { type: 'join', actorId: 'caio', player: { id: 'caio', name: 'Caio' } });
-  room = syncRoomPresence(room, ['caio'], 1_000);
+  room = dispatchRoom(room, { type: 'join', actorId: 'davi', player: { id: 'davi', name: 'Davi' } });
+  room = syncRoomPresence(room, ['caio', 'davi'], 1_000);
 
   assert.equal(hostElection(room, 1_000 + HOST_GRACE_MS).status, 'unavailable');
+  assert.equal(roomClosure(room, 1_000 + HOST_GRACE_MS).status, 'stable');
 
   room.status = 'finished';
   assert.deepEqual(hostElection(room, 1_000 + HOST_GRACE_MS), {

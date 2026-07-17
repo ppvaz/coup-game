@@ -48,6 +48,22 @@ export function nextGameSeats(room) {
   return room.seats.filter((seat) => seat.connected);
 }
 
+export function roomClosure(room, now = Date.now(), graceMs = HOST_GRACE_MS) {
+  const humans = room.seats.filter((seat) => seat.kind === 'human');
+  const connected = humans.filter((seat) => seat.connected);
+  const disconnected = humans.filter((seat) => !seat.connected && Number.isFinite(seat.disconnectedAt));
+  if (connected.length !== 1 || !disconnected.length) {
+    return { status: 'stable', survivorId: connected[0]?.id ?? null, remainingMs: 0 };
+  }
+
+  const remainingMs = Math.max(0, ...disconnected.map((seat) => seat.disconnectedAt + graceMs - now));
+  return {
+    status: remainingMs > 0 ? 'waiting' : 'ready',
+    survivorId: connected[0].id,
+    remainingMs,
+  };
+}
+
 export function hostElection(room, now = Date.now(), graceMs = HOST_GRACE_MS) {
   const host = room.seats.find((candidate) => candidate.id === room.hostId);
   if (host?.connected) return { status: 'stable', candidateId: null, remainingMs: 0 };

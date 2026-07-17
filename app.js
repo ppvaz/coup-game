@@ -11,6 +11,7 @@ import {
   generateRoomCode,
   hostElection,
   nextGameSeats,
+  roomClosure,
   syncRoomPresence,
 } from './src/rooms/room.js';
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
@@ -545,6 +546,21 @@ function handlePresenceSync() {
     broadcastRoom();
     syncViews();
   }
+
+  const closure = roomClosure(state.room);
+  clearHostElection();
+  if (closure.status !== 'stable') {
+    state.hostIssue = { status: 'closing' };
+    if (closure.status === 'waiting') {
+      hostElectionTimer = setTimeout(handlePresenceSync, closure.remainingMs + 30);
+      render();
+      persistSession();
+      return;
+    }
+    closeTableForInsufficientPlayers();
+    return;
+  }
+
   if (handover) {
     state.hostIssue = { status: 'promoting', candidateId: state.myId, candidateName: state.name };
     render();
@@ -552,7 +568,6 @@ function handlePresenceSync() {
   }
 
   const election = hostElection(state.room);
-  clearHostElection();
   if (election.status === 'stable') {
     state.hostIssue = null;
     render();
@@ -947,6 +962,11 @@ function leaveTable() {
   render();
 }
 
+function closeTableForInsufficientPlayers() {
+  state.error = 'A mesa foi encerrada porque não restaram jogadores conectados suficientes.';
+  leaveTable();
+}
+
 // ---------- Crônica ----------
 
 function describeLog(entry) {
@@ -1073,6 +1093,10 @@ function connectionUIHTML() {
       promoting: ['Reconstruindo a mesa', `${candidate} está reunindo as mãos privadas e assumindo como anfitrião.`],
       failed: ['Não foi possível recuperar a mesa', 'Recarregue a página para tentar retomar sua cadeira.'],
       unavailable: ['Mesa sem jogadores conectados', 'A partida será retomada quando alguém voltar.'],
+      closing: [
+        'Aguardando o retorno da mesa',
+        'Se nenhum outro jogador voltar durante a carência, esta mesa será encerrada.',
+      ],
     }[state.hostIssue.status] ?? ['Reconectando a mesa', 'Aguarde um instante…'];
     overlay = `<div class="connection-overlay" role="alert"><div class="connection-card"><i class="connection-spinner"></i><div class="eyebrow">Continuidade da partida</div><h2>${content[0]}</h2><p>${content[1]}</p></div></div>`;
   }
