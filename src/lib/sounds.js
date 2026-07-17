@@ -7,6 +7,10 @@ const PATTERNS = {
   ],
   warning: [{ frequency: 880, at: 0, duration: 0.08, volume: 0.028, type: 'square' }],
   action: [{ frequency: 392, at: 0, duration: 0.09, volume: 0.018 }],
+  message: [
+    { frequency: 659.25, at: 0, duration: 0.06, volume: 0.018 },
+    { frequency: 783.99, at: 0.07, duration: 0.09, volume: 0.02 },
+  ],
   victory: [
     { frequency: 392, at: 0, duration: 0.16, volume: 0.035 },
     { frequency: 523.25, at: 0.16, duration: 0.16, volume: 0.04 },

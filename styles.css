@@ -224,6 +224,56 @@ h1 em {
   align-items: center;
   gap: 8px;
 }
+.roombar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  background: rgba(10, 9, 8, 0.52);
+  color: #bbb2a4;
+}
+.chat-toggle:hover,
+.chat-toggle[aria-expanded='true'] {
+  border-color: rgba(217, 181, 107, 0.55);
+  color: var(--ivory);
+}
+.chat-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--gold);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+.chat-toggle small {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.chat-toggle b {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  display: grid;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  place-items: center;
+  border: 1px solid #18110c;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #18110c;
+  font: 700 8px 'DM Sans';
+}
 .sound-toggle {
   display: flex;
   align-items: center;
@@ -259,6 +309,229 @@ h1 em {
   font-size: 8px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.chat-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  pointer-events: none;
+  background: rgba(3, 3, 2, 0.54);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.chat-backdrop.open {
+  pointer-events: auto;
+  opacity: 1;
+}
+.chat-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: grid;
+  width: min(390px, 92vw);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border-left: 1px solid rgba(217, 181, 107, 0.3);
+  background: linear-gradient(160deg, rgba(24, 21, 17, 0.99), rgba(8, 8, 7, 0.99));
+  box-shadow: -28px 0 80px rgba(0, 0, 0, 0.42);
+  transform: translateX(105%);
+  transition: transform 220ms ease;
+}
+.chat-panel.open {
+  transform: translateX(0);
+}
+body:has(.chat-panel.open) .theme-toggle {
+  pointer-events: none;
+  opacity: 0;
+}
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 22px 18px;
+  border-bottom: 1px solid rgba(217, 181, 107, 0.18);
+}
+.chat-header h2 {
+  margin: 2px 0 0;
+  color: var(--ivory);
+  font: 600 27px 'Cormorant Garamond';
+}
+.chat-header button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: #b7aea1;
+  font-size: 20px;
+}
+.chat-messages {
+  display: flex;
+  min-height: 0;
+  padding: 18px;
+  overflow-y: auto;
+  flex-direction: column;
+  gap: 13px;
+  overscroll-behavior: contain;
+}
+.chat-empty {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  color: #8f877b;
+  text-align: center;
+}
+.chat-empty i {
+  color: rgba(217, 181, 107, 0.58);
+  font: normal 28px 'Cormorant Garamond';
+}
+.chat-empty p {
+  margin: 10px 0 3px;
+  color: #c9bead;
+  font: 600 17px 'Cormorant Garamond';
+}
+.chat-empty small {
+  font-size: 9px;
+}
+.chat-message {
+  display: grid;
+  align-items: start;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 9px;
+}
+.chat-message.mine {
+  grid-template-columns: minmax(0, 1fr) 30px;
+}
+.chat-message.mine .chat-avatar {
+  grid-column: 2;
+  grid-row: 1;
+}
+.chat-message.mine > div {
+  grid-column: 1;
+  grid-row: 1;
+}
+.chat-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(217, 181, 107, 0.24);
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6e4b33, #241817);
+  color: #eadfcd;
+  font: 600 15px 'Cormorant Garamond';
+}
+.chat-message header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 3px 4px;
+}
+.chat-message.mine header {
+  flex-direction: row-reverse;
+}
+.chat-message header strong {
+  overflow: hidden;
+  color: #cfc4b4;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-message time {
+  color: #716b62;
+  font-size: 8px;
+}
+.chat-message p {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  color: #ddd3c4;
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.chat-message.mine p {
+  border-color: rgba(217, 181, 107, 0.25);
+  background: rgba(217, 181, 107, 0.1);
+}
+.chat-message.taunt p {
+  color: #d9c38f;
+  font-family: 'Cormorant Garamond';
+  font-size: 14px;
+  font-style: italic;
+}
+.chat-compose {
+  padding: 14px 16px 18px;
+  border-top: 1px solid rgba(217, 181, 107, 0.18);
+  background: rgba(5, 5, 4, 0.42);
+}
+.chat-taunts {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chat-taunts::-webkit-scrollbar {
+  display: none;
+}
+.chat-taunts button {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border: 1px solid rgba(217, 181, 107, 0.2);
+  background: rgba(217, 181, 107, 0.06);
+  color: #bcae96;
+  font: italic 11px 'Cormorant Garamond';
+}
+.chat-taunts button:hover {
+  border-color: rgba(217, 181, 107, 0.52);
+  color: #ebd8af;
+}
+#chat-form textarea {
+  width: 100%;
+  min-height: 58px;
+  resize: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  outline: none;
+  background: rgba(0, 0, 0, 0.3);
+  color: #eee4d4;
+  padding: 10px 11px;
+  font: 11px/1.5 'DM Sans';
+}
+#chat-form textarea:focus {
+  border-color: rgba(217, 181, 107, 0.55);
+}
+#chat-form textarea:disabled {
+  opacity: 0.45;
+}
+.chat-form-footer {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 9px;
+  margin-top: 8px;
+}
+.chat-form-footer > span {
+  color: #756e64;
+  font-size: 8px;
+}
+.chat-form-footer .chat-error {
+  color: #d88476;
+}
+.chat-form-footer button {
+  padding: 7px 12px;
+  border: 1px solid rgba(217, 181, 107, 0.54);
+  background: var(--gold);
+  color: #18130c;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.chat-form-footer button:disabled {
+  opacity: 0.35;
 }
 .round {
   font-size: 11px;
@@ -485,7 +758,7 @@ h1 em {
 .connection-overlay {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 40;
   display: grid;
   place-items: center;
   padding: 24px;

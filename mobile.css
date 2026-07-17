@@ -647,6 +647,44 @@ html[data-theme='light'] .sound-toggle {
   color: #4f4438;
   border-color: rgba(91, 65, 27, 0.3);
 }
+html[data-theme='light'] .chat-toggle {
+  background: rgba(250, 247, 240, 0.62);
+  color: #4f4438;
+  border-color: rgba(91, 65, 27, 0.3);
+}
+html[data-theme='light'] .chat-panel {
+  border-color: rgba(126, 91, 31, 0.32);
+  background: linear-gradient(160deg, rgba(250, 247, 240, 0.99), rgba(232, 223, 207, 0.99));
+}
+html[data-theme='light'] .chat-header,
+html[data-theme='light'] .chat-compose {
+  border-color: rgba(126, 91, 31, 0.2);
+  background: rgba(255, 255, 255, 0.18);
+}
+html[data-theme='light'] .chat-header button,
+html[data-theme='light'] #chat-form textarea {
+  border-color: rgba(91, 65, 27, 0.26);
+  background: rgba(255, 255, 255, 0.38);
+  color: #352d24;
+}
+html[data-theme='light'] .chat-message p {
+  border-color: rgba(91, 65, 27, 0.14);
+  background: rgba(255, 255, 255, 0.34);
+  color: #41372c;
+}
+html[data-theme='light'] .chat-message.mine p {
+  border-color: rgba(126, 91, 31, 0.3);
+  background: rgba(155, 116, 46, 0.12);
+}
+html[data-theme='light'] .chat-message header strong,
+html[data-theme='light'] .chat-empty p {
+  color: #4a3e31;
+}
+html[data-theme='light'] .chat-taunts button {
+  border-color: rgba(126, 91, 31, 0.24);
+  background: rgba(155, 116, 46, 0.08);
+  color: #685538;
+}
 .chronicle {
   width: min(480px, 100%);
   margin: 26px auto 0;
@@ -1008,5 +1046,43 @@ html[data-theme='light'] .sound-toggle {
   }
   .role-card h3 {
     font-size: 20px;
+  }
+}
+
+@media (max-width: 720px) {
+  .chat-toggle {
+    min-width: 38px;
+    padding: 8px;
+    justify-content: center;
+  }
+  .chat-toggle small {
+    display: none;
+  }
+  .chat-panel {
+    top: auto;
+    left: 0;
+    width: 100%;
+    height: min(78dvh, 680px);
+    border-top: 1px solid rgba(217, 181, 107, 0.3);
+    border-left: 0;
+    transform: translateY(105%);
+  }
+  .chat-panel.open {
+    transform: translateY(0);
+  }
+  .chat-header {
+    padding: 16px 18px 13px;
+  }
+  .chat-header h2 {
+    font-size: 23px;
+  }
+  .chat-messages {
+    padding: 14px 16px;
+  }
+  .chat-compose {
+    padding: 11px 14px max(14px, env(safe-area-inset-bottom));
+  }
+  #chat-form textarea {
+    font-size: 16px;
   }
 }

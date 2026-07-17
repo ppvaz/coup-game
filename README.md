@@ -18,6 +18,7 @@ La Corte é uma experiência premium de blefe e influência inspirada nas mecân
 - Relógios por fase com jogada conservadora automática para jogadores ausentes.
 - Reconexão, retomada da cadeira e promoção automática de anfitrião sem expor as mãos privadas.
 - Sons sintetizados para turno, alerta de tempo e resultado, com mute persistente.
+- Chat cifrado da mesa com provocações rápidas, histórico, contador e proteção contra spam.
 - Tema escuro e tema claro “pergaminho imperial”, persistidos no navegador.
 - Interface responsiva e assets originais: cenário noturno/diurno, cinco personagens e favicon.
 
@@ -77,7 +78,7 @@ npm test
 npm run check
 ```
 
-Os testes cobrem o motor genérico de Coup, códigos de sala, presença, retomada da cadeira, eleição e migração de host, reconstrução da partida e criptografia das visões privadas.
+Os testes cobrem o motor genérico de Coup, códigos de sala, presença, retomada da cadeira, eleição e migração de host, reconstrução da partida, chat e criptografia das visões privadas.
 
 ## Estrutura
 
@@ -88,6 +89,7 @@ src/lib/secure-channel.js Criptografia das visões privadas no Broadcast
 src/lib/sounds.js Sons sintetizados e preferência de mute
 src/game/coup.js   Máquina de estados genérica das regras
 src/game/handover.js Reconstrução segura na troca de anfitrião
+src/rooms/chat.js Normalização, histórico e proteção contra spam
 src/rooms/room.js  Estado genérico de sala, assentos e host
 src/rooms/session.js Retomada da cadeira após recarregar a aba
 assets/            Cenários, personagens e favicon originais

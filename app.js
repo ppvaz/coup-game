@@ -3,6 +3,7 @@ import { ACTIONS, createGame, dispatchGame, viewForPlayer, isAlive } from './src
 import { reconstructGame } from './src/game/handover.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
 import { createSoundManager } from './src/lib/sounds.js';
+import { CHAT_MAX_LENGTH, appendChatMessage, createChatGuard, normalizeChatText } from './src/rooms/chat.js';
 import {
   HOST_GRACE_MS,
   createRoom,
@@ -60,6 +61,12 @@ const BLOCK_HINTS = {
   Embaixador: 'Impede Roubo',
 };
 const NAMES = ['Lorenzo', 'Beatrice', 'Vittorio'];
+const CHAT_TAUNTS = [
+  'A corte está observando.',
+  'Isso foi um blefe.',
+  'Corajoso da sua parte.',
+  'Sua vez, excelência.',
+];
 // Relógio por fase, em segundos: estourou, a autoridade joga o padrão conservador.
 const PHASE_SECONDS = {
   turn: 30,
@@ -101,6 +108,11 @@ let state = {
   connection: 'idle',
   presenceReady: false,
   hostIssue: null,
+  chatOpen: false,
+  chatMessages: [],
+  chatDraft: '',
+  chatUnread: 0,
+  chatError: null,
 };
 if (resumeSnapshot) {
   state = {
@@ -114,6 +126,10 @@ if (resumeSnapshot) {
     game: resumeSnapshot.game,
     screen: resumeSnapshot.game ? 'game' : 'room',
     connection: 'connecting',
+    chatMessages: (resumeSnapshot.chatMessages ?? []).reduce(
+      (messages, message) => appendChatMessage(messages, normalizeIncomingChat(message)),
+      [],
+    ),
   };
 }
 let roomChannel = null;
@@ -125,6 +141,7 @@ let handover = null;
 let encryptionIdentity = null;
 let connectionId = null;
 let warnedClockKey = '';
+let chatErrorTimer = null;
 if (resumeSnapshot?.game) {
   clock = {
     key: 'restored',
@@ -135,6 +152,7 @@ if (resumeSnapshot?.game) {
 
 const themeToggle = $('#theme-toggle');
 const sounds = createSoundManager();
+const chatGuard = createChatGuard();
 const unlockSounds = () => sounds.unlock().catch(() => {});
 document.addEventListener('pointerdown', unlockSounds, { once: true });
 document.addEventListener('keydown', unlockSounds, { once: true });
@@ -188,6 +206,7 @@ function persistSession() {
     game: state.game,
     clockRemaining: Math.max(0, clock.deadline - Date.now()),
     clockTotal: clock.total,
+    chatMessages: state.chatMessages,
   });
 }
 
@@ -195,6 +214,126 @@ function broadcastRoom() {
   if (!state.isHost || !state.room) return;
   sendRoom('room', { room: publicRoom() });
   persistSession();
+}
+
+function setChatError(message, duration = 4_000) {
+  clearTimeout(chatErrorTimer);
+  state.chatError = message;
+  chatErrorTimer = setTimeout(() => {
+    state.chatError = null;
+    if (state.chatOpen) render();
+  }, duration);
+}
+
+function normalizeIncomingChat(message) {
+  return {
+    id: String(message?.id ?? '').slice(0, 80),
+    playerId: String(message?.playerId ?? '').slice(0, 80),
+    playerName: String(message?.playerName ?? '').slice(0, 18),
+    text: message?.text,
+    sentAt: Number(message?.sentAt) || Date.now(),
+    kind: message?.kind === 'taunt' ? 'taunt' : 'message',
+  };
+}
+
+function addChatMessage(message, notify = true) {
+  const normalized = normalizeIncomingChat(message);
+  const next = appendChatMessage(state.chatMessages, normalized);
+  if (next === state.chatMessages) return false;
+  state.chatMessages = next;
+  if (notify && normalized.playerId !== state.myId) {
+    if (!state.chatOpen) state.chatUnread += 1;
+    sounds.play('message');
+  }
+  persistSession();
+  return true;
+}
+
+async function sendPrivateChat(event, recipientId, value) {
+  if (!encryptionIdentity) return false;
+  const recipients = roomChannel?.presenceState()?.[recipientId] ?? [];
+  const sends = recipients
+    .filter((recipient) => recipient.publicKey && recipient.connectionId)
+    .map(async (recipient) => {
+      const encrypted = await encryptFor(encryptionIdentity, recipient.publicKey, value);
+      return sendRoom(event, {
+        recipientId,
+        recipientConnectionId: recipient.connectionId,
+        senderId: state.myId,
+        senderConnectionId: connectionId,
+        encrypted,
+      });
+    });
+  await Promise.allSettled(sends);
+  return sends.length > 0;
+}
+
+async function readPrivateChat(payload) {
+  if (!encryptionIdentity || payload?.recipientId !== state.myId || payload.recipientConnectionId !== connectionId)
+    return null;
+  const sender = presenceEntry(payload.senderId, payload.senderConnectionId);
+  if (!sender?.publicKey) return null;
+  try {
+    return await decryptFrom(encryptionIdentity, sender.publicKey, payload.encrypted);
+  } catch {
+    return null;
+  }
+}
+
+function rejectChat(playerId, retryAfter) {
+  const seconds = Math.max(1, Math.ceil(retryAfter / 1000));
+  const message = `Muitas mensagens. Aguarde ${seconds}s para continuar.`;
+  if (playerId === state.myId) setChatError(message, retryAfter);
+  else sendPrivateChat('chat_rejected', playerId, { retryAfter });
+}
+
+function acceptChatRequest(payload) {
+  if (!state.isHost || !state.room) return;
+  const seat = state.room.seats.find(
+    (candidate) => candidate.id === payload?.playerId && candidate.kind === 'human' && candidate.connected,
+  );
+  if (!seat) return;
+  const result = chatGuard.accept(seat.id, payload.text);
+  if (!result.ok) {
+    if (result.reason === 'cooldown') rejectChat(seat.id, result.retryAfter);
+    return;
+  }
+  const message = {
+    id: crypto.randomUUID(),
+    playerId: seat.id,
+    playerName: seat.name,
+    text: result.text,
+    sentAt: Date.now(),
+    kind: payload.kind,
+  };
+  addChatMessage(message, seat.id !== state.myId);
+  for (const recipient of state.room.seats.filter((seat) => seat.kind === 'human' && seat.id !== state.myId)) {
+    sendPrivateChat('chat_message', recipient.id, { message });
+  }
+  render();
+}
+
+async function submitChat(value, kind = 'message') {
+  const text = normalizeChatText(value);
+  if (!text || !state.online) return;
+  if (state.connection !== 'connected' || state.hostIssue) {
+    setChatError('Reconecte-se à mesa antes de enviar mensagens.');
+    render();
+    return;
+  }
+  state.chatDraft = '';
+  const request = { playerId: state.myId, text, kind };
+  if (state.isHost) acceptChatRequest(request);
+  else {
+    const sent = await sendPrivateChat('chat_request', state.room.hostId, request);
+    if (!sent) setChatError('O anfitrião ainda não está disponível. Tente novamente em instantes.');
+  }
+  render();
+}
+
+function sendChatHistory(recipientId) {
+  if (!state.isHost) return;
+  sendPrivateChat('chat_history', recipientId, { messages: state.chatMessages });
 }
 
 // ---------- Fluxo de comandos: um único motor para bots e multiplayer ----------
@@ -552,6 +691,10 @@ async function connectRoom(kind) {
   if (!resume) {
     state.myId = crypto.randomUUID();
     state.isHost = kind === 'create';
+    state.chatMessages = [];
+    state.chatDraft = '';
+    state.chatUnread = 0;
+    state.chatError = null;
   }
   const code = kind === 'create' ? generateRoomCode() : state.room?.code || state.joinCode;
   const channel = supabase.channel(`la-corte:${code}`, {
@@ -572,6 +715,7 @@ async function connectRoom(kind) {
       }
       broadcastRoom();
       syncViews();
+      sendChatHistory(payload.id);
       render();
     })
     .on('broadcast', { event: 'room' }, ({ payload }) => {
@@ -626,6 +770,39 @@ async function connectRoom(kind) {
       if (!state.isHost || !state.game) return;
       if (!payload?.command || payload.command.actorId !== payload.playerId) return;
       applyCommand(payload.command);
+    })
+    .on('broadcast', { event: 'chat_request' }, async ({ payload }) => {
+      if (!state.isHost) return;
+      const request = await readPrivateChat(payload);
+      if (!request || request.playerId !== payload.senderId) return;
+      acceptChatRequest(request);
+    })
+    .on('broadcast', { event: 'chat_message' }, async ({ payload }) => {
+      if (payload?.senderId !== state.room?.hostId) return;
+      const accepted = await readPrivateChat(payload);
+      if (accepted?.message && addChatMessage(accepted.message)) render();
+    })
+    .on('broadcast', { event: 'chat_history' }, async ({ payload }) => {
+      if (state.isHost || payload?.senderId !== state.room?.hostId) return;
+      const history = await readPrivateChat(payload);
+      if (!history) return;
+      const merged = [...(history.messages ?? []), ...state.chatMessages].sort(
+        (left, right) => left.sentAt - right.sentAt,
+      );
+      state.chatMessages = merged.reduce(
+        (messages, message) => appendChatMessage(messages, normalizeIncomingChat(message)),
+        [],
+      );
+      persistSession();
+      if (state.chatOpen) render();
+    })
+    .on('broadcast', { event: 'chat_rejected' }, async ({ payload }) => {
+      if (payload?.senderId !== state.room?.hostId) return;
+      const rejection = await readPrivateChat(payload);
+      if (!rejection) return;
+      const retryAfter = Math.max(1_000, Number(rejection.retryAfter) || 1_000);
+      setChatError(`Muitas mensagens. Aguarde ${Math.ceil(retryAfter / 1000)}s para continuar.`, retryAfter);
+      render();
     })
     .on('broadcast', { event: 'handover_request' }, ({ payload }) => replyToHandover(payload))
     .on('broadcast', { event: 'handover_response' }, ({ payload }) => collectHandover(payload))
@@ -703,6 +880,7 @@ function leaveTable() {
   clearTimeout(botTimer);
   clearHostElection();
   clearTimeout(handoverTimer);
+  clearTimeout(chatErrorTimer);
   handover = null;
   warnedClockKey = '';
   clock = { key: '', deadline: 0, total: 0 };
@@ -714,6 +892,11 @@ function leaveTable() {
   state.exchangePicks = [];
   state.connection = 'idle';
   state.hostIssue = null;
+  state.chatOpen = false;
+  state.chatMessages = [];
+  state.chatDraft = '';
+  state.chatUnread = 0;
+  state.chatError = null;
   clearOnlineSession(sessionStorage);
   const channel = roomChannel;
   roomChannel = null;
@@ -791,18 +974,43 @@ const logIcon = (entry) =>
 
 function render() {
   const root = $('#app');
+  const restoreChatFocus = document.activeElement?.id === 'chat-input';
   if (state.screen === 'lobby') {
-    root.innerHTML = lobbyHTML() + connectionUIHTML();
+    root.innerHTML = lobbyHTML() + connectionUIHTML() + chatPanelHTML();
     bindLobby();
+    bindChat(restoreChatFocus);
     return;
   }
   if (state.screen === 'room' || state.screen === 'waiting_game') {
-    root.innerHTML = roomHTML() + connectionUIHTML();
+    root.innerHTML = roomHTML() + connectionUIHTML() + chatPanelHTML();
     bindRoom();
+    bindChat(restoreChatFocus);
     return;
   }
-  root.innerHTML = gameHTML() + connectionUIHTML();
+  root.innerHTML = gameHTML() + connectionUIHTML() + chatPanelHTML();
   bindGame();
+  bindChat(restoreChatFocus);
+}
+
+function chatToggleHTML() {
+  if (!state.online) return '';
+  const unread = Math.min(state.chatUnread, 99);
+  return `<button class="chat-toggle" id="chat-toggle" type="button" aria-expanded="${state.chatOpen}" aria-label="Abrir chat da mesa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v11H9l-5 3v-14Z"/><path d="M8 10h8M8 13h5"/></svg><small>Chat</small>${unread ? `<b>${unread}</b>` : ''}</button>`;
+}
+
+function chatPanelHTML() {
+  if (!state.online || !state.room || state.screen === 'lobby') return '';
+  const count = Array.from(state.chatDraft).length;
+  const messages = state.chatMessages.length
+    ? state.chatMessages
+        .map((message) => {
+          const mine = message.playerId === state.myId;
+          const time = new Date(message.sentAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          return `<article class="chat-message ${mine ? 'mine' : ''} ${message.kind === 'taunt' ? 'taunt' : ''}"><span class="chat-avatar">${escapeHTML(message.playerName[0] ?? '?')}</span><div><header><strong>${escapeHTML(message.playerName || 'Convidado')}</strong><time>${time}</time></header><p>${escapeHTML(message.text)}</p></div></article>`;
+        })
+        .join('')
+    : '<div class="chat-empty"><i>♜</i><p>A corte ainda está em silêncio.</p><small>Quebre o gelo — ou comece uma intriga.</small></div>';
+  return `<div class="chat-backdrop ${state.chatOpen ? 'open' : ''}" id="chat-backdrop"></div><aside class="chat-panel ${state.chatOpen ? 'open' : ''}" aria-hidden="${!state.chatOpen}" ${state.chatOpen ? '' : 'inert'}><header class="chat-header"><div><span class="eyebrow">Conversa da mesa</span><h2>Salão da corte</h2></div><button id="chat-close" type="button" aria-label="Fechar chat">×</button></header><div class="chat-messages" id="chat-messages" aria-live="polite">${messages}</div><div class="chat-compose"><div class="chat-taunts">${CHAT_TAUNTS.map((taunt) => `<button type="button" data-taunt="${escapeHTML(taunt)}">${escapeHTML(taunt)}</button>`).join('')}</div><form id="chat-form"><textarea id="chat-input" maxlength="${CHAT_MAX_LENGTH}" rows="2" placeholder="Diga algo à corte…" ${state.connection === 'connected' ? '' : 'disabled'}>${escapeHTML(state.chatDraft)}</textarea><div class="chat-form-footer"><span class="chat-error">${escapeHTML(state.chatError ?? '')}</span><span id="chat-count">${count}/${CHAT_MAX_LENGTH}</span><button type="submit" aria-label="Enviar mensagem" ${state.connection === 'connected' ? '' : 'disabled'}>Enviar</button></div></form></div></aside>`;
 }
 
 function connectionUIHTML() {
@@ -837,7 +1045,7 @@ function lobbyHTML() {
 function roomHTML() {
   const room = state.room;
   const seats = room?.seats || [];
-  return `<main class="shell"><nav class="topbar"><div class="brand">LA <span>CORTE</span></div><button class="ghost" id="leave-room">Sair da sala</button></nav><section class="room-lobby glass"><div class="eyebrow">Sala privada</div><div class="room-code">${escapeHTML(room?.code || '•••••')}</div><p class="sub">Compartilhe este link; o código já acompanha o convite.</p><button class="copy-invite" id="copy-invite">${state.shareCopied ? '✓ Link copiado' : '↗ Copiar link da sala'}</button><div class="room-seats">${seats.map((seat) => `<div class="room-seat ${seat.connected ? '' : 'offline'}"><span class="avatar">${escapeHTML(seat.name[0] ?? '?')}</span><strong title="${escapeHTML(seat.name)}">${escapeHTML(seat.name)}</strong>${seat.id === room.hostId ? '<small>ANFITRIÃO</small>' : seat.connected ? '' : '<small>DESCONECTADO</small>'}</div>`).join('')}</div>${state.screen === 'waiting_game' ? '<p class="waiting">Aguardando o anfitrião distribuir as cartas…</p>' : state.isHost ? `<button class="primary" id="start-room" ${seats.length < 2 ? 'disabled' : ''}>Iniciar partida</button>` : '<p class="waiting">Aguardando o anfitrião iniciar…</p>'}</section></main>`;
+  return `<main class="shell"><nav class="topbar"><div class="brand">LA <span>CORTE</span></div><div class="roombar-actions">${chatToggleHTML()}<button class="ghost" id="leave-room">Sair da sala</button></div></nav><section class="room-lobby glass"><div class="eyebrow">Sala privada</div><div class="room-code">${escapeHTML(room?.code || '•••••')}</div><p class="sub">Compartilhe este link; o código já acompanha o convite.</p><button class="copy-invite" id="copy-invite">${state.shareCopied ? '✓ Link copiado' : '↗ Copiar link da sala'}</button><div class="room-seats">${seats.map((seat) => `<div class="room-seat ${seat.connected ? '' : 'offline'}"><span class="avatar">${escapeHTML(seat.name[0] ?? '?')}</span><strong title="${escapeHTML(seat.name)}">${escapeHTML(seat.name)}</strong>${seat.id === room.hostId ? '<small>ANFITRIÃO</small>' : seat.connected ? '' : '<small>DESCONECTADO</small>'}</div>`).join('')}</div>${state.screen === 'waiting_game' ? '<p class="waiting">Aguardando o anfitrião distribuir as cartas…</p>' : state.isHost ? `<button class="primary" id="start-room" ${seats.length < 2 ? 'disabled' : ''}>Iniciar partida</button>` : '<p class="waiting">Aguardando o anfitrião iniciar…</p>'}</section></main>`;
 }
 
 function gameHTML() {
@@ -847,7 +1055,7 @@ function gameHTML() {
     !state.online || state.isHost
       ? '<button class="primary" id="again" style="width:220px;margin-top:24px">Jogar novamente</button>'
       : '<p class="waiting">Aguardando o anfitrião abrir outra mesa…</p>';
-  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()}</div><div class="gamebar-actions">${soundToggleHTML()}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
+  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()}</div><div class="gamebar-actions">${chatToggleHTML()}${soundToggleHTML()}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
     .filter((player) => player.id !== state.myId)
     .map(playerHTML)
     .join(
@@ -1097,6 +1305,60 @@ function bindGame() {
   $('#confirm-exchange')?.addEventListener('click', () =>
     dispatch({ type: 'choose_exchange', actorId: state.myId, cardIds: state.exchangePicks }),
   );
+}
+
+function bindChat(restoreFocus = false) {
+  const openChat = () => {
+    state.chatOpen = true;
+    state.chatUnread = 0;
+    render();
+    $('#chat-input')?.focus();
+    persistSession();
+  };
+  const closeChat = () => {
+    state.chatOpen = false;
+    render();
+  };
+
+  $('#chat-toggle')?.addEventListener('click', () => (state.chatOpen ? closeChat() : openChat()));
+  $('#chat-close')?.addEventListener('click', closeChat);
+  $('#chat-backdrop')?.addEventListener('click', closeChat);
+
+  const input = $('#chat-input');
+  const form = $('#chat-form');
+  input?.addEventListener('input', (event) => {
+    state.chatDraft = event.target.value;
+    const count = Array.from(state.chatDraft).length;
+    $('#chat-count').textContent = `${count}/${CHAT_MAX_LENGTH}`;
+  });
+  input?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      form?.requestSubmit();
+    }
+  });
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    state.chatDraft = input.value;
+    submitChat(state.chatDraft);
+    $('#chat-input')?.focus();
+  });
+  document.querySelectorAll('[data-taunt]').forEach((button) => {
+    button.addEventListener('click', () => {
+      submitChat(button.dataset.taunt, 'taunt');
+      $('#chat-input')?.focus();
+    });
+  });
+
+  requestAnimationFrame(() => {
+    const messages = $('#chat-messages');
+    if (messages) messages.scrollTop = messages.scrollHeight;
+    if (restoreFocus) {
+      const restoredInput = $('#chat-input');
+      restoredInput?.focus();
+      restoredInput?.setSelectionRange(restoredInput.value.length, restoredInput.value.length);
+    }
+  });
 }
 
 render();
