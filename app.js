@@ -71,9 +71,9 @@ const CHAT_TAUNTS = [
 // Relógio por fase, em segundos: estourou, a autoridade joga o padrão conservador.
 const PHASE_SECONDS = {
   turn: 30,
-  challenge_action: 15,
-  block: 15,
-  challenge_block: 15,
+  challenge_action: 20,
+  block: 20,
+  challenge_block: 20,
   choose_influence: 20,
   exchange: 30,
 };
