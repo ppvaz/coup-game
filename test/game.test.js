@@ -204,7 +204,7 @@ test('turno pula jogadores eliminados', () => {
 
 test('alvo que blefa o bloqueio do assassinato pode perder as duas influências', () => {
   let state = createGame(seats, { random: () => 0.42 });
-  setHand(state, 'a', ['Assassino', 'Duque']);
+  setHand(state, 'a', ['Assassina', 'Duque']);
   setHand(state, 'b', ['Duque', 'Capitão']);
   state.players[0].coins = 3;
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' });
@@ -220,7 +220,7 @@ test('alvo que blefa o bloqueio do assassinato pode perder as duas influências'
 
 test('alvo eliminado na contestação não trava a ação esperando bloqueio', () => {
   let state = createGame(seats, { random: () => 0.42 });
-  setHand(state, 'a', ['Assassino', 'Duque']);
+  setHand(state, 'a', ['Assassina', 'Duque']);
   setHand(state, 'b', ['Duque', 'Capitão']);
   state.players[1].cards[1].revealed = true;
   state.players[0].coins = 3;
@@ -233,7 +233,7 @@ test('alvo eliminado na contestação não trava a ação esperando bloqueio', (
 
 test('quem perde a contestação escolhe a influência e a ação continua para o bloqueio', () => {
   let state = createGame(seats, { random: () => 0.42 });
-  setHand(state, 'a', ['Assassino', 'Duque']);
+  setHand(state, 'a', ['Assassina', 'Duque']);
   setHand(state, 'b', ['Condessa', 'Duque']);
   state.players[0].coins = 3;
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' });

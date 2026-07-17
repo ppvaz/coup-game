@@ -1,11 +1,11 @@
-export const ROLES = ['Duque', 'Assassino', 'Capitão', 'Embaixador', 'Condessa'];
+export const ROLES = ['Duque', 'Assassina', 'Capitão', 'Embaixador', 'Condessa'];
 
 export const ACTIONS = {
   income: { label: 'Renda', coins: 1 },
   foreign_aid: { label: 'Ajuda externa', coins: 2, blockedBy: ['Duque'] },
   coup: { label: 'Golpe', cost: 7, targeted: true },
   tax: { label: 'Imposto', role: 'Duque', coins: 3 },
-  assassinate: { label: 'Assassinar', role: 'Assassino', cost: 3, targeted: true, blockedBy: ['Condessa'] },
+  assassinate: { label: 'Assassinar', role: 'Assassina', cost: 3, targeted: true, blockedBy: ['Condessa'] },
   steal: { label: 'Roubar', role: 'Capitão', targeted: true, blockedBy: ['Capitão', 'Embaixador'] },
   exchange: { label: 'Trocar', role: 'Embaixador' },
 };
