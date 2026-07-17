@@ -100,7 +100,11 @@ function responderIds(state, actorId) {
 function resolveAction(state) {
   const pending = state.pending;
   const actor = assertActor(state, pending.actorId);
-  const target = pending.targetId == null ? null : assertActor(state, pending.targetId);
+  const target = pending.targetId == null ? null : state.players.find((player) => player.id === pending.targetId);
+  if (target && !isAlive(target)) {
+    state.log.push({ type: 'action_fizzled', action: pending.action, actorId: actor.id, targetId: target.id, at: Date.now() });
+    return finishTurn(state);
+  }
   switch (pending.action) {
     case 'income': actor.coins += 1; break;
     case 'foreign_aid': actor.coins += 2; break;
@@ -131,10 +135,13 @@ function resolveAction(state) {
 function beginBlocksOrResolve(state) {
   const action = ACTIONS[state.pending.action];
   if (!action.blockedBy) return resolveAction(state);
-  state.phase = 'block';
-  state.responseQueue = state.pending.targetId == null
+  // O contestador pode ter sido eliminado ao perder a contestação; um morto não bloqueia.
+  const blockers = (state.pending.targetId == null
     ? responderIds(state, state.pending.actorId)
-    : [state.pending.targetId];
+    : [state.pending.targetId]).filter((id) => isAlive(state.players.find((player) => player.id === id)));
+  if (!blockers.length) return resolveAction(state);
+  state.phase = 'block';
+  state.responseQueue = blockers;
 }
 
 function proveRole(state, playerId, role) {

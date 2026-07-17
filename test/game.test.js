@@ -208,6 +208,19 @@ test('alvo que blefa o bloqueio do assassinato pode perder as duas influências'
   assert.equal(state.currentPlayerId, 'c');
 });
 
+test('alvo eliminado na contestação não trava a ação esperando bloqueio', () => {
+  let state = createGame(seats, { random: () => 0.42 });
+  setHand(state, 'a', ['Assassino', 'Duque']);
+  setHand(state, 'b', ['Duque', 'Capitão']);
+  state.players[1].cards[1].revealed = true;
+  state.players[0].coins = 3;
+  state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' });
+  state = dispatchGame(state, { type: 'challenge', actorId: 'b' });
+  assert.equal(activeRoles(state.players[1]).length, 0);
+  assert.equal(state.phase, 'turn');
+  assert.equal(state.currentPlayerId, 'c');
+});
+
 test('última influência perdida define o vencedor', () => {
   let state = createGame(seats.slice(0, 2), { random: () => 0.42 });
   state.players[0].coins = 7;
