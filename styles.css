@@ -290,20 +290,37 @@ h1 em {
 }
 .sound-icon {
   position: relative;
-  display: inline-grid;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
   place-items: center;
-  min-width: 12px;
   color: var(--gold);
-  font-size: 15px;
-  line-height: 1;
 }
+.sound-icon svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+  overflow: visible;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.45;
+}
+.sound-icon.muted::before,
 .sound-icon.muted::after {
   position: absolute;
-  width: 1px;
-  height: 18px;
+  top: 0;
+  right: -2px;
+  width: 7px;
+  height: 1.5px;
   content: '';
   background: currentColor;
-  transform: rotate(42deg);
+  transform: rotate(45deg);
+}
+.sound-icon.muted::after {
+  transform: rotate(-45deg);
 }
 .sound-toggle small {
   font-size: 8px;

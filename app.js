@@ -1065,7 +1065,7 @@ function gameHTML() {
 
 function soundToggleHTML() {
   const muted = sounds.isMuted();
-  return `<button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="${muted}" aria-label="${muted ? 'Ativar sons' : 'Silenciar sons'}"><span class="sound-icon ${muted ? 'muted' : ''}" aria-hidden="true">♪</span><small>${muted ? 'Sons desligados' : 'Sons ligados'}</small></button>`;
+  return `<button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="${muted}" aria-label="${muted ? 'Ativar sons' : 'Silenciar sons'}"><span class="sound-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M8 14.2V4.8l7-1.6v8.5"/><ellipse cx="5.7" cy="14.5" rx="2.3" ry="1.8"/><ellipse cx="12.7" cy="12" rx="2.3" ry="1.8"/></svg></span><small>${muted ? 'Sons desligados' : 'Sons ligados'}</small></button>`;
 }
 
 function historyHTML() {
