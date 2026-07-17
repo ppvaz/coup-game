@@ -3,7 +3,19 @@ import { createClient } from '@supabase/supabase-js';
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const isSupabaseConfigured = Boolean(url && anonKey && !url.includes('SEU-PROJETO'));
+function isProjectUrl(value) {
+  try {
+    const hostname = new URL(value).hostname;
+    return hostname.endsWith('.supabase.co') || hostname === 'localhost';
+  } catch {
+    return false;
+  }
+}
+
+export const isSupabaseConfigured = Boolean(anonKey && isProjectUrl(url));
+export const supabaseConfigError = url && !isProjectUrl(url)
+  ? 'Use a Project URL do Supabase (https://SEU-PROJETO.supabase.co), não a URL do dashboard.'
+  : null;
 
 export const supabase = isSupabaseConfigured
   ? createClient(url, anonKey, {
