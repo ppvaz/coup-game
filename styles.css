@@ -861,6 +861,17 @@ body:has(.modal-wrap) .theme-toggle {
   font: 600 44px 'Cormorant Garamond';
   color: var(--gold);
 }
+.winner.defeat {
+  color: #c97768;
+}
+.game-result-copy {
+  max-width: 380px;
+  margin: 8px auto 0;
+  color: #aaa194;
+  font:
+    12px/1.55 'DM Sans',
+    sans-serif;
+}
 @media (max-width: 800px) {
   .landing {
     grid-template-columns: 1fr;

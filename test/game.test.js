@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ROLES, createGame, dispatchGame, viewForPlayer } from '../src/game/coup.js';
+import { ROLES, createGame, dispatchGame, isAlive, viewForPlayer } from '../src/game/coup.js';
 
 const seats = [
   { id: 'a', name: 'Ana' },
@@ -300,4 +300,31 @@ test('última influência perdida define o vencedor', () => {
     () => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'income' }),
     /não está em andamento/,
   );
+});
+
+test('partida solo termina assim que o humano perde a última influência', () => {
+  const soloSeats = [
+    { id: 'me', name: 'Humano', kind: 'human' },
+    { id: 'bot-a', name: 'Bot A', kind: 'bot' },
+    { id: 'bot-b', name: 'Bot B', kind: 'bot' },
+    { id: 'bot-c', name: 'Bot C', kind: 'bot' },
+  ];
+  let state = createGame(soloSeats, { random: () => 0.42, stopWhenHumansEliminated: true });
+  state.players[0].cards[1].revealed = true;
+  state.players[1].coins = 7;
+  state.currentPlayerId = 'bot-a';
+
+  state = dispatchGame(state, {
+    type: 'declare_action',
+    actorId: 'bot-a',
+    action: 'coup',
+    targetId: 'me',
+  });
+
+  assert.equal(state.status, 'finished');
+  assert.equal(state.phase, 'finished');
+  assert.equal(state.winnerId, null);
+  assert.equal(state.finishReason, 'humans_eliminated');
+  assert.equal(state.log.at(-1).loserId, 'me');
+  assert.equal(state.players.filter((player) => player.kind === 'bot' && isAlive(player)).length, 3);
 });

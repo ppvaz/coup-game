@@ -461,7 +461,7 @@ function startLocal() {
     ...NAMES.map((name, index) => ({ id: `bot-${index}`, name, kind: 'bot' })),
   ];
   state.myId = 'me';
-  state.game = createGame(seats);
+  state.game = createGame(seats, { stopWhenHumansEliminated: true });
   announceGameState(null, state.game);
   state.screen = 'game';
   resetClock();
@@ -949,7 +949,9 @@ function describeLog(entry) {
     case 'action_fizzled':
       return `A ação de ${n(entry.actorId)} se perdeu: o alvo já havia caído.`;
     case 'game_finished':
-      return `${n(entry.winnerId)} domina a corte.`;
+      return entry.reason === 'humans_eliminated'
+        ? `${n(entry.loserId)} caiu da corte. Os rivais tomaram o poder.`
+        : `${n(entry.winnerId)} domina a corte.`;
     default:
       return '';
   }
@@ -1050,7 +1052,12 @@ function roomHTML() {
 
 function gameHTML() {
   const game = state.game;
-  const winner = game.status === 'finished' ? game.players.find((player) => player.id === game.winnerId) : null;
+  const finished = game.status === 'finished';
+  const winner = finished ? game.players.find((player) => player.id === game.winnerId) : null;
+  const result =
+    game.finishReason === 'humans_eliminated'
+      ? '<div class="winner defeat">Você caiu da corte</div><p class="game-result-copy">Seus rivais tomaram o poder. Reúna suas influências e tente novamente.</p>'
+      : `<div class="winner">${escapeHTML(winner?.name ?? '?')} domina a corte</div>`;
   const again =
     !state.online || state.isHost
       ? '<button class="primary" id="again" style="width:220px;margin-top:24px">Jogar novamente</button>'
@@ -1060,7 +1067,7 @@ function gameHTML() {
     .map(playerHTML)
     .join(
       '',
-    )}</div><div class="center"><div class="turn-copy">${winner ? `<div class="winner">${escapeHTML(winner.name)} domina a corte</div>` : `É a vez de<br><b>${playerName(game.currentPlayerId)}</b>`}</div>${winner ? '' : timerHTML()}${historyHTML()}${winner ? again : ''}</div></section>${!winner ? handHTML() : ''}${modalHTML()}</main>`;
+    )}</div><div class="center"><div class="turn-copy">${finished ? result : `É a vez de<br><b>${playerName(game.currentPlayerId)}</b>`}</div>${finished ? '' : timerHTML()}${historyHTML()}${finished ? again : ''}</div></section>${finished ? '' : handHTML()}${modalHTML()}</main>`;
 }
 
 function soundToggleHTML() {

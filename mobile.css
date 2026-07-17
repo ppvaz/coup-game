@@ -610,6 +610,12 @@ html[data-theme='light'] .turn-copy {
 html[data-theme='light'] .turn-copy b {
   color: #251d16;
 }
+html[data-theme='light'] .winner.defeat {
+  color: #8f302d;
+}
+html[data-theme='light'] .game-result-copy {
+  color: #665a4d;
+}
 html[data-theme='light'] .chronicle {
   background: linear-gradient(145deg, rgba(252, 249, 242, 0.91), rgba(232, 224, 211, 0.84));
   border-color: rgba(107, 77, 30, 0.25);

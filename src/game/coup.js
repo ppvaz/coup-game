@@ -48,6 +48,8 @@ export function createGame(seats, options = {}) {
     responseQueue: [],
     exchangeOptions: [],
     winnerId: null,
+    finishReason: null,
+    stopWhenHumansEliminated: Boolean(options.stopWhenHumansEliminated),
     log: [{ type: 'game_started', at: Date.now() }],
   };
 }
@@ -67,17 +69,28 @@ function nextPlayerId(state, afterId) {
   return afterId;
 }
 
+function finishGame(state, { winnerId = null, reason, loserId = null }) {
+  state.status = 'finished';
+  state.phase = 'finished';
+  state.winnerId = winnerId;
+  state.finishReason = reason;
+  state.pending = null;
+  state.responseQueue = [];
+  state.log.push({ type: 'game_finished', winnerId, reason, loserId, at: Date.now() });
+}
+
+function finishAfterHumanDefeat(state) {
+  if (!state.stopWhenHumansEliminated) return false;
+  const humans = state.players.filter((player) => player.kind === 'human');
+  if (!humans.length || humans.some(isAlive)) return false;
+  finishGame(state, { reason: 'humans_eliminated', loserId: humans[0].id });
+  return true;
+}
+
 function finishTurn(state) {
+  if (finishAfterHumanDefeat(state)) return;
   const living = activePlayers(state);
-  if (living.length === 1) {
-    state.status = 'finished';
-    state.phase = 'finished';
-    state.winnerId = living[0].id;
-    state.pending = null;
-    state.responseQueue = [];
-    state.log.push({ type: 'game_finished', winnerId: living[0].id, at: Date.now() });
-    return;
-  }
+  if (living.length === 1) return finishGame(state, { winnerId: living[0].id, reason: 'last_survivor' });
   state.currentPlayerId = nextPlayerId(state, state.currentPlayerId);
   state.turn += 1;
   state.phase = 'turn';
@@ -86,6 +99,7 @@ function finishTurn(state) {
 }
 
 function runAfterLoss(state, afterLoss) {
+  if (finishAfterHumanDefeat(state)) return;
   if (afterLoss === 'continue_action') return beginBlocksOrResolve(state);
   if (afterLoss === 'resolve_action') return resolveAction(state);
   if (afterLoss === 'action_blocked') {
