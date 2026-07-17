@@ -178,6 +178,16 @@
   height: 165px;
   padding: 14px;
 }
+.card-grid .role-card h3 {
+  bottom: 46px;
+  line-height: 1;
+}
+.card-grid .role-card p {
+  display: flex;
+  min-height: 28px;
+  align-items: flex-end;
+  line-height: 1.35;
+}
 .card-grid .role-card[aria-pressed='true'] {
   border-color: var(--gold);
   box-shadow:
@@ -641,6 +651,24 @@ html[data-theme='light'] .theme-toggle {
   background: rgba(250, 247, 240, 0.9);
   color: #3e342a;
   border-color: rgba(91, 65, 27, 0.3);
+}
+html[data-theme='light'] .connection-overlay {
+  background: rgba(235, 228, 216, 0.82);
+}
+html[data-theme='light'] .connection-card {
+  border-color: rgba(126, 91, 31, 0.42);
+  background: linear-gradient(145deg, #fbf7ef, #e9decc);
+  box-shadow: 0 24px 80px rgba(65, 48, 28, 0.2);
+}
+html[data-theme='light'] .connection-card h2 {
+  color: #30271f;
+}
+html[data-theme='light'] .connection-card p {
+  color: #665a4d;
+}
+html[data-theme='light'] .connection-spinner {
+  border-color: rgba(87, 61, 25, 0.2);
+  border-top-color: #8a6425;
 }
 html[data-theme='light'] .sound-toggle {
   background: rgba(250, 247, 240, 0.62);

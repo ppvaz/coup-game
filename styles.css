@@ -369,6 +369,10 @@ body:has(.chat-panel.open) .theme-toggle {
   pointer-events: none;
   opacity: 0;
 }
+body:has(.modal-wrap) .theme-toggle {
+  pointer-events: none;
+  opacity: 0;
+}
 .chat-header {
   display: flex;
   align-items: center;
