@@ -85,12 +85,29 @@ function finishTurn(state) {
   state.responseQueue = [];
 }
 
-function revealFirstAvailable(state, playerId) {
-  const player = assertActor(state, playerId);
-  const card = activeCards(player)[0];
-  if (!card) throw new Error('O jogador não possui influência para revelar.');
-  card.revealed = true;
-  state.log.push({ type: 'influence_lost', playerId, role: card.role, at: Date.now() });
+function runAfterLoss(state, afterLoss) {
+  if (afterLoss === 'continue_action') return beginBlocksOrResolve(state);
+  if (afterLoss === 'resolve_action') return resolveAction(state);
+  if (afterLoss === 'action_blocked') {
+    state.log.push({ type: 'action_blocked', ...state.pending.block, at: Date.now() });
+    return finishTurn(state);
+  }
+  return finishTurn(state);
+}
+
+// Quem perde influência escolhe qual carta revelar; com uma só carta viva
+// não há escolha, então a revelação é imediata e a continuação já executa.
+function loseInfluence(state, playerId, afterLoss) {
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  const active = activeCards(player);
+  if (active.length === 1) {
+    active[0].revealed = true;
+    state.log.push({ type: 'influence_lost', playerId, role: active[0].role, at: Date.now() });
+    return runAfterLoss(state, afterLoss);
+  }
+  state.phase = 'choose_influence';
+  state.pending.lossPlayerId = playerId;
+  state.pending.afterLoss = afterLoss;
 }
 
 function responderIds(state, actorId) {
@@ -117,8 +134,7 @@ function resolveAction(state) {
     }
     case 'coup':
     case 'assassinate':
-      state.phase = 'choose_influence';
-      state.pending.lossPlayerId = target.id;
+      loseInfluence(state, target.id, 'finish_turn');
       return;
     case 'exchange': {
       const count = activeCards(actor).length;
@@ -207,15 +223,9 @@ export function dispatchGame(source, command) {
     const claimedRole = state.phase === 'challenge_action' ? state.pending.claimedRole : state.pending.block.role;
     const truthful = proveRole(state, challengedId, claimedRole);
     state.log.push({ type: 'challenge_resolved', challengerId: actor.id, challengedId, claimedRole, truthful, at: Date.now() });
-    if (truthful) {
-      revealFirstAvailable(state, actor.id);
-      if (state.phase === 'challenge_action') beginBlocksOrResolve(state);
-      else { state.log.push({ type: 'action_blocked', ...state.pending.block, at: Date.now() }); finishTurn(state); }
-    } else {
-      revealFirstAvailable(state, challengedId);
-      if (state.phase === 'challenge_action') finishTurn(state);
-      else resolveAction(state);
-    }
+    const onAction = state.phase === 'challenge_action';
+    if (truthful) loseInfluence(state, actor.id, onAction ? 'continue_action' : 'action_blocked');
+    else loseInfluence(state, challengedId, onAction ? 'finish_turn' : 'resolve_action');
     return state;
   }
 
@@ -236,7 +246,10 @@ export function dispatchGame(source, command) {
     if (!card) throw new Error('Influência inválida.');
     card.revealed = true;
     state.log.push({ type: 'influence_lost', playerId: actor.id, role: card.role, at: Date.now() });
-    finishTurn(state);
+    const afterLoss = state.pending.afterLoss;
+    state.pending.lossPlayerId = null;
+    state.pending.afterLoss = null;
+    runAfterLoss(state, afterLoss);
     return state;
   }
 
