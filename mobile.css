@@ -39,7 +39,11 @@
 .block-option:hover { border-color:var(--gold); background:rgba(217,181,107,.16); }
 .block-option b { font:600 18px "Cormorant Garamond"; }
 .block-option small { color:#aaa194; font-size:10px; }
-.card-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:10px; margin:22px 0 16px; }
+/* No máximo 4 opções: 1 centrada, 2 lado a lado, 3 em linha, 4 em 2x2. */
+.card-grid { display:grid; gap:10px; margin:22px 0 16px; justify-content:center; grid-template-columns:minmax(0, 200px); }
+.card-grid:has(> :nth-child(2)) { grid-template-columns:repeat(2, minmax(0, 200px)); }
+.card-grid:has(> :nth-child(3)) { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+.card-grid:has(> :nth-child(4)) { grid-template-columns:repeat(2, minmax(0, 200px)); }
 .pick-card { position:relative; height:152px; padding:12px; border:1px solid rgba(217,181,107,.34); background-color:#171210; background-image:linear-gradient(180deg, rgba(8,7,6,.05) 25%, rgba(8,7,6,.94) 80%), var(--portrait); background-size:cover; background-position:center top; color:#efe5d3; text-align:left; transition:.15s; }
 .pick-card:hover { border-color:var(--gold); box-shadow:0 0 18px rgba(217,181,107,.18); }
 .pick-card b { position:absolute; left:12px; right:10px; bottom:24px; font:600 18px "Cormorant Garamond"; color:#f2e9da; text-shadow:0 2px 8px #000; }
