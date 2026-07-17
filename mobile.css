@@ -642,6 +642,11 @@ html[data-theme='light'] .theme-toggle {
   color: #3e342a;
   border-color: rgba(91, 65, 27, 0.3);
 }
+html[data-theme='light'] .sound-toggle {
+  background: rgba(250, 247, 240, 0.62);
+  color: #4f4438;
+  border-color: rgba(91, 65, 27, 0.3);
+}
 .chronicle {
   width: min(480px, 100%);
   margin: 26px auto 0;
@@ -843,6 +848,16 @@ html[data-theme='light'] .theme-toggle {
     font-size: 9px;
     line-height: 1.4;
     letter-spacing: 0.12em;
+  }
+  .gamebar-actions {
+    gap: 6px;
+  }
+  .sound-toggle {
+    min-width: 38px;
+    padding: 8px;
+  }
+  .sound-toggle small {
+    display: none;
   }
   .ghost {
     padding: 9px 10px;

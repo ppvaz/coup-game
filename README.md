@@ -15,6 +15,9 @@ La Corte é uma experiência premium de blefe e influência inspirada nas mecân
 - Bloqueios de Ajuda Externa, Roubo e Assassinato na experiência contra bots.
 - Cartas reveladas com retratos e memória pública das influências perdidas.
 - Crônica da corte, com os eventos mais recentes e contexto dentro dos modais de decisão.
+- Relógios por fase com jogada conservadora automática para jogadores ausentes.
+- Reconexão, retomada da cadeira e promoção automática de anfitrião sem expor as mãos privadas.
+- Sons sintetizados para turno, alerta de tempo e resultado, com mute persistente.
 - Tema escuro e tema claro “pergaminho imperial”, persistidos no navegador.
 - Interface responsiva e assets originais: cenário noturno/diurno, cinco personagens e favicon.
 
@@ -82,6 +85,7 @@ Os testes cobrem o motor genérico de Coup, códigos de sala, presença, retomad
 app.js             Interface e integração da mesa
 src/lib/supabase.js Cliente Supabase Realtime e configuração de conexão
 src/lib/secure-channel.js Criptografia das visões privadas no Broadcast
+src/lib/sounds.js Sons sintetizados e preferência de mute
 src/game/coup.js   Máquina de estados genérica das regras
 src/game/handover.js Reconstrução segura na troca de anfitrião
 src/rooms/room.js  Estado genérico de sala, assentos e host

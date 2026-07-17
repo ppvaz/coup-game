@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/s
 import { ACTIONS, createGame, dispatchGame, viewForPlayer, isAlive } from './src/game/coup.js';
 import { reconstructGame } from './src/game/handover.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
+import { createSoundManager } from './src/lib/sounds.js';
 import {
   HOST_GRACE_MS,
   createRoom,
@@ -123,6 +124,7 @@ let handoverTimer = null;
 let handover = null;
 let encryptionIdentity = null;
 let connectionId = null;
+let warnedClockKey = '';
 if (resumeSnapshot?.game) {
   clock = {
     key: 'restored',
@@ -132,6 +134,10 @@ if (resumeSnapshot?.game) {
 }
 
 const themeToggle = $('#theme-toggle');
+const sounds = createSoundManager();
+const unlockSounds = () => sounds.unlock().catch(() => {});
+document.addEventListener('pointerdown', unlockSounds, { once: true });
+document.addEventListener('keydown', unlockSounds, { once: true });
 function paintThemeToggle() {
   const light = document.documentElement.dataset.theme === 'light';
   themeToggle.innerHTML = `<span>${light ? '☾' : '☀'}</span><small>${light ? 'Tema escuro' : 'Tema claro'}</small>`;
@@ -150,6 +156,23 @@ const me = () => state.game.players.find((player) => player.id === state.myId);
 const playerName = (id) => escapeHTML(state.game.players.find((player) => player.id === id)?.name ?? '?');
 const roundNumber = () => Math.floor((state.game.turn - 1) / state.game.players.length) + 1;
 const sendRoom = (event, payload = {}) => roomChannel?.send({ type: 'broadcast', event, payload });
+
+function announceGameState(previous, next) {
+  if (!next) return;
+  if (next.status === 'finished' && previous?.status !== 'finished') {
+    sounds.play(next.winnerId === state.myId ? 'victory' : 'defeat');
+    return;
+  }
+  const before = previous ? awaitedPlayerId(previous) : null;
+  const after = awaitedPlayerId(next);
+  if (after === state.myId && before !== state.myId) {
+    sounds.play('turn');
+    return;
+  }
+  const previousEvent = previous?.log?.at(-1)?.at;
+  const nextEvent = next.log?.at(-1)?.at;
+  if (previous && nextEvent && nextEvent !== previousEvent) sounds.play('action');
+}
 
 function publicRoom() {
   return state.room ? { ...state.room, game: null } : null;
@@ -188,6 +211,7 @@ function dispatch(command) {
 }
 
 function applyCommand(command) {
+  const previous = state.game;
   try {
     state.game = dispatchGame(state.game, command);
   } catch (error) {
@@ -196,6 +220,7 @@ function applyCommand(command) {
     console.error('Comando rejeitado:', error.message, command);
     return;
   }
+  announceGameState(previous, state.game);
   state.targetAction = null;
   state.exchangePicks = [];
   resetClock();
@@ -243,10 +268,14 @@ function resetClock() {
     clock = { key: '', deadline: 0, total: 0 };
     return;
   }
-  const key = `${game.turn}|${game.phase}|${awaitedPlayerId(game)}|${game.responseQueue.length}`;
+  const key = decisionClockKey(game);
   if (key === clock.key) return;
   const total = (PHASE_SECONDS[game.phase] ?? 30) * 1000;
   clock = { key, deadline: Date.now() + total, total };
+}
+
+function decisionClockKey(game) {
+  return `${game.turn}|${game.phase}|${awaitedPlayerId(game)}|${game.responseQueue.length}`;
 }
 
 function tickClock() {
@@ -258,6 +287,10 @@ function tickClock() {
     element.querySelector('i').style.width = `${(remaining / clock.total) * 100}%`;
     element.querySelector('span').textContent = `${seconds}s`;
   });
+  if (seconds <= 5 && warnedClockKey !== clock.key && awaitedPlayerId(state.game) === state.myId) {
+    warnedClockKey = clock.key;
+    sounds.play('warning');
+  }
   if (remaining > 0) return;
   if (state.online && !state.isHost) return; // o host aplica pelo ausente
   const awaited = awaitedPlayerId(state.game);
@@ -283,12 +316,14 @@ function scheduleBots() {
 }
 
 function startLocal() {
+  warnedClockKey = '';
   const seats = [
     { id: 'me', name: state.name, kind: 'human' },
     ...NAMES.map((name, index) => ({ id: `bot-${index}`, name, kind: 'bot' })),
   ];
   state.myId = 'me';
   state.game = createGame(seats);
+  announceGameState(null, state.game);
   state.screen = 'game';
   resetClock();
   render();
@@ -296,8 +331,10 @@ function startLocal() {
 }
 
 function startOnline() {
+  warnedClockKey = '';
   const seats = state.room.seats.map((seat) => ({ id: seat.id, name: seat.name, kind: 'human' }));
   state.game = createGame(seats);
+  announceGameState(null, state.game);
   state.screen = 'game';
   state.room = { ...state.room, status: 'playing', version: state.room.version + 1, updatedAt: Date.now() };
   resetClock();
@@ -550,6 +587,7 @@ async function connectRoom(kind) {
     })
     .on('broadcast', { event: 'game_started' }, () => {
       if (state.isHost) return;
+      warnedClockKey = '';
       state.screen = 'waiting_game';
       render();
     })
@@ -571,11 +609,13 @@ async function connectRoom(kind) {
         return;
       }
       if (state.game && view.version < state.game.version) return;
+      const previous = state.game;
       state.game = view;
+      announceGameState(previous, view);
       state.screen = 'game';
       state.connection = 'connected';
       clock = {
-        key: 'remote',
+        key: decisionClockKey(view),
         deadline: Date.now() + Math.max(0, view.clockRemaining ?? 0),
         total: view.clockTotal || 1,
       };
@@ -664,6 +704,7 @@ function leaveTable() {
   clearHostElection();
   clearTimeout(handoverTimer);
   handover = null;
+  warnedClockKey = '';
   clock = { key: '', deadline: 0, total: 0 };
   state.online = false;
   state.room = null;
@@ -806,12 +847,17 @@ function gameHTML() {
     !state.online || state.isHost
       ? '<button class="primary" id="again" style="width:220px;margin-top:24px">Jogar novamente</button>'
       : '<p class="waiting">Aguardando o anfitrião abrir outra mesa…</p>';
-  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()}</div><button class="ghost" id="leave">Sair da mesa</button></nav><section class="board"><div class="opponents">${game.players
+  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()}</div><div class="gamebar-actions">${soundToggleHTML()}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
     .filter((player) => player.id !== state.myId)
     .map(playerHTML)
     .join(
       '',
     )}</div><div class="center"><div class="turn-copy">${winner ? `<div class="winner">${escapeHTML(winner.name)} domina a corte</div>` : `É a vez de<br><b>${playerName(game.currentPlayerId)}</b>`}</div>${winner ? '' : timerHTML()}${historyHTML()}${winner ? again : ''}</div></section>${!winner ? handHTML() : ''}${modalHTML()}</main>`;
+}
+
+function soundToggleHTML() {
+  const muted = sounds.isMuted();
+  return `<button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="${muted}" aria-label="${muted ? 'Ativar sons' : 'Silenciar sons'}"><span>${muted ? '♪̸' : '♪'}</span><small>${muted ? 'Sons desligados' : 'Sons ligados'}</small></button>`;
 }
 
 function historyHTML() {
@@ -987,6 +1033,11 @@ function bindRoom() {
 
 function bindGame() {
   $('#leave').onclick = leaveTable;
+  $('#sound-toggle')?.addEventListener('click', () => {
+    const muted = sounds.toggle();
+    if (!muted) sounds.play('action');
+    render();
+  });
   $('#again')?.addEventListener('click', () => (state.online ? startOnline() : startLocal()));
   document.querySelectorAll('[data-action]').forEach(
     (button) =>
