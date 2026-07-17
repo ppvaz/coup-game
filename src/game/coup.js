@@ -37,6 +37,7 @@ export function createGame(seats, options = {}) {
     cards: [deck.pop(), deck.pop()],
   }));
   return {
+    gameId: options.gameId ?? null,
     version: 1,
     status: 'playing',
     phase: 'turn',

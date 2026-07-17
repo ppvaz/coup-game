@@ -12,6 +12,7 @@ export function createRoom({ code = generateRoomCode(), hostId, hostName, maxPla
     version: 1,
     code,
     status: 'lobby',
+    activeGameId: null,
     hostId,
     maxPlayers,
     seats: [{ id: hostId, name: hostName, kind: 'human', connected: true, joinedAt: Date.now() }],
@@ -125,6 +126,7 @@ export function dispatchRoom(source, command) {
       if (room.seats.length < 2) throw new Error('São necessários pelo menos dois jogadores.');
       room.status = 'playing';
       room.game = command.game;
+      room.activeGameId = command.game.gameId ?? room.activeGameId;
       break;
     case 'commit_game':
       if (!isHost || room.status !== 'playing') throw new Error('Somente o host autoritativo pode confirmar o estado.');

@@ -17,8 +17,13 @@ test('gera código curto sem caracteres ambíguos', () => {
 test('host controla bots e início da sala', () => {
   let room = createRoom({ code: 'ABCDE', hostId: 'host', hostName: 'Ana' });
   room = dispatchRoom(room, { type: 'add_bot', actorId: 'host', bot: { id: 'bot-1', name: 'Lorenzo' } });
-  room = dispatchRoom(room, { type: 'start_game', actorId: 'host', game: { version: 1, status: 'playing' } });
+  room = dispatchRoom(room, {
+    type: 'start_game',
+    actorId: 'host',
+    game: { gameId: 'game-1', version: 1, status: 'playing' },
+  });
   assert.equal(room.status, 'playing');
+  assert.equal(room.activeGameId, 'game-1');
   assert.equal(room.seats[1].kind, 'bot');
 });
 

@@ -13,6 +13,7 @@ import {
   syncRoomPresence,
 } from './src/rooms/room.js';
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
+import { shouldAcceptGameView, shouldResetGame } from './src/rooms/game-sync.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import duquePortrait from './assets/characters/duque.png';
 import assassinaPortrait from './assets/characters/assassina.png';
@@ -472,12 +473,19 @@ function startLocal() {
 function startOnline() {
   warnedClockKey = '';
   const seats = state.room.seats.map((seat) => ({ id: seat.id, name: seat.name, kind: 'human' }));
-  state.game = createGame(seats);
+  const gameId = crypto.randomUUID();
+  state.game = createGame(seats, { gameId });
   announceGameState(null, state.game);
   state.screen = 'game';
-  state.room = { ...state.room, status: 'playing', version: state.room.version + 1, updatedAt: Date.now() };
+  state.room = {
+    ...state.room,
+    status: 'playing',
+    activeGameId: gameId,
+    version: state.room.version + 1,
+    updatedAt: Date.now(),
+  };
   resetClock();
-  sendRoom('game_started', {});
+  sendRoom('game_started', { gameId });
   broadcastRoom();
   render();
   syncViews();
@@ -493,6 +501,12 @@ function clearHostElection() {
 function acceptRoom(incoming) {
   if (!incoming?.code || incoming.code !== (state.room?.code ?? state.joinCode)) return false;
   if (state.room && incoming.version < state.room.version) return false;
+  if (shouldResetGame(state.game, incoming.activeGameId)) {
+    state.game = null;
+    state.targetAction = null;
+    state.exchangePicks = [];
+    clock = { key: '', deadline: 0, total: 0 };
+  }
   state.room = incoming;
   state.isHost = incoming.hostId === state.myId;
   state.online = true;
@@ -729,10 +743,16 @@ async function connectRoom(kind) {
       state.connection = 'connected';
       render();
     })
-    .on('broadcast', { event: 'game_started' }, () => {
+    .on('broadcast', { event: 'game_started' }, ({ payload }) => {
       if (state.isHost) return;
       warnedClockKey = '';
+      if (payload?.gameId) state.room = { ...state.room, status: 'playing', activeGameId: payload.gameId };
+      if (shouldResetGame(state.game, payload?.gameId)) state.game = null;
+      state.targetAction = null;
+      state.exchangePicks = [];
+      clock = { key: '', deadline: 0, total: 0 };
       state.screen = 'waiting_game';
+      persistSession();
       render();
     })
     .on('broadcast', { event: 'game_state' }, async ({ payload }) => {
@@ -752,7 +772,7 @@ async function connectRoom(kind) {
       } catch {
         return;
       }
-      if (state.game && view.version < state.game.version) return;
+      if (!shouldAcceptGameView(state.game, view, state.room?.activeGameId)) return;
       const previous = state.game;
       state.game = view;
       announceGameState(previous, view);
