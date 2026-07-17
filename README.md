@@ -8,7 +8,7 @@ La Corte é uma experiência premium de blefe e influência inspirada nas mecân
 
 - Partidas de 2 a 6 jogadores, com três bots na partida solo.
 - Salas multiplayer por código curto e links no formato `/sala/SW8X4`.
-- Servidor WebSocket local para sincronizar lobby, início da partida e ações.
+- Salas sincronizadas por Supabase Realtime, prontas para domínio público.
 - Renda, Ajuda Externa, Imposto, Roubo, Troca, Assassinato e Golpe.
 - Influências, moedas, eliminação, turnos e vitória.
 - Contestações de alegações contra bots; bots também podem contestar alegações do jogador.
@@ -80,7 +80,7 @@ Os testes cobrem o motor genérico de Coup, códigos de sala, controle do anfitr
 
 ```text
 app.js             Interface e integração da mesa
-server.js          Servidor HTTP + WebSocket para desenvolvimento local
+src/lib/supabase.js Cliente Supabase Realtime e configuração de conexão
 src/game/coup.js   Máquina de estados genérica das regras
 src/rooms/room.js  Estado genérico de sala, assentos e host
 assets/            Cenários, personagens e favicon originais
@@ -89,9 +89,14 @@ test/              Testes do motor e das salas
 
 ## Publicação na Vercel
 
-O servidor WebSocket atual é propositalmente local e não roda em funções serverless da Vercel. Antes de publicar uma versão multiplayer, a camada de salas deve migrar para um serviço de conexão persistente, como Supabase Realtime.
+O projeto usa Vite e pode ser publicado diretamente na Vercel. Adicione estas variáveis de ambiente no projeto, para os ambientes **Production**, **Preview** e **Development**:
 
-A interface está pronta para deploy estático; o plano é substituir o transporte local mantendo os motores em `src/game` e `src/rooms` como fonte de verdade.
+```text
+VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
+```
+
+Após salvar as variáveis, faça um novo deploy. A rota `/sala/*` já possui rewrite para a aplicação e as salas usam Supabase Realtime. Nunca configure uma chave `service_role` na Vercel ou no navegador.
 
 ## Licença e créditos
 
