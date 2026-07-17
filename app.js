@@ -1110,11 +1110,11 @@ function modalPlayerHTML(playerId) {
   return `${playerName(playerId)} ${modalAssetsHTML(playerId)}`;
 }
 
-function mobileOtherPlayersHTML(excludedIds = []) {
+function otherPlayersHTML(excludedIds = []) {
   const excluded = new Set(excludedIds.filter(Boolean));
   const players = state.game.players.filter((player) => !excluded.has(player.id));
   if (!players.length) return '';
-  return `<div class="modal-mobile-roster"><small>Outros jogadores</small><div>${players.map((player) => `<span class="modal-mobile-player ${isAlive(player) ? '' : 'eliminated'}">${modalPlayerHTML(player.id)}</span>`).join('')}</div></div>`;
+  return `<div class="modal-roster"><small>Outros jogadores</small><div>${players.map((player) => `<span class="modal-roster-player ${isAlive(player) ? '' : 'eliminated'}">${modalPlayerHTML(player.id)}</span>`).join('')}</div></div>`;
 }
 
 function modalActionTargetHTML(pending) {
@@ -1130,7 +1130,7 @@ function modalContext() {
 }
 
 function waitingModal(title, copy) {
-  return `<div class="modal-wrap"><div class="modal"><div class="eyebrow">Aguardando a mesa</div><h2>${escapeHTML(title)}</h2>${mobileOtherPlayersHTML([state.myId])}<p class="modal-copy">${escapeHTML(copy)}</p>${timerHTML()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal"><div class="eyebrow">Aguardando a mesa</div><h2>${escapeHTML(title)}</h2>${otherPlayersHTML([state.myId])}<p class="modal-copy">${escapeHTML(copy)}</p>${timerHTML()}</div></div>`;
 }
 
 function modalHTML() {
@@ -1179,7 +1179,7 @@ function targetModal() {
 function challengeActionModal() {
   const pending = state.game.pending;
   const target = pending.targetId ? ` para${modalActionTargetHTML(pending)}` : '';
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Alegação de personagem</div><h2>${modalPlayerHTML(pending.actorId)} diz ser ${pending.claimedRole}${target}</h2>${mobileOtherPlayersHTML([pending.actorId, pending.targetId])}<p class="modal-copy">Se contestar e ele provar a carta, você perde uma influência. Se for blefe, ele perde.</p>${timerHTML()}<div class="response-actions"><button class="danger" id="challenge">Contestar alegação</button><button class="primary" id="allow">Permitir ação</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Alegação de personagem</div><h2>${modalPlayerHTML(pending.actorId)} diz ser ${pending.claimedRole}${target}</h2>${otherPlayersHTML([pending.actorId, pending.targetId])}<p class="modal-copy">Se contestar e ele provar a carta, você perde uma influência. Se for blefe, ele perde.</p>${timerHTML()}<div class="response-actions"><button class="danger" id="challenge">Contestar alegação</button><button class="primary" id="allow">Permitir ação</button></div></div>${modalContext()}</div></div>`;
 }
 
 function blockChoiceModal() {
@@ -1188,25 +1188,25 @@ function blockChoiceModal() {
   const intent = pending.targetId
     ? `quer${modalActionTargetHTML(pending)}`
     : `quer ${ACTIONS[pending.action].label.toLowerCase()}`;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${modalPlayerHTML(pending.actorId)} ${intent}</h2>${mobileOtherPlayersHTML([pending.actorId, pending.targetId])}<p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p>${timerHTML()}<div class="card-grid">${roles.map((role) => `<button class="role-card" data-block-role="${role}" style="--portrait:url('${PORTRAITS[role]}')"><h3>${role}</h3><p>${BLOCK_HINTS[role]}</p></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${modalPlayerHTML(pending.actorId)} ${intent}</h2>${otherPlayersHTML([pending.actorId, pending.targetId])}<p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p>${timerHTML()}<div class="card-grid">${roles.map((role) => `<button class="role-card" data-block-role="${role}" style="--portrait:url('${PORTRAITS[role]}')"><h3>${role}</h3><p>${BLOCK_HINTS[role]}</p></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext()}</div></div>`;
 }
 
 function blockClaimModal() {
   const pending = state.game.pending;
   const block = pending.block;
   const eyebrow = pending.action === 'assassinate' ? 'Alvo do assassinato · Bloqueio declarado' : 'Bloqueio declarado';
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">${eyebrow}</div><h2>${modalPlayerHTML(block.playerId)} diz ser ${block.role}</h2>${mobileOtherPlayersHTML([block.playerId, pending.actorId])}<p class="modal-copy">${playerName(block.playerId)} bloqueou ${ACTIONS[pending.action].label.toLowerCase()}. Você pode aceitar ou contestar a alegação.</p>${timerHTML()}<div class="response-actions"><button class="danger" id="contest-block">Contestar bloqueio</button><button class="primary" id="accept-block">Aceitar bloqueio</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">${eyebrow}</div><h2>${modalPlayerHTML(block.playerId)} diz ser ${block.role}</h2>${otherPlayersHTML([block.playerId, pending.actorId])}<p class="modal-copy">${playerName(block.playerId)} bloqueou ${ACTIONS[pending.action].label.toLowerCase()}. Você pode aceitar ou contestar a alegação.</p>${timerHTML()}<div class="response-actions"><button class="danger" id="contest-block">Contestar bloqueio</button><button class="primary" id="accept-block">Aceitar bloqueio</button></div></div>${modalContext()}</div></div>`;
 }
 
 function revealModal() {
   const options = me().cards.filter((card) => !card.revealed);
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Influência perdida</div><h2>Escolha qual carta revelar</h2>${mobileOtherPlayersHTML([state.myId])}<p class="modal-copy">A carta escolhida fica virada para cima e deixa de valer.</p>${timerHTML()}<div class="card-grid">${options.map((card) => `<button class="role-card" data-reveal="${card.id}" style="--portrait:url('${PORTRAITS[card.role]}')"><h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Influência perdida</div><h2>Escolha qual carta revelar</h2>${otherPlayersHTML([state.myId])}<p class="modal-copy">A carta escolhida fica virada para cima e deixa de valer.</p>${timerHTML()}<div class="card-grid">${options.map((card) => `<button class="role-card" data-reveal="${card.id}" style="--portrait:url('${PORTRAITS[card.role]}')"><h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div></div>${modalContext()}</div></div>`;
 }
 
 function exchangeModal() {
   const count = state.game.pending.exchangeCount;
   const picks = state.exchangePicks;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Troca do Embaixador</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2>${mobileOtherPlayersHTML([state.myId])}<p class="modal-copy">As demais voltam para o baralho da corte.</p>${timerHTML()}<div class="card-grid">${state.game.exchangeOptions.map((card) => `<button class="role-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${PORTRAITS[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Troca do Embaixador</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2>${otherPlayersHTML([state.myId])}<p class="modal-copy">As demais voltam para o baralho da corte.</p>${timerHTML()}<div class="card-grid">${state.game.exchangeOptions.map((card) => `<button class="role-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${PORTRAITS[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext()}</div></div>`;
 }
 
 // ---------- Eventos ----------
