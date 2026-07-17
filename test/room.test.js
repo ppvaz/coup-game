@@ -6,6 +6,7 @@ import {
   dispatchRoom,
   generateRoomCode,
   hostElection,
+  nextGameSeats,
   syncRoomPresence,
 } from '../src/rooms/room.js';
 
@@ -58,4 +59,68 @@ test('sincroniza quedas e retornos a partir da presença sem trocar o host', () 
   assert.equal(room.seats.find((seat) => seat.id === 'a').connected, true);
   assert.equal('disconnectedAt' in room.seats.find((seat) => seat.id === 'a'), false);
   assert.equal(hostElection(room, 900).status, 'stable');
+});
+
+test('entrada tardia aguarda a próxima partida e participa da sala', () => {
+  let room = createRoom({ code: 'ABCDE', hostId: 'host', hostName: 'Ana' });
+  room = dispatchRoom(room, { type: 'join', actorId: 'bia', player: { id: 'bia', name: 'Bia' } });
+  room = dispatchRoom(room, {
+    type: 'start_game',
+    actorId: 'host',
+    game: {
+      gameId: 'game-1',
+      version: 1,
+      status: 'playing',
+      players: [{ id: 'host' }, { id: 'bia' }],
+    },
+  });
+  room = dispatchRoom(room, { type: 'join', actorId: 'caio', player: { id: 'caio', name: 'Caio' } });
+
+  const late = room.seats.find((seat) => seat.id === 'caio');
+  assert.equal(late.connected, true);
+  assert.equal(late.joinsNextGame, true);
+  assert.equal(room.pending.length, 0);
+  assert.deepEqual(room.activePlayerIds, ['host', 'bia']);
+  assert.deepEqual(
+    nextGameSeats(room).map((seat) => seat.id),
+    ['host', 'bia', 'caio'],
+  );
+});
+
+test('jogador tardio só pode assumir a sala depois do fim da partida', () => {
+  let room = createRoom({ code: 'ABCDE', hostId: 'host', hostName: 'Ana' });
+  room = dispatchRoom(room, { type: 'join', actorId: 'bia', player: { id: 'bia', name: 'Bia' } });
+  room = dispatchRoom(room, {
+    type: 'start_game',
+    actorId: 'host',
+    game: {
+      gameId: 'game-1',
+      version: 1,
+      status: 'playing',
+      players: [{ id: 'host' }, { id: 'bia' }],
+    },
+  });
+  room = dispatchRoom(room, { type: 'join', actorId: 'caio', player: { id: 'caio', name: 'Caio' } });
+  room = syncRoomPresence(room, ['caio'], 1_000);
+
+  assert.equal(hostElection(room, 1_000 + HOST_GRACE_MS).status, 'unavailable');
+
+  room.status = 'finished';
+  assert.deepEqual(hostElection(room, 1_000 + HOST_GRACE_MS), {
+    status: 'ready',
+    candidateId: 'caio',
+    remainingMs: 0,
+  });
+});
+
+test('nova partida ignora assentos desconectados', () => {
+  let room = createRoom({ code: 'ABCDE', hostId: 'host', hostName: 'Ana' });
+  room = dispatchRoom(room, { type: 'join', actorId: 'bia', player: { id: 'bia', name: 'Bia' } });
+  room = dispatchRoom(room, { type: 'join', actorId: 'caio', player: { id: 'caio', name: 'Caio' } });
+  room = syncRoomPresence(room, ['host', 'caio'], 500);
+
+  assert.deepEqual(
+    nextGameSeats(room).map((seat) => seat.id),
+    ['host', 'caio'],
+  );
 });

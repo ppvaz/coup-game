@@ -13,6 +13,7 @@ export function createRoom({ code = generateRoomCode(), hostId, hostName, maxPla
     code,
     status: 'lobby',
     activeGameId: null,
+    activePlayerIds: [],
     hostId,
     maxPlayers,
     seats: [{ id: hostId, name: hostName, kind: 'human', connected: true, joinedAt: Date.now() }],
@@ -43,12 +44,19 @@ export function syncRoomPresence(source, connectedIds, now = Date.now()) {
   return room;
 }
 
+export function nextGameSeats(room) {
+  return room.seats.filter((seat) => seat.connected);
+}
+
 export function hostElection(room, now = Date.now(), graceMs = HOST_GRACE_MS) {
   const host = room.seats.find((candidate) => candidate.id === room.hostId);
   if (host?.connected) return { status: 'stable', candidateId: null, remainingMs: 0 };
 
+  const activeIds = room.status === 'playing' && room.activePlayerIds?.length ? new Set(room.activePlayerIds) : null;
   const successor = room.seats
-    .filter((candidate) => candidate.kind === 'human' && candidate.connected)
+    .filter(
+      (candidate) => candidate.kind === 'human' && candidate.connected && (!activeIds || activeIds.has(candidate.id)),
+    )
     .sort((a, b) => a.joinedAt - b.joinedAt || a.id.localeCompare(b.id))[0];
   if (!successor) return { status: 'unavailable', candidateId: null, remainingMs: Infinity };
 
@@ -68,12 +76,14 @@ export function dispatchRoom(source, command) {
   switch (command.type) {
     case 'join': {
       if (room.seats.some((candidate) => candidate.id === command.player.id)) return room;
-      if (room.status !== 'lobby') {
-        if (!room.pending.some((candidate) => candidate.id === command.player.id)) room.pending.push(command.player);
-        break;
-      }
       if (room.seats.length >= room.maxPlayers) throw new Error('A sala está cheia.');
-      room.seats.push({ ...command.player, kind: 'human', connected: true, joinedAt: Date.now() });
+      room.seats.push({
+        ...command.player,
+        kind: 'human',
+        connected: true,
+        joinedAt: Date.now(),
+        joinsNextGame: room.status !== 'lobby',
+      });
       break;
     }
     case 'approve_join': {
@@ -127,6 +137,11 @@ export function dispatchRoom(source, command) {
       room.status = 'playing';
       room.game = command.game;
       room.activeGameId = command.game.gameId ?? room.activeGameId;
+      room.activePlayerIds = command.game.players?.map((player) => player.id) ?? [];
+      room.seats = room.seats.map((candidate) => ({
+        ...candidate,
+        joinsNextGame: !room.activePlayerIds.includes(candidate.id),
+      }));
       break;
     case 'commit_game':
       if (!isHost || room.status !== 'playing') throw new Error('Somente o host autoritativo pode confirmar o estado.');

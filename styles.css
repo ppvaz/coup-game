@@ -567,6 +567,10 @@ body:has(.modal-wrap) .theme-toggle {
   letter-spacing: 0.16em;
   color: var(--muted);
 }
+.next-game-count {
+  color: var(--gold);
+  white-space: nowrap;
+}
 .ghost {
   background: none;
   border: 1px solid var(--line);

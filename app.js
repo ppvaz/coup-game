@@ -10,6 +10,7 @@ import {
   dispatchRoom,
   generateRoomCode,
   hostElection,
+  nextGameSeats,
   syncRoomPresence,
 } from './src/rooms/room.js';
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
@@ -361,6 +362,10 @@ function applyCommand(command) {
     return;
   }
   announceGameState(previous, state.game);
+  if (state.online && state.isHost && previous?.status !== 'finished' && state.game.status === 'finished') {
+    state.room = { ...state.room, status: 'finished', version: state.room.version + 1, updatedAt: Date.now() };
+    broadcastRoom();
+  }
   state.targetAction = null;
   state.exchangePicks = [];
   resetClock();
@@ -472,7 +477,12 @@ function startLocal() {
 
 function startOnline() {
   warnedClockKey = '';
-  const seats = state.room.seats.map((seat) => ({ id: seat.id, name: seat.name, kind: 'human' }));
+  const readySeats = nextGameSeats(state.room);
+  if (readySeats.length < 2) {
+    render();
+    return;
+  }
+  const seats = readySeats.map((seat) => ({ id: seat.id, name: seat.name, kind: 'human' }));
   const gameId = crypto.randomUUID();
   state.game = createGame(seats, { gameId });
   announceGameState(null, state.game);
@@ -481,6 +491,11 @@ function startOnline() {
     ...state.room,
     status: 'playing',
     activeGameId: gameId,
+    activePlayerIds: seats.map((seat) => seat.id),
+    seats: state.room.seats.map((seat) => ({
+      ...seat,
+      joinsNextGame: !readySeats.some((ready) => ready.id === seat.id),
+    })),
     version: state.room.version + 1,
     updatedAt: Date.now(),
   };
@@ -578,7 +593,7 @@ function beginHostPromotion() {
   }
 
   state.hostIssue = { status: 'promoting', candidateId: state.myId, candidateName: state.name };
-  if (!state.game || state.room.status !== 'playing') {
+  if (!state.game || !['playing', 'finished'].includes(state.room.status)) {
     finishHostPromotion();
     return;
   }
@@ -719,7 +734,11 @@ async function connectRoom(kind) {
     .on('broadcast', { event: 'join_request' }, ({ payload }) => {
       if (!state.isHost || !state.room) return;
       try {
-        state.room = dispatchRoom(state.room, {
+        const room =
+          state.room.status === 'playing' && !state.room.activePlayerIds?.length && state.game
+            ? { ...state.room, activePlayerIds: state.game.players.map((player) => player.id) }
+            : state.room;
+        state.room = dispatchRoom(room, {
           type: 'join',
           actorId: payload.id,
           player: { id: payload.id, name: String(payload.name ?? '').slice(0, 18) },
@@ -1067,7 +1086,20 @@ function lobbyHTML() {
 function roomHTML() {
   const room = state.room;
   const seats = room?.seats || [];
-  return `<main class="shell"><nav class="topbar"><div class="brand">LA <span>CORTE</span></div><div class="roombar-actions">${chatToggleHTML()}<button class="ghost" id="leave-room">Sair da sala</button></div></nav><section class="room-lobby glass"><div class="eyebrow">Sala privada</div><div class="room-code">${escapeHTML(room?.code || '•••••')}</div><p class="sub">Compartilhe este link; o código já acompanha o convite.</p><button class="copy-invite" id="copy-invite">${state.shareCopied ? '✓ Link copiado' : '↗ Copiar link da sala'}</button><div class="room-seats">${seats.map((seat) => `<div class="room-seat ${seat.connected ? '' : 'offline'}"><span class="avatar">${escapeHTML(seat.name[0] ?? '?')}</span><strong title="${escapeHTML(seat.name)}">${escapeHTML(seat.name)}</strong>${seat.id === room.hostId ? '<small>ANFITRIÃO</small>' : seat.connected ? '' : '<small>DESCONECTADO</small>'}</div>`).join('')}</div>${state.screen === 'waiting_game' ? '<p class="waiting">Aguardando o anfitrião distribuir as cartas…</p>' : state.isHost ? `<button class="primary" id="start-room" ${seats.length < 2 ? 'disabled' : ''}>Iniciar partida</button>` : '<p class="waiting">Aguardando o anfitrião iniciar…</p>'}</section></main>`;
+  const self = seats.find((seat) => seat.id === state.myId);
+  const connected = seats.filter((seat) => seat.connected).length;
+  const lateWaiting = Boolean(self?.joinsNextGame);
+  const waitingCopy = lateWaiting
+    ? `<p class="waiting">${room.status === 'finished' ? 'Aguardando a próxima partida.' : 'A partida está em andamento. Você entra na próxima.'}<small>O chat da mesa já está disponível.</small></p>`
+    : '<p class="waiting">Aguardando o anfitrião distribuir as cartas…</p>';
+  const startLabel = room.status === 'finished' ? 'Iniciar próxima partida' : 'Iniciar partida';
+  const roomAction =
+    state.isHost && room.status !== 'playing'
+      ? `<button class="primary" id="start-room" ${connected < 2 ? 'disabled' : ''}>${startLabel}</button>`
+      : state.screen === 'waiting_game' || lateWaiting
+        ? waitingCopy
+        : '<p class="waiting">Aguardando o anfitrião iniciar…</p>';
+  return `<main class="shell"><nav class="topbar"><div class="brand">LA <span>CORTE</span></div><div class="roombar-actions">${chatToggleHTML()}<button class="ghost" id="leave-room">Sair da sala</button></div></nav><section class="room-lobby glass"><div class="eyebrow">Sala privada</div><div class="room-code">${escapeHTML(room?.code || '•••••')}</div><p class="sub">Compartilhe este link; o código já acompanha o convite.</p><button class="copy-invite" id="copy-invite">${state.shareCopied ? '✓ Link copiado' : '↗ Copiar link da sala'}</button><div class="room-seats">${seats.map((seat) => `<div class="room-seat ${seat.connected ? '' : 'offline'} ${seat.joinsNextGame ? 'next-game' : ''}"><span class="avatar">${escapeHTML(seat.name[0] ?? '?')}</span><strong title="${escapeHTML(seat.name)}">${escapeHTML(seat.name)}</strong>${seat.id === room.hostId ? '<small>ANFITRIÃO</small>' : !seat.connected ? '<small>DESCONECTADO</small>' : seat.joinsNextGame ? '<small>PRÓXIMA PARTIDA</small>' : ''}</div>`).join('')}</div>${roomAction}</section></main>`;
 }
 
 function gameHTML() {
@@ -1078,11 +1110,16 @@ function gameHTML() {
     game.finishReason === 'humans_eliminated'
       ? '<div class="winner defeat">Você caiu da corte</div><p class="game-result-copy">Seus rivais tomaram o poder. Reúna suas influências e tente novamente.</p>'
       : `<div class="winner">${escapeHTML(winner?.name ?? '?')} domina a corte</div>`;
+  const readyPlayers = state.room?.seats.filter((seat) => seat.connected).length ?? 0;
+  const waitingPlayers = state.room?.seats.filter((seat) => seat.connected && seat.joinsNextGame).length ?? 0;
+  const waitingNotice = waitingPlayers
+    ? `<span class="next-game-count" title="${waitingPlayers} ${waitingPlayers === 1 ? 'jogador entra' : 'jogadores entram'} na próxima partida">· +${waitingPlayers} aguardando</span>`
+    : '';
   const again =
     !state.online || state.isHost
-      ? '<button class="primary" id="again" style="width:220px;margin-top:24px">Jogar novamente</button>'
+      ? `<button class="primary" id="again" style="width:240px;margin-top:24px" ${state.online && readyPlayers < 2 ? 'disabled' : ''}>${state.online && readyPlayers < 2 ? 'Aguardando jogadores' : state.online ? `Jogar novamente · ${readyPlayers}` : 'Jogar novamente'}</button>`
       : '<p class="waiting">Aguardando o anfitrião abrir outra mesa…</p>';
-  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()}</div><div class="gamebar-actions">${chatToggleHTML()}${soundToggleHTML()}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
+  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()} ${waitingNotice}</div><div class="gamebar-actions">${chatToggleHTML()}${soundToggleHTML()}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
     .filter((player) => player.id !== state.myId)
     .map(playerHTML)
     .join(
