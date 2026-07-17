@@ -647,6 +647,23 @@ html[data-theme='light'] .sound-toggle {
   color: #4f4438;
   border-color: rgba(91, 65, 27, 0.3);
 }
+html[data-theme='light'] .turn-timer em {
+  height: 4px;
+  background: rgba(87, 61, 25, 0.24);
+}
+html[data-theme='light'] .turn-timer i {
+  background: #8a6425;
+}
+html[data-theme='light'] .turn-timer span {
+  color: #5f5140;
+  font-weight: 600;
+}
+html[data-theme='light'] .turn-timer.urgent i {
+  background: #9e3731;
+}
+html[data-theme='light'] .turn-timer.urgent span {
+  color: #8f302d;
+}
 html[data-theme='light'] .chat-toggle {
   background: rgba(250, 247, 240, 0.62);
   color: #4f4438;
