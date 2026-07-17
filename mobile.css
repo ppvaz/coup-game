@@ -39,18 +39,17 @@
 .block-option:hover { border-color:var(--gold); background:rgba(217,181,107,.16); }
 .block-option b { font:600 18px "Cormorant Garamond"; }
 .block-option small { color:#aaa194; font-size:10px; }
-/* No máximo 4 opções: 1 centrada, 2 lado a lado, 3 em linha, 4 em 2x2. */
-.card-grid { display:grid; gap:10px; margin:22px 0 16px; justify-content:center; grid-template-columns:minmax(0, 200px); }
-.card-grid:has(> :nth-child(2)) { grid-template-columns:repeat(2, minmax(0, 200px)); }
-.card-grid:has(> :nth-child(3)) { grid-template-columns:repeat(3, minmax(0, 1fr)); }
-.card-grid:has(> :nth-child(4)) { grid-template-columns:repeat(2, minmax(0, 200px)); }
-.pick-card { position:relative; height:152px; padding:12px; border:1px solid rgba(217,181,107,.34); background-color:#171210; background-image:linear-gradient(180deg, rgba(8,7,6,.05) 25%, rgba(8,7,6,.94) 80%), var(--portrait); background-size:cover; background-position:center top; color:#efe5d3; text-align:left; transition:.15s; }
-.pick-card:hover { border-color:var(--gold); box-shadow:0 0 18px rgba(217,181,107,.18); }
-.pick-card b { position:absolute; left:12px; right:10px; bottom:24px; font:600 18px "Cormorant Garamond"; color:#f2e9da; text-shadow:0 2px 8px #000; }
-.pick-card small { position:absolute; left:12px; right:10px; bottom:9px; font-size:9px; color:#c3b8a8; text-shadow:0 2px 8px #000; }
-.pick-card[aria-pressed="true"] { border-color:var(--gold); box-shadow:0 0 0 2px var(--gold) inset, 0 0 22px rgba(217,181,107,.25); }
-.pick-card .pick-mark { position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%; background:var(--gold); color:#18130c; display:grid; place-items:center; font-weight:700; font-size:12px; }
-html[data-theme="light"] .pick-card { border-color:rgba(126,91,31,.32); }
+/* Escolhas nos modais: as mesmas cartas da mesa (.role-card), no máximo 4 —
+   1 centrada, 2 lado a lado, 3 em linha, 4 em 2x2. */
+.card-grid { display:grid; gap:12px; margin:22px 0 16px; justify-content:center; grid-template-columns:max-content; }
+.card-grid:has(> :nth-child(2)) { grid-template-columns:repeat(2, max-content); }
+.card-grid:has(> :nth-child(3)) { grid-template-columns:repeat(3, max-content); }
+.card-grid:has(> :nth-child(4)) { grid-template-columns:repeat(2, max-content); }
+/* Fixa a proporção da carta da mão mesmo onde o layout mobile da .hand a redimensiona. */
+.card-grid .role-card { grid-row:auto; width:130px; height:165px; padding:14px; }
+.card-grid .role-card[aria-pressed="true"] { border-color:var(--gold); box-shadow:0 0 0 2px var(--gold) inset, 0 0 22px rgba(217,181,107,.25); }
+.pick-mark { position:absolute; z-index:2; top:8px; right:8px; width:22px; height:22px; border-radius:50%; background:var(--gold); color:#18130c; display:grid; place-items:center; font-weight:700; font-size:12px; }
+@media (max-width:800px) { .card-grid .role-card { width:115px; height:145px; } .card-grid .role-card h3 { margin-top:0; font-size:20px; } }
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .mode-grid .mode { margin: 0; }
 .mode-grid .mode:last-child { grid-column: 1 / -1; }

@@ -371,7 +371,7 @@ function challengeActionModal() {
 function blockChoiceModal() {
   const pending = state.game.pending;
   const roles = ACTIONS[pending.action].blockedBy;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${playerName(pending.actorId)} tenta ${ACTIONS[pending.action].label.toLowerCase()}</h2><p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p><div class="card-grid">${roles.map((role) => `<button class="pick-card" data-block-role="${role}" style="--portrait:url('${PORTRAITS[role]}')"><b>${role}</b><small>${BLOCK_HINTS[role]}</small></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${playerName(pending.actorId)} tenta ${ACTIONS[pending.action].label.toLowerCase()}</h2><p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p><div class="card-grid">${roles.map((role) => `<button class="role-card" data-block-role="${role}" style="--portrait:url('${PORTRAITS[role]}')"><h3>${role}</h3><p>${BLOCK_HINTS[role]}</p></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext()}</div></div>`;
 }
 
 function blockClaimModal() {
@@ -381,13 +381,13 @@ function blockClaimModal() {
 
 function revealModal() {
   const options = me().cards.filter((card) => !card.revealed);
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Influência perdida</div><h2>Escolha qual carta revelar</h2><p class="modal-copy">A carta escolhida fica virada para cima e deixa de valer.</p><div class="card-grid">${options.map((card) => `<button class="pick-card" data-reveal="${card.id}" style="--portrait:url('${PORTRAITS[card.role]}')"><b>${card.role}</b><small>${ROLE_HINTS[card.role]}</small></button>`).join('')}</div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Influência perdida</div><h2>Escolha qual carta revelar</h2><p class="modal-copy">A carta escolhida fica virada para cima e deixa de valer.</p><div class="card-grid">${options.map((card) => `<button class="role-card" data-reveal="${card.id}" style="--portrait:url('${PORTRAITS[card.role]}')"><h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div></div>${modalContext()}</div></div>`;
 }
 
 function exchangeModal() {
   const count = state.game.pending.exchangeCount;
   const picks = state.exchangePicks;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Troca do Embaixador</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2><p class="modal-copy">As demais voltam para o baralho da corte.</p><div class="card-grid">${state.game.exchangeOptions.map((card) => `<button class="pick-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${PORTRAITS[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<b>${card.role}</b><small>${ROLE_HINTS[card.role]}</small></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Troca do Embaixador</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2><p class="modal-copy">As demais voltam para o baralho da corte.</p><div class="card-grid">${state.game.exchangeOptions.map((card) => `<button class="role-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${PORTRAITS[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext()}</div></div>`;
 }
 
 // ---------- Eventos ----------
