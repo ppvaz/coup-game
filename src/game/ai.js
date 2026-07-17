@@ -15,6 +15,34 @@ export function awaitedPlayerId(state) {
   return null;
 }
 
+// Jogada conservadora aplicada pela autoridade quando o relógio de decisão
+// estoura: nunca blefa nem arrisca influência de quem está ausente.
+export function timeoutCommand(state, playerId) {
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  switch (state.phase) {
+    case 'turn': {
+      if (player.coins < 10) return { type: 'declare_action', actorId: playerId, action: 'income' };
+      const rivals = state.players.filter((candidate) => candidate.id !== playerId && isAlive(candidate));
+      const weakest = [...rivals].sort((left, right) => activeCards(left).length - activeCards(right).length)[0];
+      return { type: 'declare_action', actorId: playerId, action: 'coup', targetId: weakest.id };
+    }
+    case 'challenge_action':
+    case 'challenge_block':
+    case 'block':
+      return { type: 'pass', actorId: playerId };
+    case 'choose_influence':
+      return { type: 'reveal_influence', actorId: playerId, cardId: activeCards(player)[0].id };
+    case 'exchange':
+      return {
+        type: 'choose_exchange',
+        actorId: playerId,
+        cardIds: state.exchangeOptions.slice(0, state.pending.exchangeCount).map((card) => card.id),
+      };
+    default:
+      throw new Error(`Sem jogada padrão para a fase ${state.phase}.`);
+  }
+}
+
 export function botCommand(state, botId, random = Math.random) {
   const bot = state.players.find((player) => player.id === botId);
   switch (state.phase) {

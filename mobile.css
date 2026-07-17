@@ -184,6 +184,43 @@
     0 0 0 2px var(--gold) inset,
     0 0 22px rgba(217, 181, 107, 0.25);
 }
+/* Relógio de decisão: barra fina dourada que esquenta nos segundos finais. */
+.turn-timer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(240px, 100%);
+  margin: 14px auto 0;
+}
+.turn-timer em {
+  flex: 1;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(217, 181, 107, 0.16);
+}
+.turn-timer i {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.25s linear;
+}
+.turn-timer span {
+  min-width: 26px;
+  color: #aaa194;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.turn-timer.urgent i {
+  background: #c25a50;
+}
+.turn-timer.urgent span {
+  color: #e19a94;
+}
+.modal .turn-timer,
+.modal-main .turn-timer {
+  margin: 18px 0 0;
+}
 .pick-mark {
   position: absolute;
   z-index: 2;

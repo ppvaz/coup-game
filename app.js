@@ -1,7 +1,7 @@
 import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/supabase.js';
 import { ACTIONS, createGame, dispatchGame, viewForPlayer, isAlive } from './src/game/coup.js';
 import { createRoom, dispatchRoom, generateRoomCode } from './src/rooms/room.js';
-import { awaitedPlayerId, botCommand } from './src/game/ai.js';
+import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import duquePortrait from './assets/characters/duque.png';
 import assassinaPortrait from './assets/characters/assassina.png';
 import capitaoPortrait from './assets/characters/capitao.png';
@@ -49,6 +49,15 @@ const BLOCK_HINTS = {
   Embaixador: 'Impede Roubo',
 };
 const NAMES = ['Lorenzo', 'Beatrice', 'Vittorio'];
+// Relógio por fase, em segundos: estourou, a autoridade joga o padrão conservador.
+const PHASE_SECONDS = {
+  turn: 30,
+  challenge_action: 15,
+  block: 15,
+  challenge_block: 15,
+  choose_influence: 20,
+  exchange: 30,
+};
 
 const escapeHTML = (value) =>
   String(value).replace(
@@ -80,6 +89,7 @@ let state = {
 };
 let roomChannel = null;
 let botTimer = null;
+let clock = { key: '', deadline: 0, total: 0 };
 
 const themeToggle = $('#theme-toggle');
 function paintThemeToggle() {
@@ -125,6 +135,7 @@ function applyCommand(command) {
   }
   state.targetAction = null;
   state.exchangePicks = [];
+  resetClock();
   render();
   syncViews();
   scheduleBots();
@@ -136,10 +147,49 @@ function syncViews() {
     state.game.players.map((player) => {
       const view = viewForPlayer(state.game, player.id);
       view.log = view.log.slice(-20);
+      // Restante em ms, não timestamp: o relógio do convidado pode divergir do host.
+      view.clockRemaining = clock.deadline - Date.now();
+      view.clockTotal = clock.total;
       return [player.id, view];
     }),
   );
   sendRoom('game_state', { views });
+}
+
+function resetClock() {
+  const game = state.game;
+  if (!game || game.status !== 'playing') {
+    clock = { key: '', deadline: 0, total: 0 };
+    return;
+  }
+  const key = `${game.turn}|${game.phase}|${awaitedPlayerId(game)}|${game.responseQueue.length}`;
+  if (key === clock.key) return;
+  const total = (PHASE_SECONDS[game.phase] ?? 30) * 1000;
+  clock = { key, deadline: Date.now() + total, total };
+}
+
+function tickClock() {
+  if (!state.game || state.game.status !== 'playing' || !clock.deadline) return;
+  const remaining = Math.max(0, clock.deadline - Date.now());
+  const seconds = Math.ceil(remaining / 1000);
+  document.querySelectorAll('.turn-timer').forEach((element) => {
+    element.classList.toggle('urgent', seconds <= 5);
+    element.querySelector('i').style.width = `${(remaining / clock.total) * 100}%`;
+    element.querySelector('span').textContent = `${seconds}s`;
+  });
+  if (remaining > 0) return;
+  if (state.online && !state.isHost) return; // o host aplica pelo ausente
+  const awaited = awaitedPlayerId(state.game);
+  if (!awaited) return;
+  applyCommand(timeoutCommand(state.game, awaited));
+}
+setInterval(tickClock, 250);
+
+function timerHTML() {
+  if (!clock.deadline || state.game?.status !== 'playing') return '';
+  const remaining = Math.max(0, clock.deadline - Date.now());
+  const seconds = Math.ceil(remaining / 1000);
+  return `<div class="turn-timer ${seconds <= 5 ? 'urgent' : ''}"><em><i style="width:${(remaining / clock.total) * 100}%"></i></em><span>${seconds}s</span></div>`;
 }
 
 function scheduleBots() {
@@ -159,6 +209,7 @@ function startLocal() {
   state.myId = 'me';
   state.game = createGame(seats);
   state.screen = 'game';
+  resetClock();
   render();
   scheduleBots();
 }
@@ -167,6 +218,7 @@ function startOnline() {
   const seats = state.room.seats.map((seat) => ({ id: seat.id, name: seat.name, kind: 'human' }));
   state.game = createGame(seats);
   state.screen = 'game';
+  resetClock();
   sendRoom('game_started', {});
   render();
   syncViews();
@@ -221,6 +273,11 @@ function connectRoom(kind) {
       if (!view) return;
       state.game = view;
       state.screen = 'game';
+      clock = {
+        key: 'remote',
+        deadline: Date.now() + Math.max(0, view.clockRemaining ?? 0),
+        total: view.clockTotal || 1,
+      };
       render();
     })
     .on('broadcast', { event: 'command' }, ({ payload }) => {
@@ -261,6 +318,7 @@ function connectRoom(kind) {
 
 function leaveTable() {
   clearTimeout(botTimer);
+  clock = { key: '', deadline: 0, total: 0 };
   state.online = false;
   state.room = null;
   state.game = null;
@@ -375,7 +433,7 @@ function gameHTML() {
     .map(playerHTML)
     .join(
       '',
-    )}</div><div class="center"><div class="turn-copy">${winner ? `<div class="winner">${escapeHTML(winner.name)} domina a corte</div>` : `É a vez de<br><b>${playerName(game.currentPlayerId)}</b>`}</div>${historyHTML()}${winner ? again : ''}</div></section>${!winner ? handHTML() : ''}${modalHTML()}</main>`;
+    )}</div><div class="center"><div class="turn-copy">${winner ? `<div class="winner">${escapeHTML(winner.name)} domina a corte</div>` : `É a vez de<br><b>${playerName(game.currentPlayerId)}</b>`}</div>${winner ? '' : timerHTML()}${historyHTML()}${winner ? again : ''}</div></section>${!winner ? handHTML() : ''}${modalHTML()}</main>`;
 }
 
 function historyHTML() {
@@ -415,7 +473,7 @@ function modalContext() {
 }
 
 function waitingModal(title, copy) {
-  return `<div class="modal-wrap"><div class="modal"><div class="eyebrow">Aguardando a mesa</div><h2>${escapeHTML(title)}</h2><p class="modal-copy">${escapeHTML(copy)}</p></div></div>`;
+  return `<div class="modal-wrap"><div class="modal"><div class="eyebrow">Aguardando a mesa</div><h2>${escapeHTML(title)}</h2><p class="modal-copy">${escapeHTML(copy)}</p>${timerHTML()}</div></div>`;
 }
 
 function modalHTML() {
@@ -463,29 +521,29 @@ function targetModal() {
 
 function challengeActionModal() {
   const pending = state.game.pending;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Alegação de personagem</div><h2>${playerName(pending.actorId)} diz ser ${pending.claimedRole}</h2><p class="modal-copy">Se contestar e ele provar a carta, você perde uma influência. Se for blefe, ele perde.</p><div class="response-actions"><button class="danger" id="challenge">Contestar alegação</button><button class="primary" id="allow">Permitir ação</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Alegação de personagem</div><h2>${playerName(pending.actorId)} diz ser ${pending.claimedRole}</h2><p class="modal-copy">Se contestar e ele provar a carta, você perde uma influência. Se for blefe, ele perde.</p>${timerHTML()}<div class="response-actions"><button class="danger" id="challenge">Contestar alegação</button><button class="primary" id="allow">Permitir ação</button></div></div>${modalContext()}</div></div>`;
 }
 
 function blockChoiceModal() {
   const pending = state.game.pending;
   const roles = ACTIONS[pending.action].blockedBy;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${playerName(pending.actorId)} tenta ${ACTIONS[pending.action].label.toLowerCase()}</h2><p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p><div class="card-grid">${roles.map((role) => `<button class="role-card" data-block-role="${role}" style="--portrait:url('${PORTRAITS[role]}')"><h3>${role}</h3><p>${BLOCK_HINTS[role]}</p></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${playerName(pending.actorId)} tenta ${ACTIONS[pending.action].label.toLowerCase()}</h2><p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p>${timerHTML()}<div class="card-grid">${roles.map((role) => `<button class="role-card" data-block-role="${role}" style="--portrait:url('${PORTRAITS[role]}')"><h3>${role}</h3><p>${BLOCK_HINTS[role]}</p></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext()}</div></div>`;
 }
 
 function blockClaimModal() {
   const block = state.game.pending.block;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Bloqueio declarado</div><h2>${playerName(block.playerId)} diz ser ${block.role}</h2><p class="modal-copy">${playerName(block.playerId)} bloqueou ${ACTIONS[state.game.pending.action].label.toLowerCase()}. Você pode aceitar ou contestar a alegação.</p><div class="response-actions"><button class="danger" id="contest-block">Contestar bloqueio</button><button class="primary" id="accept-block">Aceitar bloqueio</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Bloqueio declarado</div><h2>${playerName(block.playerId)} diz ser ${block.role}</h2><p class="modal-copy">${playerName(block.playerId)} bloqueou ${ACTIONS[state.game.pending.action].label.toLowerCase()}. Você pode aceitar ou contestar a alegação.</p>${timerHTML()}<div class="response-actions"><button class="danger" id="contest-block">Contestar bloqueio</button><button class="primary" id="accept-block">Aceitar bloqueio</button></div></div>${modalContext()}</div></div>`;
 }
 
 function revealModal() {
   const options = me().cards.filter((card) => !card.revealed);
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Influência perdida</div><h2>Escolha qual carta revelar</h2><p class="modal-copy">A carta escolhida fica virada para cima e deixa de valer.</p><div class="card-grid">${options.map((card) => `<button class="role-card" data-reveal="${card.id}" style="--portrait:url('${PORTRAITS[card.role]}')"><h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Influência perdida</div><h2>Escolha qual carta revelar</h2><p class="modal-copy">A carta escolhida fica virada para cima e deixa de valer.</p>${timerHTML()}<div class="card-grid">${options.map((card) => `<button class="role-card" data-reveal="${card.id}" style="--portrait:url('${PORTRAITS[card.role]}')"><h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div></div>${modalContext()}</div></div>`;
 }
 
 function exchangeModal() {
   const count = state.game.pending.exchangeCount;
   const picks = state.exchangePicks;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Troca do Embaixador</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2><p class="modal-copy">As demais voltam para o baralho da corte.</p><div class="card-grid">${state.game.exchangeOptions.map((card) => `<button class="role-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${PORTRAITS[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Troca do Embaixador</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2><p class="modal-copy">As demais voltam para o baralho da corte.</p>${timerHTML()}<div class="card-grid">${state.game.exchangeOptions.map((card) => `<button class="role-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${PORTRAITS[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext()}</div></div>`;
 }
 
 // ---------- Eventos ----------
