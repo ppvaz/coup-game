@@ -569,7 +569,6 @@ html[data-theme='light'] .gamebar {
 html[data-theme='light'] .brand {
   color: #292018;
 }
-html[data-theme='light'] .status,
 html[data-theme='light'] .round {
   color: #6f6558;
 }
@@ -1022,12 +1021,6 @@ html[data-theme='light'] .chat-taunts button {
   }
   .brand {
     font-size: 22px;
-  }
-  .status {
-    max-width: 145px;
-    font-size: 10px;
-    line-height: 1.45;
-    letter-spacing: 0.1em;
   }
   .landing {
     display: block;

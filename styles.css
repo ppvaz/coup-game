@@ -49,22 +49,6 @@ button {
 .brand span {
   color: var(--gold);
 }
-.status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #b9b1a3;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #73a675;
-  box-shadow: 0 0 12px #73a675;
-}
 .landing {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
