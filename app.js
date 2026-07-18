@@ -20,6 +20,7 @@ import {
 } from './src/rooms/room.js';
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
 import { shouldAcceptGameView, shouldResetGame } from './src/rooms/game-sync.js';
+import { JOIN_RETRY_MS, JOIN_TIMEOUT_MS, canAcceptRoomSnapshot, hasRoomSeat } from './src/rooms/join.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import duquePortrait from './assets/characters/duque.png';
 import assassinaPortrait from './assets/characters/assassina.png';
@@ -525,7 +526,14 @@ function clearHostElection() {
 }
 
 function acceptRoom(incoming) {
-  if (!incoming?.code || incoming.code !== (state.room?.code ?? state.joinCode)) return false;
+  if (
+    !canAcceptRoomSnapshot(incoming, {
+      code: state.room?.code ?? state.joinCode,
+      playerId: state.myId,
+      isHost: state.isHost,
+    })
+  )
+    return false;
   if (state.room && incoming.version < state.room.version) return false;
   if (shouldResetGame(state.game, incoming.activeGameId)) {
     state.game = null;
@@ -536,6 +544,7 @@ function acceptRoom(incoming) {
   state.room = incoming;
   state.isHost = incoming.hostId === state.myId;
   state.online = true;
+  state.connection = 'connected';
   if (incoming.status === 'playing') state.screen = state.game ? 'game' : 'waiting_game';
   else if (state.screen !== 'game') state.screen = 'room';
   persistSession();
@@ -889,7 +898,7 @@ async function connectRoom(kind) {
       const firstSubscription = !subscribedOnce;
       subscribedOnce = true;
       state.online = true;
-      state.connection = 'connected';
+      state.connection = kind === 'join' ? 'connecting' : 'connected';
       const presenceStatus = await trackPresence(channel, {
         playerId: state.myId,
         name: state.name,
@@ -931,15 +940,36 @@ async function connectRoom(kind) {
         handlePresenceSync();
       } else {
         state.screen = 'room';
+        history.replaceState(null, '', `/sala/${code}`);
         render();
-        sendRoom('join_request', { id: state.myId, name: state.name });
+
+        const requestJoin = () => {
+          if (roomChannel !== channel || hasRoomSeat(state.room, state.myId)) return;
+          channel
+            .send({
+              type: 'broadcast',
+              event: 'join_request',
+              payload: { id: state.myId, name: state.name },
+            })
+            .catch(() => {});
+          setTimeout(requestJoin, JOIN_RETRY_MS);
+        };
+        requestJoin();
+
         setTimeout(() => {
-          if (!state.room?.seats?.some((seat) => seat.id === state.myId)) {
-            state.error = 'Sala não encontrada ou anfitrião offline.';
-            state.screen = 'lobby';
-            render();
-          }
-        }, 6000);
+          if (roomChannel !== channel || hasRoomSeat(state.room, state.myId)) return;
+          roomChannel = null;
+          connectionId = null;
+          encryptionIdentity = null;
+          state.online = false;
+          state.room = null;
+          state.error = 'Sala não encontrada ou anfitrião offline.';
+          state.screen = 'lobby';
+          state.connection = 'idle';
+          channel.untrack();
+          channel.unsubscribe();
+          render();
+        }, JOIN_TIMEOUT_MS);
       }
       persistSession();
     });
