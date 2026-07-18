@@ -3,7 +3,7 @@ import { ACTIONS, isAlive } from './coup.js';
 const activeCards = (player) => player.cards.filter((card) => !card.revealed);
 
 // Ordem de preferência para manter cartas (a última é a primeira a ser revelada/trocada).
-const KEEP_PRIORITY = ['Duque', 'Condessa', 'Capitão', 'Assassina', 'Embaixador'];
+const KEEP_PRIORITY = ['Duque', 'Condessa', 'Capitão', 'Assassina', 'Embaixadora'];
 const keepRank = (role) => KEEP_PRIORITY.indexOf(role);
 
 export function awaitedPlayerId(state) {

@@ -32,3 +32,30 @@ test('ignora sessão expirada ou pertencente a outro convite', () => {
   clearOnlineSession(storage);
   assert.equal(loadOnlineSession(storage, 'ABCDE', 2_000), null);
 });
+
+test('migra a embaixadora em partidas salvas com o nome antigo', () => {
+  const storage = makeStorage();
+  const snapshot = {
+    code: 'ABCDE',
+    myId: 'a',
+    name: 'Ana',
+    room: { code: 'ABCDE' },
+    game: {
+      players: [{ id: 'a', cards: [{ id: 'a-Embaixador-0', role: 'Embaixador', revealed: false }] }],
+      deck: [{ id: 'Embaixador-1', role: 'Embaixador', revealed: false }],
+      exchangeOptions: [],
+      pending: { claimedRole: 'Embaixador', block: { role: 'Embaixador' } },
+      log: [{ type: 'block_declared', role: 'Embaixador' }],
+    },
+  };
+
+  saveOnlineSession(storage, snapshot, 1_000);
+  const restored = loadOnlineSession(storage, 'ABCDE', 2_000);
+
+  assert.equal(restored.game.players[0].cards[0].id, 'a-Embaixadora-0');
+  assert.equal(restored.game.players[0].cards[0].role, 'Embaixadora');
+  assert.equal(restored.game.deck[0].role, 'Embaixadora');
+  assert.equal(restored.game.pending.claimedRole, 'Embaixadora');
+  assert.equal(restored.game.pending.block.role, 'Embaixadora');
+  assert.equal(restored.game.log[0].role, 'Embaixadora');
+});

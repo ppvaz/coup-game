@@ -35,6 +35,33 @@ class FakeAudioContext {
   }
 }
 
+class FakeAudio {
+  static instances = [];
+
+  constructor(source) {
+    this.source = source;
+    this.listeners = {};
+    this.paused = false;
+    FakeAudio.instances.push(this);
+  }
+
+  addEventListener(name, listener) {
+    this.listeners[name] = listener;
+  }
+
+  play() {
+    return Promise.resolve();
+  }
+
+  pause() {
+    this.paused = true;
+  }
+
+  finish() {
+    this.listeners.ended?.();
+  }
+}
+
 test('mute é persistido e impede a criação de tons', async () => {
   FakeAudioContext.oscillators = [];
   const storage = makeStorage({ 'la-corte-muted': 'true' });
@@ -52,4 +79,60 @@ test('mute é persistido e impede a criação de tons', async () => {
 test('funciona silenciosamente quando Web Audio não está disponível', async () => {
   const sounds = createSoundManager({ AudioContext: null, storage: makeStorage() });
   assert.equal(await sounds.play('victory'), false);
+});
+
+test('toca somente a primeira fala e descarta qualquer áudio enquanto ela toca', () => {
+  FakeAudio.instances = [];
+  const storage = makeStorage({ 'la-corte-voices-muted': 'false' });
+  const sounds = createSoundManager({ Audio: FakeAudio, AudioContext: null, storage });
+
+  assert.equal(sounds.playVoices(['challenge.mp3', 'proved.mp3']), true);
+  assert.equal(FakeAudio.instances[0].source, 'challenge.mp3');
+  assert.equal(sounds.playVoices('lost.mp3'), false);
+  assert.equal(FakeAudio.instances[0].paused, false);
+  assert.equal(FakeAudio.instances.length, 1);
+
+  FakeAudio.instances[0].finish();
+  assert.equal(sounds.playVoices('lost.mp3'), true);
+  assert.equal(FakeAudio.instances[1].source, 'lost.mp3');
+});
+
+test('persiste efeitos e vozes separadamente', async () => {
+  FakeAudio.instances = [];
+  FakeAudioContext.oscillators = [];
+  const storage = makeStorage({ 'la-corte-voices-muted': 'false' });
+  const sounds = createSoundManager({ Audio: FakeAudio, AudioContext: FakeAudioContext, storage });
+
+  assert.equal(sounds.toggle(), true);
+  assert.equal(storage.getItem('la-corte-muted'), 'true');
+  assert.equal(sounds.playVoices('voice.mp3'), true);
+  assert.equal(sounds.isVoicePlaying(), true);
+
+  assert.equal(sounds.toggleVoices(), true);
+  assert.equal(storage.getItem('la-corte-voices-muted'), 'true');
+  assert.equal(FakeAudio.instances[0].paused, true);
+  assert.equal(sounds.playVoices('another.mp3'), false);
+
+  assert.equal(sounds.toggle(), false);
+  assert.equal(await sounds.play('action'), true);
+  assert.equal(FakeAudioContext.oscillators.length, 1);
+});
+
+test('inicia com vozes desligadas e respeita uma escolha salva', () => {
+  FakeAudio.instances = [];
+  const freshStorage = makeStorage();
+  const freshSounds = createSoundManager({ Audio: FakeAudio, AudioContext: null, storage: freshStorage });
+
+  assert.equal(freshSounds.isVoicesMuted(), true);
+  assert.equal(freshSounds.playVoices('voice.mp3'), false);
+  assert.equal(freshSounds.toggleVoices(), false);
+  assert.equal(freshStorage.getItem('la-corte-voices-muted'), 'false');
+  assert.equal(freshSounds.playVoices('voice.mp3'), true);
+
+  const savedSounds = createSoundManager({
+    Audio: FakeAudio,
+    AudioContext: null,
+    storage: makeStorage({ 'la-corte-voices-muted': 'false' }),
+  });
+  assert.equal(savedSounds.isVoicesMuted(), false);
 });

@@ -156,12 +156,12 @@ test('bloqueio blefado contestado: o bloqueador perde influência e a ação con
 
 test('golpe não abre respostas e o alvo escolhe qual influência revelar', () => {
   let state = createGame(seats, { random: () => 0.42 });
-  setHand(state, 'b', ['Duque', 'Embaixador']);
+  setHand(state, 'b', ['Duque', 'Embaixadora']);
   state.players[0].coins = 7;
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'coup', targetId: 'b' });
   assert.equal(state.players[0].coins, 0);
   assert.equal(state.phase, 'choose_influence');
-  state = dispatchGame(state, { type: 'reveal_influence', actorId: 'b', cardId: 'b-Embaixador-1' });
+  state = dispatchGame(state, { type: 'reveal_influence', actorId: 'b', cardId: 'b-Embaixadora-1' });
   assert.deepEqual(activeRoles(state.players[1]), ['Duque']);
   assert.equal(state.currentPlayerId, 'b');
 });
@@ -211,7 +211,7 @@ test('não permite mirar a si mesmo nem agir sem moedas suficientes', () => {
   );
 });
 
-test('troca do embaixador devolve as cartas não escolhidas ao baralho', () => {
+test('troca da embaixadora devolve as cartas não escolhidas ao baralho', () => {
   let state = createGame(seats, { random: () => 0.42 });
   const deckSize = state.deck.length;
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'exchange' });

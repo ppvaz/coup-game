@@ -1,4 +1,5 @@
 const MUTE_KEY = 'la-corte-muted';
+const VOICES_MUTE_KEY = 'la-corte-voices-muted';
 
 const PATTERNS = {
   turn: [
@@ -23,19 +24,25 @@ const PATTERNS = {
   ],
 };
 
-const readMuted = (storage) => {
+const readMuted = (storage, key, defaultValue = false) => {
   try {
-    return storage?.getItem(MUTE_KEY) === 'true';
+    const saved = storage?.getItem(key);
+    return saved == null ? defaultValue : saved === 'true';
   } catch {
-    return false;
+    return defaultValue;
   }
 };
 
 export function createSoundManager(options = {}) {
   const AudioContext = options.AudioContext ?? globalThis.AudioContext ?? globalThis.webkitAudioContext;
+  const AudioPlayer = options.Audio ?? globalThis.Audio;
   const storage = options.storage ?? globalThis.localStorage;
   let context = null;
-  let muted = readMuted(storage);
+  let muted = readMuted(storage, MUTE_KEY);
+  let voicesMuted = readMuted(storage, VOICES_MUTE_KEY, true);
+  let currentVoice = null;
+  let voiceQueue = [];
+  let voiceRun = 0;
 
   const getContext = () => {
     if (!context && AudioContext) context = new AudioContext();
@@ -56,6 +63,56 @@ export function createSoundManager(options = {}) {
       // A preferência fica válida nesta página mesmo sem storage.
     }
     return muted;
+  };
+
+  const stopVoices = () => {
+    voiceRun += 1;
+    voiceQueue = [];
+    currentVoice?.pause();
+    currentVoice = null;
+  };
+
+  const setVoicesMuted = (value) => {
+    voicesMuted = Boolean(value);
+    if (voicesMuted) stopVoices();
+    try {
+      storage?.setItem(VOICES_MUTE_KEY, String(voicesMuted));
+    } catch {
+      // A preferência fica válida nesta página mesmo sem storage.
+    }
+    return voicesMuted;
+  };
+
+  const playNextVoice = (run) => {
+    if (run !== voiceRun || voicesMuted || !voiceQueue.length) return;
+    const source = voiceQueue.shift();
+    let voice;
+    try {
+      voice = new AudioPlayer(source);
+    } catch {
+      playNextVoice(run);
+      return;
+    }
+    currentVoice = voice;
+    voice.preload = 'auto';
+    voice.volume = 0.9;
+    const advance = () => {
+      if (run !== voiceRun || currentVoice !== voice) return;
+      currentVoice = null;
+      playNextVoice(run);
+    };
+    voice.addEventListener('ended', advance, { once: true });
+    voice.addEventListener('error', advance, { once: true });
+    Promise.resolve(voice.play()).catch(advance);
+  };
+
+  const playVoices = (sources) => {
+    const playable = (Array.isArray(sources) ? sources : [sources]).filter(Boolean);
+    if (voicesMuted || !AudioPlayer || !playable.length) return false;
+    if (currentVoice || voiceQueue.length) return false;
+    voiceQueue = [playable[0]];
+    playNextVoice(voiceRun);
+    return true;
   };
 
   const play = async (name) => {
@@ -89,7 +146,13 @@ export function createSoundManager(options = {}) {
     isMuted: () => muted,
     setMuted,
     toggle: () => setMuted(!muted),
+    isVoicesMuted: () => voicesMuted,
+    setVoicesMuted,
+    toggleVoices: () => setVoicesMuted(!voicesMuted),
+    isVoicePlaying: () => Boolean(currentVoice || voiceQueue.length),
     unlock,
     play,
+    playVoices,
+    stopVoices,
   };
 }

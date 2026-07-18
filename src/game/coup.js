@@ -1,4 +1,4 @@
-export const ROLES = ['Duque', 'Assassina', 'Capitão', 'Embaixador', 'Condessa'];
+export const ROLES = ['Duque', 'Assassina', 'Capitão', 'Embaixadora', 'Condessa'];
 
 export const ACTIONS = {
   income: { label: 'Renda', coins: 1 },
@@ -6,8 +6,8 @@ export const ACTIONS = {
   coup: { label: 'Golpe', cost: 7, targeted: true },
   tax: { label: 'Imposto', role: 'Duque', coins: 3 },
   assassinate: { label: 'Assassinar', role: 'Assassina', cost: 3, targeted: true, blockedBy: ['Condessa'] },
-  steal: { label: 'Roubar', role: 'Capitão', targeted: true, blockedBy: ['Capitão', 'Embaixador'] },
-  exchange: { label: 'Trocar', role: 'Embaixador' },
+  steal: { label: 'Roubar', role: 'Capitão', targeted: true, blockedBy: ['Capitão', 'Embaixadora'] },
+  exchange: { label: 'Trocar', role: 'Embaixadora' },
 };
 
 const clone = (value) => structuredClone(value);
@@ -122,7 +122,7 @@ function runAfterLoss(state, afterLoss) {
   if (afterLoss === 'continue_action') return beginBlocksOrResolve(state);
   if (afterLoss === 'resolve_action') return resolveAction(state);
   if (afterLoss === 'action_blocked') {
-    state.log.push({ type: 'action_blocked', ...state.pending.block, at: Date.now() });
+    state.log.push({ type: 'action_blocked', action: state.pending.action, ...state.pending.block, at: Date.now() });
     return finishTurn(state);
   }
   return finishTurn(state);
@@ -280,7 +280,7 @@ export function dispatchGame(source, command) {
     if (state.phase === 'challenge_action') beginBlocksOrResolve(state);
     else if (state.phase === 'block') resolveAction(state);
     else {
-      state.log.push({ type: 'action_blocked', ...state.pending.block, at: Date.now() });
+      state.log.push({ type: 'action_blocked', action: state.pending.action, ...state.pending.block, at: Date.now() });
       finishTurn(state);
     }
     return commit();
@@ -314,7 +314,13 @@ export function dispatchGame(source, command) {
     state.pending.block = { playerId: actor.id, role: command.role };
     state.phase = 'challenge_block';
     state.responseQueue = responderIds(state, actor.id);
-    state.log.push({ type: 'block_declared', playerId: actor.id, role: command.role, at: Date.now() });
+    state.log.push({
+      type: 'block_declared',
+      action: state.pending.action,
+      playerId: actor.id,
+      role: command.role,
+      at: Date.now(),
+    });
     return commit();
   }
 

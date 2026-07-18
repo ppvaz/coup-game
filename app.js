@@ -4,6 +4,9 @@ import { reconstructGame } from './src/game/handover.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
 import { trackPresence } from './src/lib/realtime.js';
 import { createSoundManager } from './src/lib/sounds.js';
+import { botDelayMs } from './src/lib/bot-timing.js';
+import { decisionClockKey } from './src/lib/decision-clock.js';
+import { voiceFilesForTransition } from './src/lib/voice-announcer.js';
 import { CHAT_MAX_LENGTH, appendChatMessage, createChatGuard, normalizeChatText } from './src/rooms/chat.js';
 import {
   HOST_GRACE_MS,
@@ -21,7 +24,7 @@ import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import duquePortrait from './assets/characters/duque.png';
 import assassinaPortrait from './assets/characters/assassina.png';
 import capitaoPortrait from './assets/characters/capitao.png';
-import embaixadorPortrait from './assets/characters/embaixador.png';
+import embaixadoraPortrait from './assets/characters/embaixadora.png';
 import condessaPortrait from './assets/characters/condessa.png';
 import councilChamberDark from './assets/council-chamber.png';
 import councilChamberLight from './assets/council-chamber-light.png';
@@ -30,9 +33,15 @@ const PORTRAITS = {
   Duque: duquePortrait,
   Assassina: assassinaPortrait,
   Capitão: capitaoPortrait,
-  Embaixador: embaixadorPortrait,
+  Embaixadora: embaixadoraPortrait,
   Condessa: condessaPortrait,
 };
+const VOICE_ASSETS = import.meta.glob('./assets/voices/**/*.mp3', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+});
+const voiceAssetURLs = (files) => files.map((file) => VOICE_ASSETS[`./assets/voices/${file}`]).filter(Boolean);
 const PRIORITY_ASSETS = [councilChamberDark, councilChamberLight, ...Object.values(PORTRAITS)];
 for (const source of PRIORITY_ASSETS) {
   const image = new Image();
@@ -45,7 +54,7 @@ const ROLE_HINTS = {
   Duque: 'Receba 3 moedas',
   Assassina: 'Elimine por 3 moedas',
   Capitão: 'Roube até 2 moedas',
-  Embaixador: 'Troque cartas',
+  Embaixadora: 'Troque cartas',
   Condessa: 'Bloqueia assassinato',
 };
 const ACTION_ORDER = ['income', 'foreign_aid', 'tax', 'steal', 'exchange', 'assassinate', 'coup'];
@@ -54,7 +63,7 @@ const ACTION_HINTS = {
   foreign_aid: '+2 moedas',
   tax: 'Duque · +3',
   steal: 'Capitão · alvo',
-  exchange: 'Embaixador',
+  exchange: 'Embaixadora',
   assassinate: '3 moedas · alvo',
   coup: '7 moedas · alvo',
 };
@@ -62,7 +71,7 @@ const BLOCK_HINTS = {
   Duque: 'Impede Ajuda Externa',
   Condessa: 'Impede Assassinato',
   Capitão: 'Impede Roubo',
-  Embaixador: 'Impede Roubo',
+  Embaixadora: 'Impede Roubo',
 };
 const NAMES = ['Lorenzo', 'Beatrice', 'Vittorio'];
 const CHAT_TAUNTS = [
@@ -181,19 +190,22 @@ const sendRoom = (event, payload = {}) => roomChannel?.send({ type: 'broadcast',
 
 function announceGameState(previous, next) {
   if (!next) return;
+  const voices = voiceAssetURLs(voiceFilesForTransition(previous, next));
+  if (voices.length) sounds.playVoices(voices);
+  const voicePlaying = sounds.isVoicePlaying();
   if (next.status === 'finished' && previous?.status !== 'finished') {
-    sounds.play(next.winnerId === state.myId ? 'victory' : 'defeat');
+    if (!voicePlaying) sounds.play(next.winnerId === state.myId ? 'victory' : 'defeat');
     return;
   }
   const before = previous ? awaitedPlayerId(previous) : null;
   const after = awaitedPlayerId(next);
   if (after === state.myId && before !== state.myId) {
-    sounds.play('turn');
+    if (!voicePlaying) sounds.play('turn');
     return;
   }
   const previousEvent = previous?.log?.at(-1)?.at;
   const nextEvent = next.log?.at(-1)?.at;
-  if (previous && nextEvent && nextEvent !== previousEvent) sounds.play('action');
+  if (previous && nextEvent && nextEvent !== previousEvent && !voicePlaying) sounds.play('action');
 }
 
 function publicRoom() {
@@ -421,10 +433,6 @@ function resetClock() {
   clock = { key, deadline: Date.now() + total, total };
 }
 
-function decisionClockKey(game) {
-  return `${game.turn}|${game.phase}|${awaitedPlayerId(game)}|${game.responseQueue.length}`;
-}
-
 function tickClock() {
   if (!state.game || state.game.status !== 'playing' || !clock.deadline) return;
   const remaining = Math.max(0, clock.deadline - Date.now());
@@ -459,7 +467,8 @@ function scheduleBots() {
   const awaited = awaitedPlayerId(state.game);
   const player = state.game.players.find((candidate) => candidate.id === awaited);
   if (player?.kind !== 'bot') return;
-  botTimer = setTimeout(() => applyCommand(botCommand(state.game, awaited)), 650 + Math.random() * 500);
+  const delay = botDelayMs();
+  botTimer = setTimeout(() => applyCommand(botCommand(state.game, awaited)), delay);
 }
 
 function startLocal() {
@@ -1136,6 +1145,7 @@ function roomHTML() {
 function gameHTML() {
   const game = state.game;
   const finished = game.status === 'finished';
+  const decisionPlayerId = awaitedPlayerId(game) ?? game.currentPlayerId;
   const winner = finished ? game.players.find((player) => player.id === game.winnerId) : null;
   const result =
     game.finishReason === 'humans_eliminated'
@@ -1150,17 +1160,26 @@ function gameHTML() {
     !state.online || state.isHost
       ? `<button class="primary" id="again" style="width:240px;margin-top:24px" ${state.online && readyPlayers < 2 ? 'disabled' : ''}>${state.online && readyPlayers < 2 ? 'Aguardando jogadores' : state.online ? `Jogar novamente · ${readyPlayers}` : 'Jogar novamente'}</button>`
       : '<p class="waiting">Aguardando o anfitrião abrir outra mesa…</p>';
-  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()} ${waitingNotice}</div><div class="gamebar-actions">${chatToggleHTML()}${soundToggleHTML()}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
+  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber()} ${waitingNotice}</div><div class="gamebar-actions">${chatToggleHTML()}${audioTogglesHTML()}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
     .filter((player) => player.id !== state.myId)
     .map(playerHTML)
     .join(
       '',
-    )}</div><div class="center"><div class="turn-copy">${finished ? result : `É a vez de<br><b>${playerName(game.currentPlayerId)}</b>`}</div>${finished ? '' : timerHTML()}${historyHTML()}${finished ? again : ''}</div></section>${finished ? '' : handHTML()}${modalHTML()}</main>`;
+    )}</div><div class="center"><div class="turn-copy">${finished ? result : `É a vez de<br><b>${playerName(decisionPlayerId)}</b>`}</div>${finished ? '' : timerHTML()}${historyHTML()}${finished ? again : ''}</div></section>${finished ? '' : handHTML()}${modalHTML()}</main>`;
 }
 
 function soundToggleHTML() {
   const muted = sounds.isMuted();
-  return `<button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="${muted}" aria-label="${muted ? 'Ativar sons' : 'Silenciar sons'}"><span class="sound-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path class="sound-speaker" d="M4 9h4l5-4v14l-5-4H4Z"/><path class="sound-waves" d="M16 9.2a4 4 0 0 1 0 5.6M18.5 6.8a7.3 7.3 0 0 1 0 10.4"/></svg></span><small>${muted ? 'Sons desligados' : 'Sons ligados'}</small></button>`;
+  return `<button class="audio-toggle sound-toggle" id="sound-toggle" type="button" aria-pressed="${muted}" aria-label="${muted ? 'Ativar efeitos sonoros' : 'Silenciar efeitos sonoros'}"><span class="audio-icon sound-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path class="sound-speaker" d="M4 9h4l5-4v14l-5-4H4Z"/><path class="sound-waves" d="M16 9.2a4 4 0 0 1 0 5.6M18.5 6.8a7.3 7.3 0 0 1 0 10.4"/></svg></span><small>${muted ? 'Sons desligados' : 'Sons ligados'}</small></button>`;
+}
+
+function voiceToggleHTML() {
+  const muted = sounds.isVoicesMuted();
+  return `<button class="audio-toggle voice-toggle" id="voice-toggle" type="button" aria-pressed="${muted}" aria-label="${muted ? 'Ativar vozes' : 'Silenciar vozes'}"><span class="audio-icon voice-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="7" r="3"/><path d="M3.5 18c.5-3.3 2.2-5 4.5-5s4 1.7 4.5 5M15 8.5a3.8 3.8 0 0 1 0 5M18 6.5a6.7 6.7 0 0 1 0 9"/></svg></span><small>${muted ? 'Vozes desligadas' : 'Vozes ligadas'}</small></button>`;
+}
+
+function audioTogglesHTML() {
+  return `<div class="audio-toggles" role="group" aria-label="Controles de áudio">${soundToggleHTML()}${voiceToggleHTML()}</div>`;
 }
 
 function historyHTML() {
@@ -1176,7 +1195,7 @@ function historyHTML() {
 }
 
 function playerHTML(player) {
-  const isTurn = state.game.currentPlayerId === player.id && state.game.status === 'playing';
+  const isTurn = awaitedPlayerId(state.game) === player.id && state.game.status === 'playing';
   const connected = state.room?.seats.find((seat) => seat.id === player.id)?.connected ?? true;
   return `<div class="player ${isTurn ? 'turn' : ''} ${!isAlive(player) ? 'dead' : ''} ${connected ? '' : 'offline'}"><div class="avatar">${escapeHTML(player.name[0] ?? '?')}</div><strong title="${escapeHTML(player.name)}">${escapeHTML(player.name)}</strong>${connected ? '' : '<small class="offline-label">DESCONECTADO</small>'}<div class="coins">◆ ${player.coins} moedas</div><div class="influence">${player.cards.map((card) => (card.revealed ? `<i class="mini-card revealed" style="--mini-portrait:url('${PORTRAITS[card.role]}')"><span>${card.role}</span></i>` : '<i class="mini-card hidden" aria-label="Influência não revelada"><span>?</span></i>')).join('')}</div></div>`;
 }
@@ -1311,7 +1330,7 @@ function revealModal() {
 function exchangeModal() {
   const count = state.game.pending.exchangeCount;
   const picks = state.exchangePicks;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Troca do Embaixador</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2>${otherPlayersHTML([state.myId])}<p class="modal-copy">As demais voltam para o baralho da corte.</p>${timerHTML()}<div class="card-grid">${state.game.exchangeOptions.map((card) => `<button class="role-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${PORTRAITS[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext()}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Troca da Embaixadora</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2>${otherPlayersHTML([state.myId])}<p class="modal-copy">As demais voltam para o baralho da corte.</p>${timerHTML()}<div class="card-grid">${state.game.exchangeOptions.map((card) => `<button class="role-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${PORTRAITS[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext()}</div></div>`;
 }
 
 // ---------- Eventos ----------
@@ -1379,6 +1398,10 @@ function bindGame() {
   $('#sound-toggle')?.addEventListener('click', () => {
     const muted = sounds.toggle();
     if (!muted) sounds.play('action');
+    render();
+  });
+  $('#voice-toggle')?.addEventListener('click', () => {
+    sounds.toggleVoices();
     render();
   });
   $('#again')?.addEventListener('click', () => (state.online ? startOnline() : startLocal()));

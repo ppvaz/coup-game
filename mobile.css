@@ -824,7 +824,7 @@ html[data-theme='light'] .connection-spinner {
   border-color: rgba(87, 61, 25, 0.2);
   border-top-color: #8a6425;
 }
-html[data-theme='light'] .sound-toggle {
+html[data-theme='light'] .audio-toggle {
   background: rgba(250, 247, 240, 0.62);
   color: #4f4438;
   border-color: rgba(91, 65, 27, 0.3);
