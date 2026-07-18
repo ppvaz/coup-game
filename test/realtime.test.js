@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { trackPresence } from '../src/lib/realtime.js';
+import { channelStatusOutcome, trackPresence } from '../src/lib/realtime.js';
 
 test('confirma o registro da presença quando o canal responde', async () => {
   const calls = [];
@@ -23,4 +23,16 @@ test('não deixa a conexão presa quando a confirmação da presença não chega
 test('distingue uma falha explícita de uma confirmação atrasada', async () => {
   assert.equal(await trackPresence({ track: async () => 'timed out' }, {}, 20), 'error');
   assert.equal(await trackPresence({ track: async () => Promise.reject(new Error('offline')) }, {}, 20), 'error');
+});
+
+test('queda de canal reconecta quem tem sala e devolve ao salão quem não tem', () => {
+  for (const status of ['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED']) {
+    assert.equal(channelStatusOutcome(status, true), 'reconnect');
+    assert.equal(channelStatusOutcome(status, false), 'fail');
+  }
+});
+
+test('assinatura confirmada prossegue e estados intermediários são ignorados', () => {
+  assert.equal(channelStatusOutcome('SUBSCRIBED', false), 'subscribed');
+  assert.equal(channelStatusOutcome('JOINING', true), 'ignore');
 });

@@ -2,7 +2,7 @@ import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/s
 import { ACTIONS, createGame, dispatchGame, viewForPlayer, isAlive, responseProgress } from './src/game/coup.js';
 import { reconstructGame } from './src/game/handover.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
-import { trackPresence } from './src/lib/realtime.js';
+import { channelStatusOutcome, trackPresence } from './src/lib/realtime.js';
 import { createSoundManager } from './src/lib/sounds.js';
 import { botDelayMs } from './src/lib/bot-timing.js';
 import { decisionClockKey } from './src/lib/decision-clock.js';
@@ -882,19 +882,21 @@ async function connectRoom(kind) {
     .on('presence', { event: 'sync' }, handlePresenceSync)
     .subscribe(async (status) => {
       if (roomChannel !== channel) return;
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        if (state.room) {
-          state.connection = 'reconnecting';
-        } else {
-          state.error =
-            'Não foi possível conectar ao Supabase. Confira a Project URL e a chave pública configuradas na Vercel.';
-          state.screen = 'lobby';
-          state.connection = 'idle';
-        }
+      const outcome = channelStatusOutcome(status, Boolean(state.room));
+      if (outcome === 'reconnect') {
+        state.connection = 'reconnecting';
         render();
         return;
       }
-      if (status !== 'SUBSCRIBED') return;
+      if (outcome === 'fail') {
+        state.error =
+          'Não foi possível conectar ao Supabase. Confira a Project URL e a chave pública configuradas na Vercel.';
+        state.screen = 'lobby';
+        state.connection = 'idle';
+        render();
+        return;
+      }
+      if (outcome !== 'subscribed') return;
       const firstSubscription = !subscribedOnce;
       subscribedOnce = true;
       state.online = true;
