@@ -16,17 +16,26 @@ test('gera código curto sem caracteres ambíguos', () => {
   assert.match(code, /^[A-HJ-NP-Z2-9]{5}$/);
 });
 
-test('host controla bots e início da sala', () => {
+test('somente o anfitrião inicia, e apenas com a mesa fora de jogo', () => {
   let room = createRoom({ code: 'ABCDE', hostId: 'host', hostName: 'Ana' });
-  room = dispatchRoom(room, { type: 'add_bot', actorId: 'host', bot: { id: 'bot-1', name: 'Lorenzo' } });
-  room = dispatchRoom(room, {
-    type: 'start_game',
-    actorId: 'host',
-    game: { gameId: 'game-1', version: 1, status: 'playing' },
-  });
+  room = dispatchRoom(room, { type: 'join', actorId: 'bia', player: { id: 'bia', name: 'Bia' } });
+
+  assert.throws(
+    () => dispatchRoom(room, { type: 'start_game', actorId: 'bia', gameId: 'g', playerIds: ['host', 'bia'] }),
+    /anfitrião/,
+  );
+  room = dispatchRoom(room, { type: 'start_game', actorId: 'host', gameId: 'game-1', playerIds: ['host', 'bia'] });
   assert.equal(room.status, 'playing');
   assert.equal(room.activeGameId, 'game-1');
-  assert.equal(room.seats[1].kind, 'bot');
+  assert.throws(
+    () => dispatchRoom(room, { type: 'start_game', actorId: 'host', gameId: 'game-2', playerIds: ['host', 'bia'] }),
+    /andamento/,
+  );
+
+  // Fim de partida reabre a mesa para a próxima.
+  room = { ...room, status: 'finished' };
+  room = dispatchRoom(room, { type: 'start_game', actorId: 'host', gameId: 'game-2', playerIds: ['host', 'bia'] });
+  assert.equal(room.activeGameId, 'game-2');
 });
 
 test('aguarda o período de tolerância e migra para o humano conectado mais antigo', () => {
@@ -35,7 +44,7 @@ test('aguarda o período de tolerância e migra para o humano conectado mais ant
   room = dispatchRoom(room, { type: 'join', actorId: 'c', player: { id: 'c', name: 'Caio' } });
   room.seats.find((seat) => seat.id === 'b').joinedAt = 10;
   room.seats.find((seat) => seat.id === 'c').joinedAt = 20;
-  room = dispatchRoom(room, { type: 'disconnect', actorId: 'a', now: 100 });
+  room = syncRoomPresence(room, ['b', 'c'], 100);
   assert.deepEqual(hostElection(room, 100 + HOST_GRACE_MS - 1), {
     status: 'waiting',
     candidateId: 'b',
@@ -96,22 +105,12 @@ test('cancela o encerramento se outro jogador retornar durante a carência', () 
 test('entrada tardia aguarda a próxima partida e participa da sala', () => {
   let room = createRoom({ code: 'ABCDE', hostId: 'host', hostName: 'Ana' });
   room = dispatchRoom(room, { type: 'join', actorId: 'bia', player: { id: 'bia', name: 'Bia' } });
-  room = dispatchRoom(room, {
-    type: 'start_game',
-    actorId: 'host',
-    game: {
-      gameId: 'game-1',
-      version: 1,
-      status: 'playing',
-      players: [{ id: 'host' }, { id: 'bia' }],
-    },
-  });
+  room = dispatchRoom(room, { type: 'start_game', actorId: 'host', gameId: 'game-1', playerIds: ['host', 'bia'] });
   room = dispatchRoom(room, { type: 'join', actorId: 'caio', player: { id: 'caio', name: 'Caio' } });
 
   const late = room.seats.find((seat) => seat.id === 'caio');
   assert.equal(late.connected, true);
   assert.equal(late.joinsNextGame, true);
-  assert.equal(room.pending.length, 0);
   assert.deepEqual(room.activePlayerIds, ['host', 'bia']);
   assert.deepEqual(
     nextGameSeats(room).map((seat) => seat.id),
@@ -122,16 +121,7 @@ test('entrada tardia aguarda a próxima partida e participa da sala', () => {
 test('jogador tardio só pode assumir a sala depois do fim da partida', () => {
   let room = createRoom({ code: 'ABCDE', hostId: 'host', hostName: 'Ana' });
   room = dispatchRoom(room, { type: 'join', actorId: 'bia', player: { id: 'bia', name: 'Bia' } });
-  room = dispatchRoom(room, {
-    type: 'start_game',
-    actorId: 'host',
-    game: {
-      gameId: 'game-1',
-      version: 1,
-      status: 'playing',
-      players: [{ id: 'host' }, { id: 'bia' }],
-    },
-  });
+  room = dispatchRoom(room, { type: 'start_game', actorId: 'host', gameId: 'game-1', playerIds: ['host', 'bia'] });
   room = dispatchRoom(room, { type: 'join', actorId: 'caio', player: { id: 'caio', name: 'Caio' } });
   room = dispatchRoom(room, { type: 'join', actorId: 'davi', player: { id: 'davi', name: 'Davi' } });
   room = syncRoomPresence(room, ['caio', 'davi'], 1_000);

@@ -11,8 +11,13 @@ test('queda do host elege o sucessor e reconstrói um estado autoritativo jogáv
   room.seats.find((seat) => seat.id === 'b').joinedAt = 10;
   room.seats.find((seat) => seat.id === 'c').joinedAt = 20;
 
-  const game = createGame(room.seats);
-  room = dispatchRoom(room, { type: 'start_game', actorId: 'a', game });
+  const game = createGame(room.seats, { gameId: 'game-1' });
+  room = dispatchRoom(room, {
+    type: 'start_game',
+    actorId: 'a',
+    gameId: game.gameId,
+    playerIds: game.players.map((player) => player.id),
+  });
   room = syncRoomPresence(room, ['b', 'c'], 1_000);
   assert.equal(hostElection(room, 1_000 + HOST_GRACE_MS - 1).status, 'waiting');
 

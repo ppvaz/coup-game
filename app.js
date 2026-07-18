@@ -499,18 +499,12 @@ function startOnline() {
   state.game = createGame(seats, { gameId });
   announceGameState(null, state.game);
   state.screen = 'game';
-  state.room = {
-    ...state.room,
-    status: 'playing',
-    activeGameId: gameId,
-    activePlayerIds: seats.map((seat) => seat.id),
-    seats: state.room.seats.map((seat) => ({
-      ...seat,
-      joinsNextGame: !readySeats.some((ready) => ready.id === seat.id),
-    })),
-    version: state.room.version + 1,
-    updatedAt: Date.now(),
-  };
+  state.room = dispatchRoom(state.room, {
+    type: 'start_game',
+    actorId: state.myId,
+    gameId,
+    playerIds: seats.map((seat) => seat.id),
+  });
   resetClock();
   sendRoom('game_started', { gameId });
   broadcastRoom();
