@@ -107,6 +107,13 @@ export function continuityPlan(room, { myId, handoverActive = false, now = Date.
   return { action: 'idle', hostIssue };
 }
 
+// O vigia usa a divergência entre assentos e presença para detectar uma
+// sincronização perdida (ex.: snapshot que chegou antes do próprio track).
+export function presenceDiverges(room, connectedIds) {
+  const connected = new Set(connectedIds);
+  return room.seats.some((seat) => seat.kind === 'human' && seat.connected !== connected.has(seat.id));
+}
+
 export function dispatchRoom(source, command) {
   const room = clone(source);
   const isHost = command.actorId === room.hostId;

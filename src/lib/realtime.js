@@ -1,4 +1,7 @@
 export const PRESENCE_ACK_TIMEOUT_MS = 2_500;
+// Teto para uma reconexão em andamento: além disso, o app desiste e devolve
+// o jogador ao salão em vez de mantê-lo preso no overlay.
+export const RECONNECT_GIVE_UP_MS = 45_000;
 
 // Mapeia o status do canal Supabase para a reação do app: cair do canal com
 // uma sala em mãos é queda temporária (reconecta); sem sala é falha de

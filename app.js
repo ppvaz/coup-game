@@ -2,7 +2,7 @@ import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/s
 import { ACTIONS, createGame, dispatchGame, viewForPlayer, isAlive, responseProgress } from './src/game/coup.js';
 import { reconstructGame } from './src/game/handover.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
-import { channelStatusOutcome, trackPresence } from './src/lib/realtime.js';
+import { RECONNECT_GIVE_UP_MS, channelStatusOutcome, trackPresence } from './src/lib/realtime.js';
 import { createSoundManager } from './src/lib/sounds.js';
 import { botDelayMs } from './src/lib/bot-timing.js';
 import { decisionClockKey } from './src/lib/decision-clock.js';
@@ -17,6 +17,7 @@ import {
   generateRoomCode,
   hostElection,
   nextGameSeats,
+  presenceDiverges,
   syncRoomPresence,
 } from './src/rooms/room.js';
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
@@ -146,6 +147,7 @@ let encryptionIdentity = null;
 let connectionId = null;
 let warnedClockKey = '';
 let chatErrorTimer = null;
+let reconnectingSince = 0;
 if (resumeSnapshot?.game) {
   clock = {
     key: 'restored',
@@ -445,6 +447,26 @@ function tickClock() {
 }
 setInterval(tickClock, 250);
 
+// Vigia da continuidade: a corrente de setTimeout da carência pode ser
+// estrangulada em aba de fundo, e uma sincronização de presença pode chegar
+// antes do nosso próprio track e ser descartada. Reavalia mesas instáveis e
+// desiste de reconexões que passaram do teto em vez de prender o jogador.
+function watchTableContinuity() {
+  if (!state.online || !state.room) return;
+  if (
+    state.connection === 'reconnecting' &&
+    reconnectingSince &&
+    Date.now() - reconnectingSince > RECONNECT_GIVE_UP_MS
+  ) {
+    state.error = 'Não foi possível reconectar à mesa. Verifique sua conexão e entre novamente com o código.';
+    leaveTable();
+    return;
+  }
+  const connectedIds = roomChannel ? Object.keys(roomChannel.presenceState()) : [];
+  if (state.hostIssue || presenceDiverges(state.room, connectedIds)) handlePresenceSync();
+}
+setInterval(watchTableContinuity, 2_000);
+
 function timerHTML() {
   if (!clock.deadline || state.game?.status !== 'playing') return '';
   const remaining = Math.max(0, clock.deadline - Date.now());
@@ -693,6 +715,7 @@ async function connectRoom(kind) {
   const resume = kind === 'resume';
   state.error = null;
   state.connection = 'connecting';
+  reconnectingSince = 0;
   state.presenceReady = false;
   roomChannel?.unsubscribe();
   const nextConnectionId = crypto.randomUUID();
@@ -842,6 +865,7 @@ async function connectRoom(kind) {
       if (roomChannel !== channel) return;
       const outcome = channelStatusOutcome(status, Boolean(state.room));
       if (outcome === 'reconnect') {
+        if (state.connection !== 'reconnecting') reconnectingSince = Date.now();
         state.connection = 'reconnecting';
         render();
         return;
@@ -855,6 +879,7 @@ async function connectRoom(kind) {
         return;
       }
       if (outcome !== 'subscribed') return;
+      reconnectingSince = 0;
       const firstSubscription = !subscribedOnce;
       subscribedOnce = true;
       state.online = true;
@@ -950,6 +975,7 @@ function leaveTable() {
   state.targetAction = null;
   state.exchangePicks = [];
   state.connection = 'idle';
+  reconnectingSince = 0;
   state.hostIssue = null;
   state.chatOpen = false;
   state.chatMessages = [];

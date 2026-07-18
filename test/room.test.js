@@ -8,6 +8,7 @@ import {
   generateRoomCode,
   hostElection,
   nextGameSeats,
+  presenceDiverges,
   roomClosure,
   syncRoomPresence,
 } from '../src/rooms/room.js';
@@ -179,6 +180,18 @@ test('plano de continuidade: estável fica quieto e handover em curso prevalece 
   room = syncRoomPresence(room, ['b', 'c'], 1_000);
   const promoting = continuityPlan(room, { myId: 'b', handoverActive: true, now: 1_000 + HOST_GRACE_MS });
   assert.deepEqual(promoting, { action: 'idle', hostIssue: { status: 'promoting' } });
+});
+
+test('divergência de presença acusa sincronização perdida nas duas direções', () => {
+  let room = createRoom({ hostId: 'a', hostName: 'Ana' });
+  room = dispatchRoom(room, { type: 'join', actorId: 'b', player: { id: 'b', name: 'Bia' } });
+
+  assert.equal(presenceDiverges(room, ['a', 'b']), false);
+  assert.equal(presenceDiverges(room, ['a']), true);
+
+  room = syncRoomPresence(room, ['a'], 1_000);
+  assert.equal(presenceDiverges(room, ['a']), false);
+  assert.equal(presenceDiverges(room, ['a', 'b']), true);
 });
 
 test('nova partida ignora assentos desconectados', () => {
