@@ -101,13 +101,13 @@ test('modais seguem a fase e o papel do jogador, com espera apenas no online', (
   game = dispatchGame(game, { type: 'pass', actorId: 'b' });
   game = dispatchGame(game, { type: 'pass', actorId: 'c' });
   game = dispatchGame(game, { type: 'declare_action', actorId: 'b', action: 'foreign_aid' });
-  // A fila de bloqueio segue a ordem dos assentos: 'a' responde primeiro.
-  const blocker = modalHTML(stateFor(game), context);
+  // A fila de bloqueio segue em sentido circular: depois de 'b', responde 'c'.
+  const blocker = modalHTML(stateFor(game, { myId: 'c' }), context);
   assert.match(blocker, /Ação bloqueável/);
   assert.match(blocker, /data-block-role="Duque"/);
 
-  game = dispatchGame(game, { type: 'block', actorId: 'a', role: 'Duque' }, () => 0);
-  const judge = modalHTML(stateFor(game, { myId: 'b' }), context);
+  game = dispatchGame(game, { type: 'block', actorId: 'c', role: 'Duque' }, () => 0);
+  const judge = modalHTML(stateFor(game), context);
   assert.match(judge, /Bloqueio declarado/);
   assert.match(judge, /id="contest-block"/);
 });

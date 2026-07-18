@@ -34,6 +34,19 @@ test('renda resolve imediatamente e passa o turno', () => {
   assert.equal(next.version, state.version + 1);
 });
 
+test('em dois jogadores quem começa recebe uma moeda', () => {
+  const state = createGame(seats.slice(0, 2), { random: () => 0.42, startingPlayerId: 'b' });
+  assert.equal(state.currentPlayerId, 'b');
+  assert.equal(state.players.find((player) => player.id === 'a').coins, 2);
+  assert.equal(state.players.find((player) => player.id === 'b').coins, 1);
+});
+
+test('o vencedor anterior começa a revanche', () => {
+  const state = createGame(seats, { random: () => 0.42, startingPlayerId: 'c' });
+  assert.equal(state.currentPlayerId, 'c');
+  assert.ok(state.players.every((player) => player.coins === 2));
+});
+
 test('ação de personagem abre janela de contestação', () => {
   const state = createGame(seats, { random: () => 0.42 });
   const next = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'tax' });
@@ -106,6 +119,20 @@ test('contestação vencida: o blefe revela influência e a ação falha', () =>
   assert.equal(state.currentPlayerId, 'b');
 });
 
+test('contestação bem-sucedida devolve o custo da ação blefada', () => {
+  let state = createGame(seats, { random: () => 0.42 });
+  setHand(state, 'a', ['Duque', 'Capitão']);
+  state.players[0].coins = 3;
+  state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' });
+  assert.equal(state.players[0].coins, 0);
+
+  state = dispatchGame(state, { type: 'challenge', actorId: 'b' });
+  assert.equal(state.players[0].coins, 3);
+  state = dispatchGame(state, { type: 'reveal_influence', actorId: 'a', cardId: 'a-Duque-0' });
+  assert.equal(state.players[0].coins, 3);
+  assert.equal(state.currentPlayerId, 'b');
+});
+
 test('assassinato paga na declaração e o custo fica pago mesmo bloqueado', () => {
   let state = createGame(seats, { random: () => 0.42 });
   setHand(state, 'b', ['Condessa', 'Duque']);
@@ -116,7 +143,7 @@ test('assassinato paga na declaração e o custo fica pago mesmo bloqueado', () 
   assert.equal(state.phase, 'block');
   assert.deepEqual(state.responseQueue, ['b']);
   state = dispatchGame(state, { type: 'block', actorId: 'b', role: 'Condessa' });
-  state = passAll(state, ['a', 'c']);
+  state = passAll(state, ['c', 'a']);
   assert.equal(state.players[0].coins, 0);
   assert.equal(revealedCount(state.players[1]), 0);
   assert.equal(state.currentPlayerId, 'b');
@@ -129,6 +156,7 @@ test('bloqueio verdadeiro contestado: o contestador perde influência e a ação
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' });
   state = passAll(state, ['b', 'c']);
   state = dispatchGame(state, { type: 'block', actorId: 'b', role: 'Condessa' });
+  state = dispatchGame(state, { type: 'pass', actorId: 'c' });
   state = dispatchGame(state, { type: 'challenge', actorId: 'a' });
   assert.equal(state.phase, 'choose_influence');
   state = dispatchGame(state, { type: 'reveal_influence', actorId: 'a', cardId: state.players[0].cards[0].id });
@@ -144,6 +172,7 @@ test('bloqueio blefado contestado: o bloqueador perde influência e a ação con
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'steal', targetId: 'b' });
   state = passAll(state, ['b', 'c']);
   state = dispatchGame(state, { type: 'block', actorId: 'b', role: 'Capitão' });
+  state = dispatchGame(state, { type: 'pass', actorId: 'c' });
   state = dispatchGame(state, { type: 'challenge', actorId: 'a' });
   assert.equal(state.phase, 'choose_influence');
   assert.equal(state.players[0].coins, 2);
@@ -228,7 +257,8 @@ test('troca da embaixadora devolve as cartas não escolhidas ao baralho', () => 
     () => dispatchGame(state, { type: 'choose_exchange', actorId: 'a', cardIds: [chosen[0], chosen[0]] }),
     /Quantidade/,
   );
-  state = dispatchGame(state, { type: 'choose_exchange', actorId: 'a', cardIds: chosen });
+  const returned = state.exchangeOptions.filter((card) => !chosen.includes(card.id)).map((card) => card.id);
+  state = dispatchGame(state, { type: 'choose_exchange', actorId: 'a', cardIds: chosen }, () => 0);
   assert.deepEqual(
     state.players[0].cards.map((card) => card.id),
     chosen,
@@ -236,10 +266,17 @@ test('troca da embaixadora devolve as cartas não escolhidas ao baralho', () => 
   assert.equal(state.deck.length, deckSize);
   const all = [...state.deck, ...state.players.flatMap((player) => player.cards)];
   for (const role of ROLES) assert.equal(all.filter((card) => card.role === role).length, 3);
+  assert.notDeepEqual(
+    state.deck
+      .slice(-2)
+      .map((card) => card.id)
+      .sort(),
+    returned.sort(),
+  );
   assert.equal(state.currentPlayerId, 'b');
 });
 
-test('resposta fora de ordem é rejeitada e eliminados saem da fila', () => {
+test('respostas seguem a ordem circular e eliminados saem da fila', () => {
   let state = createGame(seats, { random: () => 0.42 });
   state.players[2].cards.forEach((card) => {
     card.revealed = true;
@@ -252,6 +289,11 @@ test('resposta fora de ordem é rejeitada e eliminados saem da fila', () => {
     action: 'tax',
   });
   assert.throws(() => dispatchGame(ordered, { type: 'pass', actorId: 'c' }), /próximo/);
+
+  const fromB = createGame(seats, { random: () => 0.42, startingPlayerId: 'b' });
+  const afterB = dispatchGame(fromB, { type: 'declare_action', actorId: 'b', action: 'tax' });
+  assert.deepEqual(afterB.responseQueue, ['c', 'a']);
+  assert.throws(() => dispatchGame(afterB, { type: 'pass', actorId: 'a' }), /próximo/);
 });
 
 test('turno pula jogadores eliminados', () => {
@@ -271,10 +313,12 @@ test('alvo que blefa o bloqueio do assassinato pode perder as duas influências'
   state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' });
   state = passAll(state, ['b', 'c']);
   state = dispatchGame(state, { type: 'block', actorId: 'b', role: 'Condessa' });
+  state = dispatchGame(state, { type: 'pass', actorId: 'c' });
   state = dispatchGame(state, { type: 'challenge', actorId: 'a' });
   assert.equal(state.phase, 'choose_influence');
   state = dispatchGame(state, { type: 'reveal_influence', actorId: 'b', cardId: 'b-Duque-0' });
   assert.equal(activeRoles(state.players[1]).length, 0);
+  assert.equal(state.players[1].coins, 0);
   assert.equal(state.status, 'playing');
   assert.equal(state.currentPlayerId, 'c');
 });
@@ -309,7 +353,7 @@ test('quem perde a contestação escolhe a influência e a ação continua para 
   assert.equal(state.phase, 'block');
   assert.deepEqual(state.responseQueue, ['b']);
   state = dispatchGame(state, { type: 'block', actorId: 'b', role: 'Condessa' });
-  state = passAll(state, ['a', 'c']);
+  state = passAll(state, ['c', 'a']);
   assert.equal(activeRoles(state.players[1]).length, 1);
   assert.equal(state.currentPlayerId, 'b');
 });
@@ -322,6 +366,7 @@ test('última influência perdida define o vencedor', () => {
   assert.equal(state.status, 'finished');
   assert.equal(state.phase, 'finished');
   assert.equal(state.winnerId, 'a');
+  assert.equal(state.players[1].coins, 0);
   assert.throws(
     () => dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'income' }),
     /não está em andamento/,

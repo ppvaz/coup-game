@@ -50,12 +50,14 @@ export function createDeck(random = Math.random) {
 export function createGame(seats, options = {}) {
   if (seats.length < 2 || seats.length > 6) throw new Error('Coup requer entre 2 e 6 jogadores.');
   const deck = createDeck(options.random);
+  const requestedStarter = seats.find((seat) => seat.id === options.startingPlayerId);
+  const startingPlayerId = requestedStarter?.id ?? seats[0].id;
   const players = seats.map((seat) => ({
     id: seat.id,
     name: seat.name,
     kind: seat.kind ?? 'human',
     connected: seat.connected ?? true,
-    coins: 2,
+    coins: seats.length === 2 && seat.id === startingPlayerId ? 1 : 2,
     cards: [deck.pop(), deck.pop()],
   }));
   return {
@@ -65,7 +67,7 @@ export function createGame(seats, options = {}) {
     phase: 'turn',
     players,
     deck,
-    currentPlayerId: players[0].id,
+    currentPlayerId: startingPlayerId,
     turn: 1,
     pending: null,
     responseQueue: [],
@@ -139,6 +141,7 @@ function loseInfluence(state, playerId, afterLoss) {
   const active = activeCards(player);
   if (active.length === 1) {
     active[0].revealed = true;
+    player.coins = 0;
     state.log.push({ type: 'influence_lost', playerId, role: active[0].role, at: Date.now() });
     return runAfterLoss(state, afterLoss);
   }
@@ -148,7 +151,14 @@ function loseInfluence(state, playerId, afterLoss) {
 }
 
 function responderIds(state, actorId) {
-  return state.players.filter((player) => player.id !== actorId && isAlive(player)).map((player) => player.id);
+  const actorIndex = state.players.findIndex((player) => player.id === actorId);
+  if (actorIndex < 0) return [];
+  const responders = [];
+  for (let distance = 1; distance < state.players.length; distance++) {
+    const player = state.players[(actorIndex + distance) % state.players.length];
+    if (isAlive(player)) responders.push(player.id);
+  }
+  return responders;
 }
 
 function resolveAction(state) {
@@ -256,6 +266,7 @@ export function dispatchGame(source, command, random = Math.random) {
       actorId: actor.id,
       targetId: command.targetId ?? null,
       claimedRole: action.role ?? null,
+      paidCost: action.cost ?? 0,
     };
     state.log.push({
       type: 'action_declared',
@@ -293,6 +304,11 @@ export function dispatchGame(source, command, random = Math.random) {
     const challengedId = state.phase === 'challenge_action' ? state.pending.actorId : state.pending.block.playerId;
     const claimedRole = state.phase === 'challenge_action' ? state.pending.claimedRole : state.pending.block.role;
     const truthful = proveRole(state, challengedId, claimedRole, random);
+    const onAction = state.phase === 'challenge_action';
+    if (onAction && !truthful) {
+      const challenged = state.players.find((player) => player.id === challengedId);
+      challenged.coins += state.pending.paidCost ?? 0;
+    }
     state.log.push({
       type: 'challenge_resolved',
       challengerId: actor.id,
@@ -301,7 +317,6 @@ export function dispatchGame(source, command, random = Math.random) {
       truthful,
       at: Date.now(),
     });
-    const onAction = state.phase === 'challenge_action';
     if (truthful) loseInfluence(state, actor.id, onAction ? 'continue_action' : 'action_blocked');
     else loseInfluence(state, challengedId, onAction ? 'finish_turn' : 'resolve_action');
     return commit();
@@ -353,6 +368,7 @@ export function dispatchGame(source, command, random = Math.random) {
     const returned = state.exchangeOptions.filter((card) => !command.cardIds.includes(card.id));
     actor.cards = [...revealed, ...chosen];
     state.deck.push(...returned.map((card) => ({ ...card, revealed: false })));
+    shuffle(state.deck, random);
     state.exchangeOptions = [];
     state.log.push({ type: 'exchange_resolved', playerId: actor.id, at: Date.now() });
     finishTurn(state);

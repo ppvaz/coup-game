@@ -461,12 +461,13 @@ function scheduleBots() {
 
 function startLocal() {
   warnedClockKey = '';
+  const previousWinnerId = state.game?.winnerId;
   const seats = [
     { id: 'me', name: state.name, kind: 'human' },
     ...NAMES.map((name, index) => ({ id: `bot-${index}`, name, kind: 'bot' })),
   ];
   state.myId = 'me';
-  state.game = createGame(seats, { stopWhenHumansEliminated: true });
+  state.game = createGame(seats, { stopWhenHumansEliminated: true, startingPlayerId: previousWinnerId });
   announceGameState(null, state.game);
   state.screen = 'game';
   resetClock();
@@ -476,6 +477,7 @@ function startLocal() {
 
 function startOnline() {
   warnedClockKey = '';
+  const previousWinnerId = state.game?.winnerId;
   const readySeats = nextGameSeats(state.room);
   if (readySeats.length < 2) {
     render();
@@ -483,7 +485,7 @@ function startOnline() {
   }
   const seats = readySeats.map((seat) => ({ id: seat.id, name: seat.name, kind: 'human' }));
   const gameId = crypto.randomUUID();
-  state.game = createGame(seats, { gameId });
+  state.game = createGame(seats, { gameId, startingPlayerId: previousWinnerId });
   announceGameState(null, state.game);
   state.screen = 'game';
   state.room = dispatchRoom(state.room, {

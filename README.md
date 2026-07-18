@@ -57,7 +57,8 @@ http://SEU-IP:5173/sala/SW8X4
 
 ## Regras implementadas
 
-O objetivo é ser o último jogador com influência. Cada jogador começa com duas influências e duas moedas.
+O objetivo é ser o último jogador com influência. Cada jogador começa com duas influências e duas moedas; em uma
+partida de dois jogadores, quem começa recebe apenas uma moeda. Nas revanches, o vencedor anterior começa.
 
 | Ação          | Efeito                                                    | Pode ser bloqueada                |
 | ------------- | --------------------------------------------------------- | --------------------------------- |
