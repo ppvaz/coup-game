@@ -31,12 +31,12 @@ npm install
 npm run dev
 ```
 
-Abra [http://localhost:8099](http://localhost:8099).
+Abra [http://localhost:5173](http://localhost:5173), ou use o endereço exibido pelo Vite no terminal.
 
-Para jogar em outro dispositivo na mesma rede, descubra o IP da máquina anfitriã e compartilhe, por exemplo:
+Para jogar em outro dispositivo na mesma rede, execute `npm run dev:lan`, descubra o IP da máquina anfitriã e compartilhe, por exemplo:
 
 ```text
-http://10.0.0.43:8099
+http://10.0.0.43:5173
 ```
 
 O firewall do sistema pode pedir autorização para conexões de entrada.
@@ -52,7 +52,7 @@ O firewall do sistema pode pedir autorização para conexões de entrada.
 Os links seguem o padrão:
 
 ```text
-http://SEU-IP:8099/sala/SW8X4
+http://SEU-IP:5173/sala/SW8X4
 ```
 
 ## Regras implementadas
