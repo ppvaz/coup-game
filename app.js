@@ -20,7 +20,7 @@ import {
 } from './src/rooms/room.js';
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
 import { shouldAcceptGameView, shouldResetGame } from './src/rooms/game-sync.js';
-import { JOIN_RETRY_MS, JOIN_TIMEOUT_MS, canAcceptRoomSnapshot, hasRoomSeat } from './src/rooms/join.js';
+import { canAcceptRoomSnapshot, hasRoomSeat, startJoinAttempt } from './src/rooms/join.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import duquePortrait from './assets/characters/duque.png';
 import assassinaPortrait from './assets/characters/assassina.png';
@@ -939,37 +939,36 @@ async function connectRoom(kind) {
         }
         handlePresenceSync();
       } else {
+        // A rede é agendada antes do primeiro render: se a UI lançar, o
+        // join_request e o timeout continuam valendo (regressão DM9HH).
+        startJoinAttempt({
+          isActive: () => roomChannel === channel,
+          hasSeat: () => hasRoomSeat(state.room, state.myId),
+          send: () =>
+            channel
+              .send({
+                type: 'broadcast',
+                event: 'join_request',
+                payload: { id: state.myId, name: state.name },
+              })
+              .catch(() => {}),
+          onTimeout: () => {
+            roomChannel = null;
+            connectionId = null;
+            encryptionIdentity = null;
+            state.online = false;
+            state.room = null;
+            state.error = 'Sala não encontrada ou anfitrião offline.';
+            state.screen = 'lobby';
+            state.connection = 'idle';
+            channel.untrack();
+            channel.unsubscribe();
+            render();
+          },
+        });
         state.screen = 'room';
         history.replaceState(null, '', `/sala/${code}`);
         render();
-
-        const requestJoin = () => {
-          if (roomChannel !== channel || hasRoomSeat(state.room, state.myId)) return;
-          channel
-            .send({
-              type: 'broadcast',
-              event: 'join_request',
-              payload: { id: state.myId, name: state.name },
-            })
-            .catch(() => {});
-          setTimeout(requestJoin, JOIN_RETRY_MS);
-        };
-        requestJoin();
-
-        setTimeout(() => {
-          if (roomChannel !== channel || hasRoomSeat(state.room, state.myId)) return;
-          roomChannel = null;
-          connectionId = null;
-          encryptionIdentity = null;
-          state.online = false;
-          state.room = null;
-          state.error = 'Sala não encontrada ou anfitrião offline.';
-          state.screen = 'lobby';
-          state.connection = 'idle';
-          channel.untrack();
-          channel.unsubscribe();
-          render();
-        }, JOIN_TIMEOUT_MS);
       }
       persistSession();
     });
@@ -1160,11 +1159,11 @@ function roomHTML() {
   const connected = seats.filter((seat) => seat.connected).length;
   const lateWaiting = Boolean(self?.joinsNextGame);
   const waitingCopy = lateWaiting
-    ? `<p class="waiting">${room.status === 'finished' ? 'Aguardando a próxima partida.' : 'A partida está em andamento. Você entra na próxima.'}<small>O chat da mesa já está disponível.</small></p>`
+    ? `<p class="waiting">${room?.status === 'finished' ? 'Aguardando a próxima partida.' : 'A partida está em andamento. Você entra na próxima.'}<small>O chat da mesa já está disponível.</small></p>`
     : '<p class="waiting">Aguardando o anfitrião distribuir as cartas…</p>';
-  const startLabel = room.status === 'finished' ? 'Iniciar próxima partida' : 'Iniciar partida';
+  const startLabel = room?.status === 'finished' ? 'Iniciar próxima partida' : 'Iniciar partida';
   const roomAction =
-    state.isHost && room.status !== 'playing'
+    state.isHost && room?.status !== 'playing'
       ? `<button class="primary" id="start-room" ${connected < 2 ? 'disabled' : ''}>${startLabel}</button>`
       : state.screen === 'waiting_game' || lateWaiting
         ? waitingCopy
