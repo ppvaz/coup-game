@@ -82,6 +82,31 @@ export function hostElection(room, now = Date.now(), graceMs = HOST_GRACE_MS) {
   };
 }
 
+// Decide a reação à situação da mesa após uma sincronização de presença:
+// encerrar, aguardar carência (com prazo de reavaliação), promover um novo
+// anfitrião ou seguir estável. Pura — quem chama executa os efeitos.
+export function continuityPlan(room, { myId, handoverActive = false, now = Date.now(), graceMs = HOST_GRACE_MS } = {}) {
+  const closure = roomClosure(room, now, graceMs);
+  if (closure.status === 'waiting')
+    return { action: 'wait', hostIssue: { status: 'closing' }, recheckMs: closure.remainingMs + 30 };
+  if (closure.status === 'ready') return { action: 'close', hostIssue: { status: 'closing' } };
+
+  if (handoverActive) return { action: 'idle', hostIssue: { status: 'promoting' } };
+
+  const election = hostElection(room, now, graceMs);
+  if (election.status === 'stable') return { action: 'idle', hostIssue: null };
+
+  const candidate = room.seats.find((seat) => seat.id === election.candidateId);
+  const hostIssue = {
+    status: election.status,
+    candidateId: election.candidateId,
+    candidateName: candidate?.name ?? 'outro jogador',
+  };
+  if (election.status === 'waiting') return { action: 'wait', hostIssue, recheckMs: election.remainingMs + 30 };
+  if (election.status === 'ready' && election.candidateId === myId) return { action: 'promote', hostIssue };
+  return { action: 'idle', hostIssue };
+}
+
 export function dispatchRoom(source, command) {
   const room = clone(source);
   const isHost = command.actorId === room.hostId;

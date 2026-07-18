@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   HOST_GRACE_MS,
+  continuityPlan,
   createRoom,
   dispatchRoom,
   generateRoomCode,
@@ -135,6 +136,49 @@ test('jogador tardio só pode assumir a sala depois do fim da partida', () => {
     candidateId: 'caio',
     remainingMs: 0,
   });
+});
+
+test('plano de continuidade: mesa esvaziando aguarda a carência e depois encerra', () => {
+  let room = createRoom({ hostId: 'a', hostName: 'Ana' });
+  room = dispatchRoom(room, { type: 'join', actorId: 'b', player: { id: 'b', name: 'Bia' } });
+  room = syncRoomPresence(room, ['a'], 1_000);
+
+  const waiting = continuityPlan(room, { myId: 'a', now: 1_000 + HOST_GRACE_MS - 300 });
+  assert.equal(waiting.action, 'wait');
+  assert.equal(waiting.hostIssue.status, 'closing');
+  assert.equal(waiting.recheckMs, 330);
+
+  assert.equal(continuityPlan(room, { myId: 'a', now: 1_000 + HOST_GRACE_MS }).action, 'close');
+});
+
+test('plano de continuidade: queda do anfitrião elege e promove só o candidato', () => {
+  let room = createRoom({ hostId: 'a', hostName: 'Ana' });
+  room = dispatchRoom(room, { type: 'join', actorId: 'b', player: { id: 'b', name: 'Bia' } });
+  room = dispatchRoom(room, { type: 'join', actorId: 'c', player: { id: 'c', name: 'Caio' } });
+  room.seats.find((seat) => seat.id === 'b').joinedAt = 10;
+  room.seats.find((seat) => seat.id === 'c').joinedAt = 20;
+  room = syncRoomPresence(room, ['b', 'c'], 1_000);
+
+  const waiting = continuityPlan(room, { myId: 'b', now: 1_000 + HOST_GRACE_MS - 100 });
+  assert.equal(waiting.action, 'wait');
+  assert.deepEqual(waiting.hostIssue, { status: 'waiting', candidateId: 'b', candidateName: 'Bia' });
+
+  assert.equal(continuityPlan(room, { myId: 'b', now: 1_000 + HOST_GRACE_MS }).action, 'promote');
+  const spectator = continuityPlan(room, { myId: 'c', now: 1_000 + HOST_GRACE_MS });
+  assert.equal(spectator.action, 'idle');
+  assert.equal(spectator.hostIssue.status, 'ready');
+});
+
+test('plano de continuidade: estável fica quieto e handover em curso prevalece sobre a eleição', () => {
+  let room = createRoom({ hostId: 'a', hostName: 'Ana' });
+  room = dispatchRoom(room, { type: 'join', actorId: 'b', player: { id: 'b', name: 'Bia' } });
+
+  assert.deepEqual(continuityPlan(room, { myId: 'a', now: 5_000 }), { action: 'idle', hostIssue: null });
+
+  room = dispatchRoom(room, { type: 'join', actorId: 'c', player: { id: 'c', name: 'Caio' } });
+  room = syncRoomPresence(room, ['b', 'c'], 1_000);
+  const promoting = continuityPlan(room, { myId: 'b', handoverActive: true, now: 1_000 + HOST_GRACE_MS });
+  assert.deepEqual(promoting, { action: 'idle', hostIssue: { status: 'promoting' } });
 });
 
 test('nova partida ignora assentos desconectados', () => {

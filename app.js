@@ -11,12 +11,12 @@ import { CHAT_MAX_LENGTH, appendChatMessage, createChatGuard, normalizeChatText 
 import { chatPanelHTML, chatToggleHTML, connectionUIHTML, escapeHTML, lobbyHTML, roomHTML } from './src/ui/screens.js';
 import {
   HOST_GRACE_MS,
+  continuityPlan,
   createRoom,
   dispatchRoom,
   generateRoomCode,
   hostElection,
   nextGameSeats,
-  roomClosure,
   syncRoomPresence,
 } from './src/rooms/room.js';
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
@@ -550,49 +550,23 @@ function handlePresenceSync() {
     syncViews();
   }
 
-  const closure = roomClosure(state.room);
+  const plan = continuityPlan(state.room, { myId: state.myId, handoverActive: Boolean(handover) });
   clearHostElection();
-  if (closure.status !== 'stable') {
-    state.hostIssue = { status: 'closing' };
-    if (closure.status === 'waiting') {
-      hostElectionTimer = setTimeout(handlePresenceSync, closure.remainingMs + 30);
-      render();
-      persistSession();
-      return;
-    }
+  if (plan.action === 'close') {
     closeTableForInsufficientPlayers();
     return;
   }
-
-  if (handover) {
-    state.hostIssue = { status: 'promoting', candidateId: state.myId, candidateName: state.name };
-    render();
-    return;
-  }
-
-  const election = hostElection(state.room);
-  if (election.status === 'stable') {
-    state.hostIssue = null;
-    render();
-    persistSession();
-    return;
-  }
-
-  const candidate = state.room.seats.find((seat) => seat.id === election.candidateId);
-  state.hostIssue = {
-    status: election.status,
-    candidateId: election.candidateId,
-    candidateName: candidate?.name ?? 'outro jogador',
-  };
-
-  if (election.status === 'waiting') {
-    hostElectionTimer = setTimeout(handlePresenceSync, election.remainingMs + 30);
-  } else if (election.status === 'ready' && election.candidateId === state.myId) {
+  state.hostIssue =
+    plan.hostIssue?.status === 'promoting'
+      ? { status: 'promoting', candidateId: state.myId, candidateName: state.name }
+      : plan.hostIssue;
+  if (plan.action === 'promote') {
     beginHostPromotion();
     return;
   }
+  if (plan.recheckMs) hostElectionTimer = setTimeout(handlePresenceSync, plan.recheckMs);
   render();
-  persistSession();
+  if (plan.hostIssue?.status !== 'promoting') persistSession();
 }
 
 function beginHostPromotion() {
