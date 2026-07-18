@@ -11,8 +11,16 @@ export const ACTIONS = {
 };
 
 const clone = (value) => structuredClone(value);
-const activeCards = (player) => player.cards.filter((card) => !card.revealed);
+export const activeCards = (player) => player.cards.filter((card) => !card.revealed);
 export const isAlive = (player) => activeCards(player).length > 0;
+
+function shuffle(cards, random = Math.random) {
+  for (let index = cards.length - 1; index > 0; index--) {
+    const swap = Math.floor(random() * (index + 1));
+    [cards[index], cards[swap]] = [cards[swap], cards[index]];
+  }
+  return cards;
+}
 export const activePlayers = (state) => state.players.filter(isAlive);
 export const currentPlayer = (state) => state.players.find((player) => player.id === state.currentPlayerId);
 
@@ -36,11 +44,7 @@ export function responseProgress(state) {
 
 export function createDeck(random = Math.random) {
   const cards = ROLES.flatMap((role) => [0, 1, 2].map((copy) => ({ id: `${role}-${copy}`, role, revealed: false })));
-  for (let index = cards.length - 1; index > 0; index--) {
-    const swap = Math.floor(random() * (index + 1));
-    [cards[index], cards[swap]] = [cards[swap], cards[index]];
-  }
-  return cards;
+  return shuffle(cards, random);
 }
 
 export function createGame(seats, options = {}) {
@@ -211,22 +215,19 @@ function beginBlocksOrResolve(state) {
   state.responseQueue = blockers;
 }
 
-function proveRole(state, playerId, role) {
+function proveRole(state, playerId, role, random = Math.random) {
   const player = assertActor(state, playerId);
   const card = activeCards(player).find((candidate) => candidate.role === role);
   if (!card) return false;
   player.cards = player.cards.filter((candidate) => candidate.id !== card.id);
   card.revealed = false;
   state.deck.push(card);
-  for (let index = state.deck.length - 1; index > 0; index--) {
-    const swap = Math.floor(Math.random() * (index + 1));
-    [state.deck[index], state.deck[swap]] = [state.deck[swap], state.deck[index]];
-  }
+  shuffle(state.deck, random);
   player.cards.push(state.deck.pop());
   return true;
 }
 
-export function dispatchGame(source, command) {
+export function dispatchGame(source, command, random = Math.random) {
   const state = clone(source);
   if (state.status !== 'playing') throw new Error('A partida não está em andamento.');
   const actor = assertActor(state, command.actorId);
@@ -291,7 +292,7 @@ export function dispatchGame(source, command) {
     if (state.responseQueue[0] !== actor.id) throw new Error('Este jogador não é o próximo a responder.');
     const challengedId = state.phase === 'challenge_action' ? state.pending.actorId : state.pending.block.playerId;
     const claimedRole = state.phase === 'challenge_action' ? state.pending.claimedRole : state.pending.block.role;
-    const truthful = proveRole(state, challengedId, claimedRole);
+    const truthful = proveRole(state, challengedId, claimedRole, random);
     state.log.push({
       type: 'challenge_resolved',
       challengerId: actor.id,

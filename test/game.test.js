@@ -354,3 +354,17 @@ test('partida solo termina assim que o humano perde a última influência', () =
   assert.equal(state.log.at(-1).loserId, 'me');
   assert.equal(state.players.filter((player) => player.kind === 'bot' && isAlive(player)).length, 3);
 });
+
+test('comprovação de personagem aceita sorteio injetado e fica determinística', () => {
+  let state = createGame(seats, { random: () => 0.42 });
+  setHand(state, 'a', ['Duque', 'Condessa']);
+  state = dispatchGame(state, { type: 'declare_action', actorId: 'a', action: 'tax' });
+
+  const first = dispatchGame(state, { type: 'challenge', actorId: 'b' }, () => 0);
+  const second = dispatchGame(state, { type: 'challenge', actorId: 'b' }, () => 0);
+  assert.deepEqual(first.players, second.players);
+  assert.deepEqual(
+    first.deck.map((card) => card.id),
+    second.deck.map((card) => card.id),
+  );
+});
