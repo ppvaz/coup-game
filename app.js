@@ -1079,6 +1079,18 @@ const logIcon = (entry) =>
 // ---------- Renderização ----------
 
 function render() {
+  try {
+    renderApp();
+  } catch (error) {
+    console.error('Falha ao renderizar a tela:', error);
+    // O salão é o fallback; se nem ele renderiza, não há para onde cair.
+    if (state.screen === 'lobby') throw error;
+    state.error = 'Algo deu errado ao desenhar a mesa. Você voltou ao salão.';
+    leaveTable();
+  }
+}
+
+function renderApp() {
   const root = $('#app');
   const restoreChatFocus = document.activeElement?.id === 'chat-input';
   if (state.screen === 'lobby') {
