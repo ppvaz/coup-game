@@ -2,7 +2,7 @@ import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/s
 import { ACTIONS, createGame, dispatchGame, viewForPlayer } from './src/game/coup.js';
 import { reconstructGame } from './src/game/handover.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
-import { RECONNECT_GIVE_UP_MS, channelStatusOutcome, trackPresence } from './src/lib/realtime.js';
+import { RECONNECT_GIVE_UP_MS, trackPresence } from './src/lib/realtime.js';
 import { createSoundManager } from './src/lib/sounds.js';
 import { botDelayMs } from './src/lib/bot-timing.js';
 import { decisionClockKey } from './src/lib/decision-clock.js';
@@ -24,6 +24,7 @@ import {
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
 import { shouldAcceptGameView, shouldResetGame } from './src/rooms/game-sync.js';
 import { canAcceptRoomSnapshot, hasRoomSeat, startJoinAttempt } from './src/rooms/join.js';
+import { createSubscriptionHandler } from './src/rooms/connection.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import duquePortrait from './assets/characters/duque.png';
 import assassinaPortrait from './assets/characters/assassina.png';
@@ -718,7 +719,6 @@ async function connectRoom(kind) {
   const channel = supabase.channel(`la-corte:${code}`, {
     config: { broadcast: { self: false }, presence: { key: state.myId, enabled: true } },
   });
-  let subscribedOnce = false;
   roomChannel = channel
     .on('broadcast', { event: 'join_request' }, ({ payload }) => {
       if (!state.isHost || !state.room) return;
@@ -835,102 +835,106 @@ async function connectRoom(kind) {
     .on('broadcast', { event: 'handover_request' }, ({ payload }) => replyToHandover(payload))
     .on('broadcast', { event: 'handover_response' }, ({ payload }) => collectHandover(payload))
     .on('presence', { event: 'sync' }, handlePresenceSync)
-    .subscribe(async (status) => {
-      if (roomChannel !== channel) return;
-      const outcome = channelStatusOutcome(status, Boolean(state.room));
-      if (outcome === 'reconnect') {
-        if (state.connection !== 'reconnecting') reconnectingSince = Date.now();
-        state.connection = 'reconnecting';
-        render();
-        return;
-      }
-      if (outcome === 'fail') {
-        state.error =
-          'Não foi possível conectar ao Supabase. Confira a Project URL e a chave pública configuradas na Vercel.';
-        state.screen = 'lobby';
-        state.connection = 'idle';
-        render();
-        return;
-      }
-      if (outcome !== 'subscribed') return;
-      reconnectingSince = 0;
-      const firstSubscription = !subscribedOnce;
-      subscribedOnce = true;
-      state.online = true;
-      state.connection = kind === 'join' ? 'connecting' : 'connected';
-      const presenceStatus = await trackPresence(channel, {
-        playerId: state.myId,
-        name: state.name,
-        onlineAt: new Date().toISOString(),
-        connectionId,
-        publicKey: encryptionIdentity.publicKey,
-      });
-      if (roomChannel !== channel) return;
-      if (presenceStatus === 'error') {
-        state.error = 'O canal abriu, mas não foi possível registrar sua cadeira. Tente entrar novamente.';
-        leaveTable();
-        return;
-      }
-      if (!firstSubscription) {
-        sendRoom('join_request', { id: state.myId, name: state.name, resume: true });
-        if (state.isHost) {
-          broadcastRoom();
-          syncViews();
-        }
-        handlePresenceSync();
-        render();
-        persistSession();
-        return;
-      }
-      if (kind === 'create') {
-        state.room = createRoom({ code, hostId: state.myId, hostName: state.name });
-        state.screen = 'room';
-        history.replaceState(null, '', `/sala/${code}`);
-        broadcastRoom();
-        render();
-      } else if (resume) {
-        history.replaceState(null, '', `/sala/${code}`);
-        render();
-        sendRoom('join_request', { id: state.myId, name: state.name, resume: true });
-        if (state.isHost) {
-          broadcastRoom();
-          syncViews();
-        }
-        handlePresenceSync();
-      } else {
-        // A rede é agendada antes do primeiro render: se a UI lançar, o
-        // join_request e o timeout continuam valendo (regressão DM9HH).
-        startJoinAttempt({
-          isActive: () => roomChannel === channel,
-          hasSeat: () => hasRoomSeat(state.room, state.myId),
-          send: () =>
-            channel
-              .send({
-                type: 'broadcast',
-                event: 'join_request',
-                payload: { id: state.myId, name: state.name },
-              })
-              .catch(() => {}),
-          onTimeout: () => {
-            roomChannel = null;
-            connectionId = null;
-            encryptionIdentity = null;
-            state.online = false;
-            state.room = null;
-            state.error = 'Sala não encontrada ou anfitrião offline.';
-            state.screen = 'lobby';
-            state.connection = 'idle';
-            channel.untrack();
-            channel.unsubscribe();
+    .subscribe(
+      createSubscriptionHandler({
+        kind,
+        isCurrent: () => roomChannel === channel,
+        hasRoom: () => Boolean(state.room),
+        track: () =>
+          trackPresence(channel, {
+            playerId: state.myId,
+            name: state.name,
+            onlineAt: new Date().toISOString(),
+            connectionId,
+            publicKey: encryptionIdentity.publicKey,
+          }),
+        effects: {
+          markReconnecting() {
+            if (state.connection !== 'reconnecting') reconnectingSince = Date.now();
+            state.connection = 'reconnecting';
             render();
           },
-        });
-        state.screen = 'room';
-        history.replaceState(null, '', `/sala/${code}`);
-        render();
-      }
-      persistSession();
-    });
+          failConnection() {
+            state.error =
+              'Não foi possível conectar ao Supabase. Confira a Project URL e a chave pública configuradas na Vercel.';
+            state.screen = 'lobby';
+            state.connection = 'idle';
+            render();
+          },
+          markSubscribed() {
+            reconnectingSince = 0;
+            state.online = true;
+            state.connection = kind === 'join' ? 'connecting' : 'connected';
+          },
+          presenceFailed() {
+            state.error = 'O canal abriu, mas não foi possível registrar sua cadeira. Tente entrar novamente.';
+            leaveTable();
+          },
+          reclaimSeat() {
+            sendRoom('join_request', { id: state.myId, name: state.name, resume: true });
+            if (state.isHost) {
+              broadcastRoom();
+              syncViews();
+            }
+            handlePresenceSync();
+            render();
+            persistSession();
+          },
+          openCreatedRoom() {
+            state.room = createRoom({ code, hostId: state.myId, hostName: state.name });
+            state.screen = 'room';
+            history.replaceState(null, '', `/sala/${code}`);
+            broadcastRoom();
+            render();
+            persistSession();
+          },
+          resumeSeat() {
+            history.replaceState(null, '', `/sala/${code}`);
+            render();
+            sendRoom('join_request', { id: state.myId, name: state.name, resume: true });
+            if (state.isHost) {
+              broadcastRoom();
+              syncViews();
+            }
+            handlePresenceSync();
+            persistSession();
+          },
+          beginJoin() {
+            // A rede é agendada antes do primeiro render: se a UI lançar, o
+            // join_request e o timeout continuam valendo (regressão DM9HH).
+            startJoinAttempt({
+              isActive: () => roomChannel === channel,
+              hasSeat: () => hasRoomSeat(state.room, state.myId),
+              send: () =>
+                channel
+                  .send({
+                    type: 'broadcast',
+                    event: 'join_request',
+                    payload: { id: state.myId, name: state.name },
+                  })
+                  .catch(() => {}),
+              onTimeout: () => {
+                roomChannel = null;
+                connectionId = null;
+                encryptionIdentity = null;
+                state.online = false;
+                state.room = null;
+                state.error = 'Sala não encontrada ou anfitrião offline.';
+                state.screen = 'lobby';
+                state.connection = 'idle';
+                channel.untrack();
+                channel.unsubscribe();
+                render();
+              },
+            });
+            state.screen = 'room';
+            history.replaceState(null, '', `/sala/${code}`);
+            render();
+            persistSession();
+          },
+        },
+      }),
+    );
   render();
 }
 
