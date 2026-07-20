@@ -289,13 +289,13 @@ export function gameHTML(state, context) {
   const readyPlayers = state.room?.seats.filter((seat) => seat.connected).length ?? 0;
   const waitingPlayers = state.room?.seats.filter((seat) => seat.connected && seat.joinsNextGame).length ?? 0;
   const waitingNotice = waitingPlayers
-    ? `<span class="next-game-count" title="${waitingPlayers} ${waitingPlayers === 1 ? 'jogador entra' : 'jogadores entram'} na próxima partida">· +${waitingPlayers} aguardando</span>`
+    ? `<div class="round"><span class="next-game-count" title="${waitingPlayers} ${waitingPlayers === 1 ? 'jogador entra' : 'jogadores entram'} na próxima partida">+${waitingPlayers} aguardando</span></div>`
     : '';
   const again =
     !state.online || state.isHost
       ? `<button class="primary" id="again" style="width:240px;margin-top:24px" ${state.online && readyPlayers < 2 ? 'disabled' : ''}>${state.online && readyPlayers < 2 ? 'Aguardando jogadores' : state.online ? `Jogar novamente · ${readyPlayers}` : 'Jogar novamente'}</button>`
       : '<p class="waiting">Aguardando o anfitrião abrir outra mesa…</p>';
-  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div><div class="round">Sessão privada · Rodada ${roundNumber(game)} ${waitingNotice}</div><div class="gamebar-actions">${chatToggleHTML(state)}${audioTogglesHTML(context)}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
+  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div>${waitingNotice}<div class="gamebar-actions">${chatToggleHTML(state)}${audioTogglesHTML(context)}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
     .filter((player) => player.id !== state.myId)
     .map((player) => playerHTML(state, player, context.portraits))
     .join(

@@ -1,28 +1,41 @@
 const ROLE_LINES = {
   Assassina: {
-    challenge: ['assassina/challenge-received-01.mp3'],
-    proved: ['assassina/role-proved-01.mp3'],
-    lost: ['assassina/influence-lost-01.mp3', 'assassina/influence-lost-02.mp3', 'assassina/influence-lost-03.mp3'],
+    challenge: [
+      'assassina/challenge-received-01.mp3',
+      'assassina/challenge-received-02.mp3',
+      'assassina/challenge-received-03.mp3',
+    ],
+    proved: ['assassina/role-proved-01.mp3', 'assassina/role-proved-02.mp3'],
+    lost: [
+      'assassina/influence-lost-01.mp3',
+      'assassina/influence-lost-02.mp3',
+      'assassina/influence-lost-03.mp3',
+      'assassina/influence-lost-04.mp3',
+    ],
   },
   Capitão: {
-    challenge: ['capitao/challenge-received-01.mp3'],
-    proved: ['capitao/role-proved-01.mp3'],
-    lost: ['capitao/influence-lost-01.mp3'],
+    challenge: ['capitao/challenge-received-01.mp3', 'capitao/challenge-received-02.mp3'],
+    proved: ['capitao/role-proved-01.mp3', 'capitao/role-proved-02.mp3'],
+    lost: ['capitao/influence-lost-01.mp3', 'capitao/influence-lost-02.mp3'],
   },
   Condessa: {
-    challenge: ['condessa/challenge-received-01.mp3'],
-    proved: ['condessa/role-proved-01.mp3'],
-    lost: ['condessa/influence-lost-01.mp3'],
+    challenge: ['condessa/challenge-received-01.mp3', 'condessa/challenge-received-02.mp3'],
+    proved: ['condessa/role-proved-01.mp3', 'condessa/role-proved-02.mp3', 'condessa/role-proved-03.mp3'],
+    lost: ['condessa/influence-lost-01.mp3', 'condessa/influence-lost-02.mp3'],
   },
   Duque: {
-    challenge: ['duque/challenge-received-01.mp3'],
-    proved: ['duque/role-proved-01.mp3'],
-    lost: ['duque/influence-lost-01.mp3'],
+    challenge: [
+      'duque/challenge-received-01.mp3',
+      'duque/challenge-received-02.mp3',
+      'duque/challenge-received-03.mp3',
+    ],
+    proved: ['duque/role-proved-01.mp3', 'duque/role-proved-02.mp3'],
+    lost: ['duque/influence-lost-01.mp3', 'duque/influence-lost-02.mp3'],
   },
   Embaixadora: {
     challenge: ['embaixadora/challenge-received-01.mp3', 'embaixadora/challenge-received-02.mp3'],
-    proved: ['embaixadora/role-proved-01.mp3'],
-    lost: ['embaixadora/influence-lost-01.mp3'],
+    proved: ['embaixadora/role-proved-01.mp3', 'embaixadora/role-proved-02.mp3', 'embaixadora/role-proved-03.mp3'],
+    lost: ['embaixadora/influence-lost-01.mp3', 'embaixadora/influence-lost-02.mp3'],
   },
 };
 
@@ -40,19 +53,46 @@ const ACTION_LINES = {
     'embaixadora/action-exchange-05.mp3',
   ],
   steal: ['capitao/action-steal-01.mp3', 'capitao/action-steal-02.mp3', 'capitao/action-steal-03.mp3'],
-  tax: ['duque/action-tax-01.mp3', 'duque/action-tax-02.mp3'],
+  tax: [
+    'duque/action-tax-01.mp3',
+    'duque/action-tax-02.mp3',
+    'duque/action-tax-03.mp3',
+    'duque/action-tax-04.mp3',
+    'duque/action-tax-05.mp3',
+  ],
 };
 
 const BLOCK_LINES = {
-  'Capitão:steal': ['capitao/block-steal-01.mp3', 'capitao/block-steal-02.mp3'],
-  'Condessa:assassinate': ['condessa/block-assassinate-01.mp3', 'condessa/block-assassinate-02.mp3'],
+  'Capitão:steal': ['capitao/block-steal-01.mp3', 'capitao/block-steal-02.mp3', 'capitao/block-steal-03.mp3'],
+  'Condessa:assassinate': [
+    'condessa/block-assassinate-01.mp3',
+    'condessa/block-assassinate-02.mp3',
+    'condessa/block-assassinate-03.mp3',
+  ],
   'Duque:foreign_aid': ['duque/block-foreign-aid-01.mp3', 'duque/block-foreign-aid-02.mp3'],
-  'Embaixadora:steal': ['embaixadora/block-steal-01.mp3'],
+  'Embaixadora:steal': ['embaixadora/block-steal-01.mp3', 'embaixadora/block-steal-02.mp3'],
 };
 
 const BLOCKED_ACTION_LINES = {
-  assassinate: ['assassina/action-blocked-01.mp3'],
+  assassinate: [
+    'assassina/action-blocked-01.mp3',
+    'assassina/action-blocked-02.mp3',
+    'assassina/action-blocked-03.mp3',
+  ],
+  steal: ['capitao/action-blocked-01.mp3'],
 };
+
+export function configuredVoiceFiles() {
+  const roleLines = Object.values(ROLE_LINES).flatMap((contexts) => Object.values(contexts).flat());
+  return [
+    ...new Set([
+      ...roleLines,
+      ...Object.values(ACTION_LINES).flat(),
+      ...Object.values(BLOCK_LINES).flat(),
+      ...Object.values(BLOCKED_ACTION_LINES).flat(),
+    ]),
+  ].sort();
+}
 
 const pick = (choices, random) => {
   if (!choices?.length) return null;

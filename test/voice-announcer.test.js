@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { newLogEntries, voiceFilesForTransition } from '../src/lib/voice-announcer.js';
+import { readdirSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { configuredVoiceFiles, newLogEntries, voiceFilesForTransition } from '../src/lib/voice-announcer.js';
 
 const state = (...log) => ({ log });
 const started = { type: 'game_started', at: 1 };
@@ -41,8 +44,22 @@ test('prioriza a contestação e a comprovação conforme a chance configurada',
   );
   assert.deepEqual(
     voiceFilesForTransition(previous, next, () => 0.99),
-    ['duque/role-proved-01.mp3'],
+    ['duque/role-proved-02.mp3'],
   );
+});
+
+test('todos os arquivos de voz estão configurados e todas as referências existem', () => {
+  const root = fileURLToPath(new URL('../assets/voices/', import.meta.url));
+  const visit = (directory) =>
+    readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const path = resolve(directory, entry.name);
+      return entry.isDirectory() ? visit(path) : [relative(root, path)];
+    });
+  const assets = visit(root)
+    .filter((file) => file.endsWith('.mp3'))
+    .sort();
+
+  assert.deepEqual(configuredVoiceFiles(), assets);
 });
 
 test('toca a ação na declaração e reage ao desafio quando o blefe é descoberto', () => {
@@ -134,11 +151,11 @@ test('alterna as falas da Assassina ao perder influência', () => {
   );
   assert.deepEqual(
     voiceFilesForTransition(previous, state(started, lost), () => 0.99),
-    ['assassina/influence-lost-03.mp3'],
+    ['assassina/influence-lost-04.mp3'],
   );
 });
 
-test('usa a nova comprovação da Assassina e as duas variações de bloqueio do Capitão', () => {
+test('usa a nova comprovação da Assassina e as três variações de bloqueio do Capitão', () => {
   const challenge = {
     type: 'challenge_resolved',
     claimedRole: 'Assassina',
@@ -147,7 +164,7 @@ test('usa a nova comprovação da Assassina e as duas variações de bloqueio do
   };
   assert.deepEqual(
     voiceFilesForTransition(state(started), state(started, challenge), () => 0.99),
-    ['assassina/role-proved-01.mp3'],
+    ['assassina/role-proved-02.mp3'],
   );
 
   const block = { type: 'block_declared', action: 'steal', role: 'Capitão', at: 2 };
@@ -157,6 +174,65 @@ test('usa a nova comprovação da Assassina e as duas variações de bloqueio do
   );
   assert.deepEqual(
     voiceFilesForTransition(state(started), state(started, block), () => 0.99),
-    ['capitao/block-steal-02.mp3'],
+    ['capitao/block-steal-03.mp3'],
+  );
+});
+
+test('inclui as novas variações de todos os personagens e a reação do Capitão ao bloqueio', () => {
+  const challenge = (claimedRole, truthful, random) =>
+    voiceFilesForTransition(
+      state(started),
+      state(started, { type: 'challenge_resolved', claimedRole, truthful, at: 2 }),
+      random,
+    );
+  const lost = (role) =>
+    voiceFilesForTransition(state(started), state(started, { type: 'influence_lost', role, at: 2 }), () => 0.99);
+  const block = (role, action) =>
+    voiceFilesForTransition(
+      state(started),
+      state(started, { type: 'block_declared', role, action, at: 2 }),
+      () => 0.99,
+    );
+
+  assert.deepEqual(
+    challenge('Duque', false, () => 0.99),
+    ['duque/challenge-received-03.mp3'],
+  );
+  assert.deepEqual(
+    challenge('Capitão', true, () => 0.99),
+    ['capitao/role-proved-02.mp3'],
+  );
+  assert.deepEqual(
+    challenge('Condessa', true, () => 0.99),
+    ['condessa/role-proved-03.mp3'],
+  );
+  assert.deepEqual(
+    challenge('Embaixadora', true, () => 0.99),
+    ['embaixadora/role-proved-03.mp3'],
+  );
+  assert.deepEqual(lost('Duque'), ['duque/influence-lost-02.mp3']);
+  assert.deepEqual(lost('Capitão'), ['capitao/influence-lost-02.mp3']);
+  assert.deepEqual(lost('Condessa'), ['condessa/influence-lost-02.mp3']);
+  assert.deepEqual(lost('Embaixadora'), ['embaixadora/influence-lost-02.mp3']);
+  assert.deepEqual(block('Condessa', 'assassinate'), ['condessa/block-assassinate-03.mp3']);
+  assert.deepEqual(block('Embaixadora', 'steal'), ['embaixadora/block-steal-02.mp3']);
+
+  const blocked = (action) =>
+    voiceFilesForTransition(state(started), state(started, { type: 'action_blocked', action, at: 2 }), () => 0.99);
+  assert.deepEqual(blocked('assassinate'), ['assassina/action-blocked-03.mp3']);
+  assert.deepEqual(blocked('steal'), ['capitao/action-blocked-01.mp3']);
+});
+
+test('inclui todas as cinco falas de imposto do Duque', () => {
+  const previous = state(started);
+  const tax = state(started, { type: 'action_declared', action: 'tax', at: 2 });
+
+  assert.deepEqual(
+    voiceFilesForTransition(previous, tax, () => 0),
+    ['duque/action-tax-01.mp3'],
+  );
+  assert.deepEqual(
+    voiceFilesForTransition(previous, tax, () => 0.99),
+    ['duque/action-tax-05.mp3'],
   );
 });
