@@ -217,6 +217,7 @@ export function tableExperimentHTML() {
         ${[
           ['auto', 'Auto'],
           ['table', 'Mesa'],
+          ['player', 'Jogador'],
           ['pov', 'POV'],
           ['duel', 'Duelo'],
           ['overhead', 'Zenital'],

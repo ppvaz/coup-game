@@ -222,7 +222,7 @@ function faceCameraYaw(object, camera, delta, offset = 0) {
   object.rotation.y += difference * (1 - Math.exp(-Math.max(delta, 1 / 120) * 8));
 }
 
-function createNoble(index, isSelf) {
+function createNoble(index) {
   const group = new THREE.Group();
   const robeColor = ROBES[index % ROBES.length];
   const robe = standardMaterial(robeColor, { roughness: 0.92, emissive: robeColor, emissiveIntensity: 0.035 });
@@ -285,8 +285,7 @@ function createNoble(index, isSelf) {
       }),
     );
   }
-  if (!isSelf) group.add(body);
-  else body.visible = false;
+  group.add(body);
 
   const focus = mesh(
     new THREE.RingGeometry(0.82, 1.02, 28),
@@ -571,6 +570,25 @@ function povCameraForSeat(seat, seatCount) {
   };
 }
 
+function playerCameraForSeat(seat, seatCount) {
+  const radiusX = seatCount <= 3 ? 5.15 : 5.55;
+  const radiusZ = seatCount <= 3 ? 4.25 : 4.65;
+  const outwardX = Math.sin(seat.azimuthRad);
+  const outwardZ = Math.cos(seat.azimuthRad);
+  const seatX = outwardX * radiusX;
+  const seatZ = outwardZ * radiusZ;
+  return {
+    position: [seatX + outwardX * 3.6, 4.35, seatZ + outwardZ * 3.6],
+    target: [seatX + outwardX * 1.15, 1.22, seatZ + outwardZ * 1.15],
+    fov: 46,
+    portrait: {
+      position: [seatX + outwardX * 3.75, 5.15, seatZ + outwardZ * 3.75],
+      target: [seatX + outwardX * 1.1, 1.2, seatZ + outwardZ * 1.1],
+      fov: 53,
+    },
+  };
+}
+
 export class CoupTableScene {
   constructor(canvas, options = {}) {
     this.theme = options.theme === 'light' ? 'light' : 'dark';
@@ -598,6 +616,12 @@ export class CoupTableScene {
       target: [0, 1.35, -1.9],
       fov: 55,
       portrait: { position: [0, 3.25, 10.8], target: [0, 1.45, -1.05], fov: 57 },
+    });
+    this.stage.defineCameraAct('player', {
+      position: [0, 4.35, 8.25],
+      target: [0, 1.22, 5.8],
+      fov: 46,
+      portrait: { position: [0, 5.15, 8.4], target: [0, 1.2, 5.75], fov: 53 },
     });
     this.stage.defineCameraAct('duel', {
       position: [7.7, 4.3, 8.6],
@@ -700,7 +724,7 @@ export class CoupTableScene {
       const angle = seatView.azimuthRad;
       const radiusX = count <= 3 ? 5.15 : 5.55;
       const radiusZ = count <= 3 ? 4.25 : 4.65;
-      const noble = createNoble(seatView.index, seatView.isSelf);
+      const noble = createNoble(seatView.index);
       noble.group.position.set(Math.sin(angle) * radiusX, 0, Math.cos(angle) * radiusZ);
       noble.group.rotation.y = angle + Math.PI;
 
@@ -711,8 +735,8 @@ export class CoupTableScene {
           transparent: false,
         }),
         {
-          position: [0, 1.34, -1.65],
-          rotation: [-Math.PI / 2, 0, 0],
+          position: [0, 1.265, -1.92],
+          rotation: [-Math.PI / 2, 0, Math.PI],
           cast: false,
         },
       );
@@ -722,7 +746,7 @@ export class CoupTableScene {
       coinGroup.position.set(-1, 1.27, -1.18);
       noble.group.add(coinGroup);
       const influenceGroup = new THREE.Group();
-      influenceGroup.position.set(0.34, 1.28, -1.23);
+      influenceGroup.position.set(1.25, 1.28, -1.14);
       noble.group.add(influenceGroup);
       this.seatLayer.add(noble.group);
       this.seats.set(seatView.id, {
@@ -763,6 +787,17 @@ export class CoupTableScene {
     if (!seats.length) return null;
     const currentIndex = seats.findIndex((seat) => seat.id === this.currentPovSeatId);
     return this.setPovSeat(seats[(currentIndex + 1 + seats.length) % seats.length].id);
+  }
+
+  setPlayerCamera({ immediate = false } = {}) {
+    const seats = this.view?.seats ?? [];
+    const self = seats.find((seat) => seat.isSelf);
+    if (!self) return null;
+    this.stage.defineCameraAct('player', playerCameraForSeat(self, seats.length));
+    this.cameraOverridden = true;
+    this.cameraName = 'player';
+    this.stage.setCameraAct('player', { immediate });
+    return { id: self.id, name: self.name };
   }
 
   updateSeat(seatView) {
@@ -807,12 +842,12 @@ export class CoupTableScene {
     if (influenceSignature !== seat.influenceSignature) {
       disposeObject3D(seat.influenceGroup);
       seat.influenceGroup = new THREE.Group();
-      seat.influenceGroup.position.set(0.34, 1.28, -1.23);
+      seat.influenceGroup.position.set(1.25, 1.28, -1.14);
       seat.group.add(seat.influenceGroup);
       seatView.influences.forEach((influence, index) => {
         const card = createInfluenceCard(influence);
-        card.position.set(index * 0.66, influence.revealed ? 0.055 : 0, index * 0.08);
-        card.rotation.y = index ? -0.12 : 0.1;
+        card.position.set(index * 0.7, influence.revealed ? 0.055 : 0, index * 0.08);
+        card.rotation.y = Math.PI + (index ? -0.12 : 0.1);
         card.rotation.z = influence.revealed ? 0.04 : 0;
         seat.influenceGroup.add(card);
       });
@@ -893,8 +928,9 @@ export class CoupTableScene {
     if (!this.currentPovSeatId || !view.seats.some((seat) => seat.id === this.currentPovSeatId)) {
       this.currentPovSeatId = view.seats.find((seat) => seat.isSelf)?.id ?? view.seats[0]?.id ?? null;
     }
-    if (seatsChanged && this.cameraOverridden && this.cameraName === 'pov') {
-      this.setPovSeat(this.currentPovSeatId, { immediate: true });
+    if (seatsChanged && this.cameraOverridden) {
+      if (this.cameraName === 'pov') this.setPovSeat(this.currentPovSeatId, { immediate: true });
+      if (this.cameraName === 'player') this.setPlayerCamera({ immediate: true });
     }
     this.victoryLight.intensity = view.beat === 'victory' ? 95 : 0;
     this.environment.setMood(view.beat);
@@ -913,6 +949,7 @@ export class CoupTableScene {
 
   setCamera(name) {
     if (name === 'pov') return this.setPovSeat(this.currentPovSeatId);
+    if (name === 'player') return this.setPlayerCamera();
     this.cameraOverridden = name !== 'auto';
     this.cameraName = name === 'auto' ? cameraForBeat(this.view?.beat) : name;
     this.stage.setCameraAct(this.cameraName);
@@ -974,7 +1011,9 @@ export class CoupTableScene {
     }
     for (const [id, seat] of this.seats) {
       const state = this.view?.seats.find((candidate) => candidate.id === id);
-      if (!state || state.isSelf) continue;
+      if (!state) continue;
+      seat.body.visible = !(this.cameraName === 'pov' && this.currentPovSeatId === id);
+      if (state.isSelf) continue;
       const emphasis = state.isActor || state.isCurrent || state.isWinner;
       seat.body.position.y = reducedMotion
         ? 0
