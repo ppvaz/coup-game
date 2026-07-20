@@ -1,0 +1,14 @@
+{
+  "name": "@la-corte/tabletop-stage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Framework-neutral Three.js runtime for tabletop game scenes",
+  "exports": {
+    ".": "./index.js",
+    "./performance": "./performance.js"
+  },
+  "peerDependencies": {
+    "three": "^0.185.1"
+  }
+}

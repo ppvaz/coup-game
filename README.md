@@ -33,6 +33,15 @@ npm run dev
 
 Abra [http://localhost:5173](http://localhost:5173), ou use o endereço exibido pelo Vite no terminal.
 
+### Laboratório de mesa 3D
+
+Abra [http://localhost:5173/3d](http://localhost:5173/3d) para explorar o
+protótipo de salão 3D. Ele encena os principais momentos de Coup sobre um motor
+gráfico desacoplado das regras, com ambientes diurno e noturno ligados à mesma
+preferência de tema da mesa 2D. O salão e as efígies 3D dos papéis derivam a
+paleta, os materiais e as silhuetas das artes 2D originais. A arquitetura e a barreira de sigilo estão em
+[`docs/tabletop-engine.md`](docs/tabletop-engine.md).
+
 Para jogar em outro dispositivo na mesma rede, execute `npm run dev:lan`, descubra o IP da máquina anfitriã e compartilhe, por exemplo:
 
 ```text

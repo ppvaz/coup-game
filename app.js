@@ -26,6 +26,7 @@ import { shouldAcceptGameView, shouldResetGame } from './src/rooms/game-sync.js'
 import { canAcceptRoomSnapshot, hasRoomSeat, startJoinAttempt } from './src/rooms/join.js';
 import { createSubscriptionHandler } from './src/rooms/connection.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
+import { mountTableExperiment, tableExperimentHTML } from './src/ui/table-experiment.js';
 import duquePortrait from './assets/characters/duque.png';
 import assassinaPortrait from './assets/characters/assassina.png';
 import capitaoPortrait from './assets/characters/capitao.png';
@@ -68,6 +69,7 @@ const PHASE_SECONDS = {
 
 const $ = (selector) => document.querySelector(selector);
 
+const isTabletopExperiment = /^\/3d\/?$/.test(location.pathname);
 const roomPathMatch = location.pathname.match(/^\/sala\/([A-Z2-9]{5})\/?$/i);
 const inviteCode = (roomPathMatch?.[1] || new URLSearchParams(location.search).get('room') || '')
   .toUpperCase()
@@ -127,6 +129,7 @@ let connectionId = null;
 let warnedClockKey = '';
 let chatErrorTimer = null;
 let reconnectingSince = 0;
+let disposeTableExperiment = null;
 if (resumeSnapshot?.game) {
   clock = {
     key: 'restored',
@@ -997,8 +1000,20 @@ function render() {
 function renderApp() {
   const root = $('#app');
   const restoreChatFocus = document.activeElement?.id === 'chat-input';
+  if (isTabletopExperiment) {
+    disposeTableExperiment?.();
+    root.innerHTML = tableExperimentHTML();
+    mountTableExperiment().then((dispose) => {
+      disposeTableExperiment = dispose;
+    });
+    return;
+  }
   if (state.screen === 'lobby') {
-    root.innerHTML = lobbyHTML(state) + connectionUIHTML(state) + chatPanelHTML(state);
+    root.innerHTML =
+      lobbyHTML(state) +
+      '<a class="lab-entry" href="/3d"><i></i> Experimento de mesa 3D</a>' +
+      connectionUIHTML(state) +
+      chatPanelHTML(state);
     bindLobby();
     bindChat(restoreChatFocus);
     return;
@@ -1201,4 +1216,4 @@ function bindChat(restoreFocus = false) {
 }
 
 render();
-if (resumeSnapshot) connectRoom('resume');
+if (resumeSnapshot && !isTabletopExperiment) connectRoom('resume');
