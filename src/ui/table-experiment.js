@@ -252,6 +252,16 @@ export async function mountTableExperiment() {
       : 'dark';
   let quality = initialTabletopQuality({ search: location.search, storage: localStorage });
 
+  const paintPovControl = (selection) => {
+    const button = document.querySelector('[data-tabletop-camera="pov"]');
+    if (!button) return;
+    button.textContent = selection ? `POV · ${selection.name}` : 'POV';
+    button.title = selection
+      ? `Ponto de vista de ${selection.name}. Clique novamente para avançar ao próximo jogador.`
+      : 'Alternar o ponto de vista entre os jogadores.';
+    button.setAttribute('aria-label', button.title);
+  };
+
   const paintQualityControl = () => {
     const button = document.querySelector('#tabletop-quality');
     if (!button) return;
@@ -295,9 +305,15 @@ export async function mountTableExperiment() {
       `${step.label} · ATO ${String(activeIndex + 1).padStart(2, '0')}`;
     document.querySelector('#tabletop-title').textContent = step.title;
     document.querySelector('#tabletop-copy').textContent = step.copy;
+    let activeStepButton = null;
     document.querySelectorAll('[data-tabletop-step]').forEach((button) => {
       button.classList.toggle('active', button.dataset.tabletopStep === step.id);
+      if (button.dataset.tabletopStep === step.id) activeStepButton = button;
     });
+    if (matchMedia('(max-width: 820px)').matches) {
+      activeStepButton?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+    paintPovControl(scene?.povSelection());
   };
 
   const resetInterval = () => {
@@ -386,7 +402,12 @@ export async function mountTableExperiment() {
   });
   document.querySelectorAll('[data-tabletop-camera]').forEach((button) => {
     button.addEventListener('click', () => {
-      scene?.setCamera(button.dataset.tabletopCamera);
+      const cameraName = button.dataset.tabletopCamera;
+      const selection =
+        cameraName === 'pov' && button.classList.contains('active')
+          ? scene?.cyclePovSeat()
+          : scene?.setCamera(cameraName);
+      paintPovControl(selection ?? scene?.povSelection());
       document.querySelectorAll('[data-tabletop-camera]').forEach((candidate) => candidate.classList.remove('active'));
       button.classList.add('active');
     });

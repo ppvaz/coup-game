@@ -1134,6 +1134,101 @@ html[data-theme='light'] .chat-taunts button {
   }
 }
 
+@media (max-width: 600px) and (orientation: portrait) {
+  .tabletop-topbar {
+    height: 54px;
+    padding: 0 9px;
+    gap: 6px;
+  }
+  .tabletop-brand {
+    font-size: 17px;
+    letter-spacing: 0.15em;
+  }
+  .tabletop-top-actions {
+    gap: 4px;
+  }
+  .tabletop-theme,
+  .tabletop-quality,
+  .tabletop-benchmark,
+  .tabletop-exit {
+    min-width: 30px;
+    min-height: 30px;
+    padding: 5px 7px;
+    justify-content: center;
+  }
+  .tabletop-exit {
+    width: 30px;
+    overflow: hidden;
+    color: transparent;
+    font-size: 0;
+  }
+  .tabletop-exit::before {
+    content: '↩';
+    color: #bdb3a3;
+    font-size: 15px;
+    line-height: 1;
+  }
+  .tabletop-benchmark-panel {
+    top: 62px;
+    right: 9px;
+    width: min(190px, calc(100vw - 18px));
+  }
+  .tabletop-story {
+    top: 68px;
+    left: 13px;
+    width: calc(100vw - 26px);
+  }
+  .tabletop-story > span {
+    font-size: 7px;
+  }
+  .tabletop-story h1 {
+    max-width: 88vw;
+    margin: 7px 0 0;
+    font-size: clamp(30px, 10vw, 42px);
+    line-height: 0.9;
+  }
+  .tabletop-story p {
+    display: none;
+  }
+  .tabletop-controls {
+    left: 6px;
+    right: 6px;
+    bottom: max(6px, env(safe-area-inset-bottom));
+    gap: 5px;
+  }
+  .tabletop-beats button {
+    min-width: 64px;
+    min-height: 44px;
+    padding: 5px 6px;
+  }
+  .tabletop-beats button span {
+    margin-top: 3px;
+    font-size: 8px;
+  }
+  .tabletop-cameras {
+    left: 0;
+    right: 0;
+    bottom: 50px;
+    max-width: none;
+    justify-content: space-between;
+  }
+  .tabletop-cameras button {
+    min-height: 28px;
+    padding: 0 6px;
+    font-size: 7px;
+    flex: 0 0 auto;
+  }
+  .tabletop-play {
+    width: 40px;
+    min-height: 44px;
+    flex-basis: 40px;
+  }
+}
+
+html[data-theme='light'] .tabletop-exit::before {
+  color: #493621;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tabletop-loading i {
     animation: none;

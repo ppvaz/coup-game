@@ -4,6 +4,7 @@ import { FrameBenchmark } from './performance.js';
 export { FrameBenchmark, summarizeFrameTimes } from './performance.js';
 
 const DEFAULT_CLEAR = 0x080706;
+const PORTRAIT_ASPECT_MAX = 0.82;
 
 const CRT_VERTEX = /* glsl */ `
   varying vec2 vUv;
@@ -178,6 +179,8 @@ export class TabletopStage {
     this.timer.connect(document);
     this.updaters = new Set();
     this.cameraActs = new Map();
+    this.activeCameraActName = null;
+    this.viewportMode = null;
     this.cameraTarget = new THREE.Vector3();
     this.cameraTween = null;
     this.performanceSampler = new FrameBenchmark();
@@ -211,7 +214,8 @@ export class TabletopStage {
       event.preventDefault();
       if (this.cameraTween) return;
       const offset = this.camera.position.clone().sub(this.cameraTarget);
-      offset.setLength(THREE.MathUtils.clamp(offset.length() + event.deltaY * 0.008, 4.2, 15));
+      const maximumDistance = this.viewportMode === 'portrait' ? 22 : 16;
+      offset.setLength(THREE.MathUtils.clamp(offset.length() + event.deltaY * 0.008, 4.2, maximumDistance));
       this.camera.position.copy(this.cameraTarget).add(offset);
     };
     canvas.addEventListener('pointerdown', this.onPointerDown);
@@ -281,6 +285,7 @@ export class TabletopStage {
         return {
           cssWidth: Math.round(this.canvas.clientWidth || 0),
           cssHeight: Math.round(this.canvas.clientHeight || 0),
+          viewportMode: this.viewportMode,
           renderWidth: this.renderTarget.width,
           renderHeight: this.renderTarget.height,
           outputWidth: this.renderer.domElement.width,
@@ -302,17 +307,29 @@ export class TabletopStage {
     });
   }
 
-  defineCameraAct(name, { position, target, fov = 48 }) {
+  defineCameraAct(name, { position, target, fov = 48, portrait = null }) {
+    const makeAct = (definition) => ({
+      position: new THREE.Vector3(...definition.position),
+      target: new THREE.Vector3(...definition.target),
+      fov: definition.fov,
+    });
     this.cameraActs.set(name, {
-      position: new THREE.Vector3(...position),
-      target: new THREE.Vector3(...target),
-      fov,
+      landscape: makeAct({ position, target, fov }),
+      portrait: portrait
+        ? makeAct({
+            position: portrait.position ?? position,
+            target: portrait.target ?? target,
+            fov: portrait.fov ?? fov,
+          })
+        : null,
     });
   }
 
   setCameraAct(name, { immediate = false } = {}) {
-    const act = this.cameraActs.get(name);
-    if (!act) throw new Error(`Ato de câmera desconhecido: ${name}`);
+    const definition = this.cameraActs.get(name);
+    if (!definition) throw new Error(`Ato de câmera desconhecido: ${name}`);
+    const act = this.viewportMode === 'portrait' && definition.portrait ? definition.portrait : definition.landscape;
+    this.activeCameraActName = name;
     if (immediate || this.reducedMotion) {
       this.camera.position.copy(act.position);
       this.cameraTarget.copy(act.target);
@@ -337,6 +354,9 @@ export class TabletopStage {
   resize() {
     const width = Math.max(1, this.canvas.clientWidth || window.innerWidth);
     const height = Math.max(1, this.canvas.clientHeight || window.innerHeight);
+    const viewportMode = width / height < PORTRAIT_ASPECT_MAX ? 'portrait' : 'landscape';
+    const viewportModeChanged = this.viewportMode !== null && viewportMode !== this.viewportMode;
+    this.viewportMode = viewportMode;
     const sourceDpr = Math.min(window.devicePixelRatio || 1, 2);
     const outputDpr = Math.min(sourceDpr, this.maxDevicePixelRatio);
     this.renderer.setPixelRatio(outputDpr);
@@ -347,6 +367,9 @@ export class TabletopStage {
       Math.max(1, Math.floor((width * sourceDpr) / this.pixelScale)),
       Math.max(1, Math.floor((height * sourceDpr) / this.pixelScale)),
     );
+    if (viewportModeChanged && this.activeCameraActName) {
+      this.setCameraAct(this.activeCameraActName, { immediate: true });
+    }
   }
 
   updateCameraTween(now) {

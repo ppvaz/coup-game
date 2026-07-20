@@ -546,10 +546,29 @@ function createInfluenceCard(influence) {
 }
 
 function cameraForBeat(beat) {
-  if (beat === 'claim' || beat === 'block-claim') return 'duel';
-  if (beat === 'influence-loss') return 'evidence';
+  if (beat === 'claim' || beat === 'block-window' || beat === 'block-claim') return 'duel';
+  if (beat === 'influence-loss' || beat === 'exchange') return 'evidence';
   if (beat === 'victory') return 'throne';
   return 'table';
+}
+
+function povCameraForSeat(seat, seatCount) {
+  const radiusX = seatCount <= 3 ? 5.15 : 5.55;
+  const radiusZ = seatCount <= 3 ? 4.25 : 4.65;
+  const outwardX = Math.sin(seat.azimuthRad);
+  const outwardZ = Math.cos(seat.azimuthRad);
+  const seatX = outwardX * radiusX;
+  const seatZ = outwardZ * radiusZ;
+  return {
+    position: [seatX + outwardX * 3.05, 2.8, seatZ + outwardZ * 3.05],
+    target: [-outwardX * 1.85, 1.35, -outwardZ * 1.85],
+    fov: 55,
+    portrait: {
+      position: [seatX + outwardX * 3.55, 3.15, seatZ + outwardZ * 3.55],
+      target: [-outwardX * 1.55, 1.45, -outwardZ * 1.55],
+      fov: 59,
+    },
+  };
 }
 
 export class CoupTableScene {
@@ -568,13 +587,48 @@ export class CoupTableScene {
       vignette: profile.vignette,
       reducedMotion: options.reducedMotion,
     });
-    this.stage.defineCameraAct('table', { position: [0, 5.35, 11.8], target: [0, 1.55, -1.25], fov: 49 });
-    this.stage.defineCameraAct('pov', { position: [0, 2.55, 6.7], target: [0, 1.2, -2.4], fov: 59 });
-    this.stage.defineCameraAct('duel', { position: [6.9, 3.7, 5.8], target: [0, 1.25, 0], fov: 46 });
-    this.stage.defineCameraAct('evidence', { position: [0, 4.5, 5.6], target: [0, 1.15, 0.25], fov: 42 });
-    this.stage.defineCameraAct('overhead', { position: [0, 7.85, 5.6], target: [0, 0.65, 0], fov: 48 });
-    this.stage.defineCameraAct('throne', { position: [0, 3.5, 7.6], target: [0, 1.8, -2.5], fov: 42 });
-    this.stage.defineCameraAct('portal', { position: [0, 3.55, 3.2], target: [0, 3.15, 12.4], fov: 46 });
+    this.stage.defineCameraAct('table', {
+      position: [0, 5.35, 11.45],
+      target: [0, 1.45, -0.8],
+      fov: 49,
+      portrait: { position: [0, 6.85, 11.25], target: [0, 1.35, -0.35], fov: 70 },
+    });
+    this.stage.defineCameraAct('pov', {
+      position: [0, 2.8, 7.8],
+      target: [0, 1.35, -1.9],
+      fov: 55,
+      portrait: { position: [0, 3.25, 10.8], target: [0, 1.45, -1.05], fov: 57 },
+    });
+    this.stage.defineCameraAct('duel', {
+      position: [7.7, 4.3, 8.6],
+      target: [0, 1.45, 0],
+      fov: 43,
+      portrait: { position: [5.9, 4.8, 10.4], target: [0, 1.65, 0], fov: 60 },
+    });
+    this.stage.defineCameraAct('evidence', {
+      position: [0, 4.7, 6.8],
+      target: [0, 1.3, 0.1],
+      fov: 40,
+      portrait: { position: [0, 5.1, 9.4], target: [0, 1.45, 0], fov: 49 },
+    });
+    this.stage.defineCameraAct('overhead', {
+      position: [0, 8.05, 6.4],
+      target: [0, 0.5, 0],
+      fov: 52,
+      portrait: { position: [0, 8.05, 7.35], target: [0, 0.5, 0], fov: 58 },
+    });
+    this.stage.defineCameraAct('throne', {
+      position: [0, 4.15, 10.2],
+      target: [0, 1.75, -2.05],
+      fov: 41,
+      portrait: { position: [0, 5.4, 11.1], target: [0, 1.8, -1.55], fov: 62 },
+    });
+    this.stage.defineCameraAct('portal', {
+      position: [0, 4.25, 5.8],
+      target: [0, 3.3, 12.4],
+      fov: 42,
+      portrait: { position: [0, 4.9, 1.8], target: [0, 3.45, 12.5], fov: 54 },
+    });
     this.stage.setCameraAct('table', { immediate: true });
 
     this.environment = createCoupEnvironment(this.stage, { theme: this.theme });
@@ -586,6 +640,7 @@ export class CoupTableScene {
     this.previousBeat = null;
     this.cameraOverridden = false;
     this.cameraName = 'table';
+    this.currentPovSeatId = null;
     this.actionTexture = null;
     this.actionCaptionTexture = null;
     this.actionSignature = '';
@@ -612,7 +667,9 @@ export class CoupTableScene {
     this.actionCard.rotation.y = -0.08;
     this.actionCard.visible = false;
     this.actionTargetX = 0;
+    this.actionTargetZ = -0.15;
     this.publicRoleTargetX = 0;
+    this.publicRoleTargetZ = -0.15;
     this.stage.add(this.actionCard);
 
     this.seal = mesh(
@@ -679,6 +736,33 @@ export class CoupTableScene {
         seed: seatView.index * 1.71,
       });
     }
+  }
+
+  povSelection() {
+    const seats = this.view?.seats ?? [];
+    const seat =
+      seats.find((candidate) => candidate.id === this.currentPovSeatId) ?? seats.find((candidate) => candidate.isSelf);
+    return seat ? { id: seat.id, name: seat.name } : null;
+  }
+
+  setPovSeat(seatId, { immediate = false } = {}) {
+    const seats = this.view?.seats ?? [];
+    const seat =
+      seats.find((candidate) => candidate.id === seatId) ?? seats.find((candidate) => candidate.isSelf) ?? seats[0];
+    if (!seat) return null;
+    this.currentPovSeatId = seat.id;
+    this.stage.defineCameraAct('pov', povCameraForSeat(seat, seats.length));
+    this.cameraOverridden = true;
+    this.cameraName = 'pov';
+    this.stage.setCameraAct('pov', { immediate });
+    return this.povSelection();
+  }
+
+  cyclePovSeat() {
+    const seats = this.view?.seats ?? [];
+    if (!seats.length) return null;
+    const currentIndex = seats.findIndex((seat) => seat.id === this.currentPovSeatId);
+    return this.setPovSeat(seats[(currentIndex + 1 + seats.length) % seats.length].id);
   }
 
   updateSeat(seatView) {
@@ -783,19 +867,35 @@ export class CoupTableScene {
 
   layoutCenterpiece() {
     const split = this.actionCard.visible && Boolean(this.publicRole);
-    this.actionTargetX = split ? 0.72 : 0;
-    this.publicRoleTargetX = split ? -0.92 : 0;
+    const cameraX = this.stage.camera.position.x;
+    const cameraZ = this.stage.camera.position.z;
+    const cameraRadius = Math.max(0.001, Math.hypot(cameraX, cameraZ));
+    const screenRightX = cameraZ / cameraRadius;
+    const screenRightZ = -cameraX / cameraRadius;
+    const actionOffset = split ? 0.72 : 0;
+    const roleOffset = split ? -0.92 : 0;
+    this.actionTargetX = screenRightX * actionOffset;
+    this.actionTargetZ = -0.15 + screenRightZ * actionOffset;
+    this.publicRoleTargetX = screenRightX * roleOffset;
+    this.publicRoleTargetZ = -0.15 + screenRightZ * roleOffset;
   }
 
   sync(view) {
     const signature = view.seats.map((seat) => seat.id).join('|');
-    if (signature !== this.seatSignature) {
+    const seatsChanged = signature !== this.seatSignature;
+    if (seatsChanged) {
       this.rebuildSeats(view);
       this.seatSignature = signature;
     }
     for (const seat of view.seats) this.updateSeat(seat);
     this.updateActionCard(view);
     this.view = view;
+    if (!this.currentPovSeatId || !view.seats.some((seat) => seat.id === this.currentPovSeatId)) {
+      this.currentPovSeatId = view.seats.find((seat) => seat.isSelf)?.id ?? view.seats[0]?.id ?? null;
+    }
+    if (seatsChanged && this.cameraOverridden && this.cameraName === 'pov') {
+      this.setPovSeat(this.currentPovSeatId, { immediate: true });
+    }
     this.victoryLight.intensity = view.beat === 'victory' ? 95 : 0;
     this.environment.setMood(view.beat);
     this.seal.material.color.setHex(
@@ -812,9 +912,11 @@ export class CoupTableScene {
   }
 
   setCamera(name) {
+    if (name === 'pov') return this.setPovSeat(this.currentPovSeatId);
     this.cameraOverridden = name !== 'auto';
     this.cameraName = name === 'auto' ? cameraForBeat(this.view?.beat) : name;
     this.stage.setCameraAct(this.cameraName);
+    return this.povSelection();
   }
 
   runPerformanceBenchmark({ warmupMs, durationMs, label = 'coup-standard' } = {}) {
@@ -828,6 +930,7 @@ export class CoupTableScene {
         quality: this.quality.id,
         beat: this.view?.beat ?? null,
         camera: this.cameraName,
+        povSeat: this.cameraName === 'pov' ? this.currentPovSeatId : null,
       },
     });
   }
@@ -855,14 +958,17 @@ export class CoupTableScene {
   update(elapsed, reducedMotion, delta) {
     this.environment.update(elapsed, reducedMotion);
     this.seal.rotation.z = elapsed * 0.14;
+    this.layoutCenterpiece();
     const centerEase = reducedMotion ? 1 : 1 - Math.exp(-Math.max(delta, 1 / 120) * 7);
     if (this.actionCard.visible) {
       this.actionCard.position.x += (this.actionTargetX - this.actionCard.position.x) * centerEase;
+      this.actionCard.position.z += (this.actionTargetZ - this.actionCard.position.z) * centerEase;
       this.actionCard.position.y = 2.35 + (reducedMotion ? 0 : Math.sin(elapsed * 1.7) * 0.055);
       faceCameraYaw(this.actionCard, this.stage.camera, reducedMotion ? 1 : delta);
     }
     if (this.publicRole) {
       this.publicRole.position.x += (this.publicRoleTargetX - this.publicRole.position.x) * centerEase;
+      this.publicRole.position.z += (this.publicRoleTargetZ - this.publicRole.position.z) * centerEase;
       this.publicRole.position.y = 1.26 + (reducedMotion ? 0 : Math.sin(elapsed * 1.45 + 0.8) * 0.035);
       faceCameraYaw(this.publicRole, this.stage.camera, reducedMotion ? 1 : delta, 0.14);
     }
