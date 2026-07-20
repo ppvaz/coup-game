@@ -178,7 +178,7 @@ function demoGame(stepId) {
 }
 
 export function tableExperimentHTML() {
-  return `<main class="tabletop-experiment">
+  return `<main class="tabletop-experiment" data-camera="auto">
     <canvas id="tabletop-canvas" aria-label="Experimento de mesa 3D da La Corte"></canvas>
     <div class="tabletop-loading" id="tabletop-loading"><i></i><span>Convocando a corte…</span></div>
     <nav class="tabletop-topbar">
@@ -376,6 +376,7 @@ export async function mountTableExperiment() {
         if (playLabel) playLabel.textContent = 'REPRODUZIR SEQUÊNCIA';
         showStep(1);
         scene.setCamera('table');
+        document.querySelector('.tabletop-experiment')?.setAttribute('data-camera', 'table');
         document.querySelectorAll('[data-tabletop-camera]').forEach((button) => {
           button.classList.toggle('active', button.dataset.tabletopCamera === 'table');
         });
@@ -408,6 +409,7 @@ export async function mountTableExperiment() {
         cameraName === 'pov' && button.classList.contains('active')
           ? scene?.cyclePovSeat()
           : scene?.setCamera(cameraName);
+      document.querySelector('.tabletop-experiment')?.setAttribute('data-camera', cameraName);
       paintPovControl(selection ?? scene?.povSelection());
       document.querySelectorAll('[data-tabletop-camera]').forEach((candidate) => candidate.classList.remove('active'));
       button.classList.add('active');

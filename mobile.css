@@ -1190,6 +1190,10 @@ html[data-theme='light'] .chat-taunts button {
   .tabletop-story p {
     display: none;
   }
+  .tabletop-experiment[data-camera='player'] .tabletop-story {
+    opacity: 0;
+    visibility: hidden;
+  }
   .tabletop-controls {
     left: 6px;
     right: 6px;

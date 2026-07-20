@@ -582,9 +582,9 @@ function playerCameraForSeat(seat, seatCount) {
     target: [seatX + outwardX * 1.15, 1.22, seatZ + outwardZ * 1.15],
     fov: 46,
     portrait: {
-      position: [seatX + outwardX * 3.75, 5.15, seatZ + outwardZ * 3.75],
-      target: [seatX + outwardX * 1.1, 1.2, seatZ + outwardZ * 1.1],
-      fov: 53,
+      position: [seatX + outwardX * 4.05, 6.4, seatZ + outwardZ * 4.05],
+      target: [seatX + outwardX * 0.75, 1.2, seatZ + outwardZ * 0.75],
+      fov: 60,
     },
   };
 }
@@ -621,7 +621,7 @@ export class CoupTableScene {
       position: [0, 4.35, 8.25],
       target: [0, 1.22, 5.8],
       fov: 46,
-      portrait: { position: [0, 5.15, 8.4], target: [0, 1.2, 5.75], fov: 53 },
+      portrait: { position: [0, 6.4, 8.7], target: [0, 1.2, 5.4], fov: 60 },
     });
     this.stage.defineCameraAct('duel', {
       position: [7.7, 4.3, 8.6],
@@ -743,7 +743,7 @@ export class CoupTableScene {
       noble.group.add(plaque);
 
       const coinGroup = new THREE.Group();
-      coinGroup.position.set(-1, 1.27, -1.18);
+      coinGroup.position.set(-1, 1.34, -1.2);
       noble.group.add(coinGroup);
       const influenceGroup = new THREE.Group();
       influenceGroup.position.set(1.25, 1.28, -1.14);
@@ -821,7 +821,7 @@ export class CoupTableScene {
     if (seat.coinCount !== seatView.coins) {
       disposeObject3D(seat.coinGroup);
       seat.coinGroup = new THREE.Group();
-      seat.coinGroup.position.set(-1, 1.27, -1.18);
+      seat.coinGroup.position.set(-1, 1.34, -1.2);
       seat.group.add(seat.coinGroup);
       const visibleCoins = Math.min(seatView.coins, 7);
       for (let index = 0; index < visibleCoins; index += 1) {
@@ -1013,6 +1013,9 @@ export class CoupTableScene {
       const state = this.view?.seats.find((candidate) => candidate.id === id);
       if (!state) continue;
       seat.body.visible = !(this.cameraName === 'pov' && this.currentPovSeatId === id);
+      const compactPrivateHand = state.isSelf && this.cameraName === 'player' && this.stage.viewportMode === 'portrait';
+      const influenceTargetX = compactPrivateHand ? 0.05 : 1.25;
+      seat.influenceGroup.position.x += (influenceTargetX - seat.influenceGroup.position.x) * centerEase;
       if (state.isSelf) continue;
       const emphasis = state.isActor || state.isCurrent || state.isWinner;
       seat.body.position.y = reducedMotion
