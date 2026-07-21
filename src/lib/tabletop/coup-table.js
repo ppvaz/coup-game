@@ -906,6 +906,26 @@ export class CoupTableScene {
         receive: false,
       }),
     );
+    // Moldura branca de hover: sinaliza que a carta aceita interação.
+    this.actionHoverFrame = new THREE.Group();
+    const frameMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+    const framePieces = [
+      { size: [1.56, 0.05], position: [0, 1.0] },
+      { size: [1.56, 0.05], position: [0, -1.0] },
+      { size: [0.05, 2.05], position: [0.755, 0] },
+      { size: [0.05, 2.05], position: [-0.755, 0] },
+    ];
+    for (const piece of framePieces) {
+      this.actionHoverFrame.add(
+        mesh(new THREE.PlaneGeometry(...piece.size), frameMaterial, {
+          position: [...piece.position, 0.047],
+          cast: false,
+          receive: false,
+        }),
+      );
+    }
+    this.actionHoverFrame.visible = false;
+    this.actionCard.add(this.actionHoverFrame);
     this.actionCard.position.set(0.72, 2.35, -0.15);
     this.actionCard.rotation.y = -0.08;
     this.actionCard.visible = false;
@@ -1097,6 +1117,7 @@ export class CoupTableScene {
     const visible = Boolean(action && ['claim', 'block-window', 'block-claim', 'influence-loss'].includes(view.beat));
     this.actionCard.visible = visible;
     if (!visible) {
+      this.setActionCardHover(false);
       this.setPublicRole(null);
       this.layoutCenterpiece();
       return;
@@ -1272,6 +1293,14 @@ export class CoupTableScene {
     this.stage.setCameraAct(act, { immediate });
   }
 
+  hasActionCard() {
+    return this.actionCard.visible;
+  }
+
+  setActionCardHover(hovered) {
+    this.actionHoverFrame.visible = Boolean(hovered) && this.actionCard.visible;
+  }
+
   // Cinemático de leitura: verdadeiro se o ponteiro (em NDC) tocou a carta de
   // ação pública sobre a mesa.
   pickActionCard(pointer) {
@@ -1313,11 +1342,6 @@ export class CoupTableScene {
   applyLabShot(spec) {
     const seats = this.view?.seats ?? [];
     const [act, indexPart] = String(spec ?? '').split(':');
-    if (!indexPart) {
-      if (!['table', 'player', 'pov', 'duel', 'evidence', 'overhead', 'throne', 'portal'].includes(act)) return null;
-      this.setCamera(act);
-      return act;
-    }
     const subjects = (indexPart ?? '')
       .split('-')
       .map(Number)
@@ -1332,10 +1356,6 @@ export class CoupTableScene {
       return act;
     }
     if (!subjects.length) return null;
-    if (act === 'pov') {
-      this.setPovSeat(subjects[0].id, { immediate: true });
-      return act;
-    }
     if (act === 'duel') this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
     else if (act === 'evidence') this.stage.defineCameraAct('evidence', playerCameraForSeat(subjects[0], seats.length));
     else if (act === 'throne') this.stage.defineCameraAct('throne', throneCameraForSeat(subjects[0], seats.length));

@@ -297,7 +297,7 @@ export async function mountTableExperiment({
     button.setAttribute(
       'aria-label',
       focusedSeat
-        ? `Voltar à câmera automática e fechar a corte. Assento em foco: ${focusedSeat.name}`
+        ? `Voltar à câmera automática. Assento em foco: ${focusedSeat.name}`
         : rosterOpen
           ? 'Ocultar estado da corte'
           : 'Mostrar estado da corte',
@@ -496,6 +496,9 @@ export async function mountTableExperiment({
     gameplay.querySelector('#tabletop-again')?.addEventListener('click', restart);
     scene?.sync(projectCoupTableView(game, currentState.myId));
     playPendingReactions();
+    // A carta saiu da mesa enquanto o cinemático a enquadrava: o Auto retoma
+    // imediatamente, sem esperar o temporizador.
+    if (scene?.cameraName === 'card' && !scene.hasActionCard()) endCardFocus();
     // O diretor Auto decide o ato dentro da cena; o atributo só espelha a
     // escolha para a composição CSS quando não há override manual.
     if (scene && !scene.cameraOverridden) root.dataset.camera = scene.cameraName === 'player' ? 'player' : 'auto';
@@ -582,6 +585,22 @@ export async function mountTableExperiment({
         root.querySelectorAll('[data-tabletop-camera]').forEach((button) => button.classList.remove('active'));
       }
     }
+    // Moldura branca ao passar o mouse: a carta de ação aceita interação.
+    let hoverFrame = 0;
+    canvas.addEventListener('pointermove', (event) => {
+      if (hoverFrame) return;
+      hoverFrame = requestAnimationFrame(() => {
+        hoverFrame = 0;
+        if (!scene) return;
+        const rect = canvas.getBoundingClientRect();
+        const hit = scene.pickActionCard({
+          x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+          y: -((event.clientY - rect.top) / rect.height) * 2 + 1,
+        });
+        scene.setActionCardHover(hit);
+        canvas.style.cursor = hit ? 'pointer' : '';
+      });
+    });
     // Clique/toque na carta de ação abre um cinemático de leitura; o Auto
     // retoma sozinho depois de alguns segundos ou com um segundo toque.
     canvas.addEventListener('click', (event) => {
@@ -653,11 +672,12 @@ export async function mountTableExperiment({
       reactionThrowable = null;
       paintReactionDock();
     }
+    // Com um assento focado, o botão age como "Voltar": retoma o Auto e
+    // preserva o painel aberto — fechá-lo é o clique seguinte.
     if (focusedSeat) {
       scene?.setCamera('auto');
       root.dataset.camera = 'auto';
       focusedSeat = null;
-      rosterOpen = false;
       paintRosterControl();
       return;
     }
