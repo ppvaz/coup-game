@@ -12,12 +12,6 @@ const PHASE_BEATS = {
   finished: 'victory',
 };
 
-function rotateAroundSelf(players, myId) {
-  const selfIndex = players.findIndex((player) => player.id === myId);
-  if (selfIndex <= 0) return [...players];
-  return [...players.slice(selfIndex), ...players.slice(0, selfIndex)];
-}
-
 const playerSummary = (player) => (player ? Object.freeze({ id: player.id, name: player.name }) : null);
 
 /**
@@ -26,7 +20,10 @@ const playerSummary = (player) => (player ? Object.freeze({ id: player.id, name:
  */
 export function projectCoupTableView(game, myId) {
   if (!game) throw new Error('A mesa 3D precisa de uma partida.');
-  const ordered = rotateAroundSelf(game.players.slice(0, 6), myId);
+  // A geografia da sala é pública e compartilhada. O jogador local pode estar
+  // em qualquer cadeira; as câmeras procuram `isSelf` sem girar os demais
+  // assentos ou trocar porta e janelas de lugar entre clientes.
+  const ordered = game.players.slice(0, 6);
   const players = new Map(game.players.map((player) => [player.id, player]));
   const pending = game.pending ?? {};
   const actor = players.get(pending.actorId) ?? null;

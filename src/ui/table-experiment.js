@@ -1,3 +1,5 @@
+import { awaitedPlayerId } from '../game/ai.js';
+import { responseProgress } from '../game/coup.js';
 import { projectCoupTableView } from '../lib/tabletop/coup-view.js';
 import {
   TABLETOP_BENCHMARK_DEFAULTS,
@@ -5,213 +7,165 @@ import {
   benchmarkOptionsFromSearch,
 } from '../lib/tabletop/benchmark-kit.js';
 import { TABLETOP_QUALITY_KEY, initialTabletopQuality, nextTabletopQuality } from '../lib/tabletop/quality-profiles.js';
-import { escapeHTML } from './screens.js';
+import { TABLETOP_EMOJIS, TABLETOP_THROWABLES } from '../lib/tabletop/reactions.js';
+import { audioTogglesHTML, bindGameDecisionControls, describeLog, handHTML, modalHTML } from './game-views.js';
+import { chatPanelHTML, chatToggleHTML, escapeHTML } from './screens.js';
 
-const STEPS = [
-  {
-    id: 'turn',
+const player = (game, id) => game.players.find((candidate) => candidate.id === id);
+
+const rosterBookIcon = (open) =>
+  open
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5v14M3 4.5h5.5A3.5 3.5 0 0 1 12 8v12.5a3.5 3.5 0 0 0-3.5-3.5H3V4.5Zm18 0h-5.5A3.5 3.5 0 0 0 12 8v12.5a3.5 3.5 0 0 1 3.5-3.5H21V4.5Z"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h14v17H6.5A2.5 2.5 0 0 1 4 18V6a2.5 2.5 0 0 1 2.5-2.5M4 18a2.5 2.5 0 0 1 2.5-2.5H19M8 7.5h7"/></svg>';
+
+function narrative(game) {
+  const pending = game.pending;
+  const latest = game.log.at(-1);
+  const eventCopy = latest ? describeLog(game, latest) : 'A corte está reunida.';
+  const progress = responseProgress(game);
+  const progressCopy =
+    progress && progress.total > 1
+      ? `${progress.submitted} de ${progress.total} respostas · ${progress.remaining} ${progress.remaining === 1 ? 'pendente' : 'pendentes'}.`
+      : '';
+  const copy = progressCopy ? `${eventCopy} ${progressCopy}` : eventCopy;
+  if (game.status === 'finished') {
+    const winner = player(game, game.winnerId);
+    return {
+      label: 'Desfecho',
+      title: `${winner?.name ?? 'A corte'} domina a mesa`,
+      copy,
+    };
+  }
+  if (game.phase === 'choose_influence') {
+    return {
+      label: 'Influência',
+      title: `${player(game, pending.lossPlayerId)?.name ?? 'Alguém'} deve revelar uma influência`,
+      copy,
+    };
+  }
+  if (game.phase === 'exchange') {
+    return {
+      label: 'Troca',
+      title: `${player(game, pending.actorId)?.name ?? 'A corte'} reorganiza suas influências`,
+      copy,
+    };
+  }
+  if (game.phase === 'challenge_block') {
+    return {
+      label: 'Intervenção',
+      title: `${player(game, pending.block.playerId)?.name ?? 'Alguém'} sustenta o bloqueio`,
+      copy,
+    };
+  }
+  if (game.phase === 'block') {
+    return {
+      label: 'Bloqueio',
+      title: 'A corte pode intervir',
+      copy,
+    };
+  }
+  if (game.phase === 'challenge_action') {
+    return {
+      label: 'Alegação',
+      title: `${player(game, pending.actorId)?.name ?? 'Alguém'} alega ser ${pending.claimedRole}`,
+      copy,
+    };
+  }
+  const current = player(game, game.currentPlayerId);
+  return {
     label: 'Turno',
-    title: 'Lorenzo reúne a corte',
-    copy: 'O selo dourado marca quem detém a palavra. Arraste para olhar ao redor da mesa.',
-  },
-  {
-    id: 'claim',
-    label: 'Alegação',
-    title: 'Vittorio alega ser Capitão',
-    copy: 'A carta alegada sobe ao centro. A regra continua no motor de Coup; o palco recebe só o fato exibível.',
-  },
-  {
-    id: 'challenge',
-    label: 'Contestação',
-    title: 'Beatrice exige provas',
-    copy: 'Os dois assentos ganham foco e a câmera encena o duelo sem conhecer a mão secreta do rival.',
-  },
-  {
-    id: 'block',
-    label: 'Bloqueio',
-    title: 'Ajuda externa sob ameaça',
-    copy: 'A janela de resposta vira uma batida visual, mantendo os controles acessíveis na camada 2D.',
-  },
-  {
-    id: 'block-claim',
-    label: 'Intervenção',
-    title: 'Isabella alega ser Duque',
-    copy: 'O palco destaca quem bloqueia e troca o documento central, sem assumir se a alegação é verdadeira.',
-  },
-  {
-    id: 'loss',
-    label: 'Influência',
-    title: 'Uma influência deve cair',
-    copy: 'A escolha continua privada no modal existente. A mesa apenas enquadra o momento dramático.',
-  },
-  {
-    id: 'victory',
-    label: 'Vitória',
-    title: 'A corte tem uma soberana',
-    copy: 'Luz, câmera e atuação reagem ao resultado já decidido pelo motor autoritativo.',
-  },
-];
-
-const BASE_PLAYERS = [
-  {
-    id: 'you',
-    name: 'Lorenzo',
-    kind: 'human',
-    connected: true,
-    coins: 4,
-    cards: [
-      { id: 'private-duke', role: 'Duque', revealed: false },
-      { id: 'private-countess', role: 'Condessa', revealed: false },
-    ],
-  },
-  {
-    id: 'bea',
-    name: 'Beatrice',
-    kind: 'bot',
-    connected: true,
-    coins: 5,
-    cards: [
-      { id: 'secret-bea-1', role: 'Assassina', revealed: false },
-      { id: 'secret-bea-2', role: 'Duque', revealed: false },
-    ],
-  },
-  {
-    id: 'vit',
-    name: 'Vittorio',
-    kind: 'bot',
-    connected: true,
-    coins: 2,
-    cards: [
-      { id: 'secret-vit-1', role: 'Capitão', revealed: false },
-      { id: 'secret-vit-2', role: 'Embaixadora', revealed: false },
-    ],
-  },
-  {
-    id: 'isa',
-    name: 'Isabella',
-    kind: 'bot',
-    connected: true,
-    coins: 7,
-    cards: [
-      { id: 'secret-isa-1', role: 'Condessa', revealed: false },
-      { id: 'secret-isa-2', role: 'Duque', revealed: false },
-    ],
-  },
-];
-
-function demoGame(stepId) {
-  const game = {
-    gameId: 'laboratorio-3d',
-    version: STEPS.findIndex((step) => step.id === stepId) + 1,
-    status: 'playing',
-    phase: 'turn',
-    players: structuredClone(BASE_PLAYERS),
-    currentPlayerId: 'you',
-    turn: 4,
-    pending: null,
-    responseQueue: [],
-    winnerId: null,
-    log: [{ type: 'game_started', at: 1 }],
+    title: `${current?.name ?? 'A corte'} detém a palavra`,
+    copy,
   };
-  if (stepId === 'claim' || stepId === 'challenge') {
-    game.phase = 'challenge_action';
-    game.currentPlayerId = 'vit';
-    game.pending = { action: 'steal', actorId: 'vit', targetId: 'bea', claimedRole: 'Capitão', paidCost: 0 };
-    game.responseQueue = ['bea', 'isa', 'you'];
-    game.log.push({ type: 'action_declared', action: 'steal', actorId: 'vit', targetId: 'bea', at: 2 });
-    if (stepId === 'challenge') {
-      game.phase = 'choose_influence';
-      game.pending.lossPlayerId = 'bea';
-      game.pending.afterLoss = 'continue_action';
-      game.log.push({
-        type: 'challenge_resolved',
-        challengerId: 'bea',
-        challengedId: 'vit',
-        claimedRole: 'Capitão',
-        truthful: true,
-        at: 3,
-      });
-    }
-  }
-  if (stepId === 'block' || stepId === 'block-claim') {
-    game.phase = stepId === 'block' ? 'block' : 'challenge_block';
-    game.currentPlayerId = 'vit';
-    game.pending = {
-      action: 'foreign_aid',
-      actorId: 'vit',
-      targetId: null,
-      claimedRole: null,
-      paidCost: 0,
-      ...(stepId === 'block-claim' ? { block: { playerId: 'isa', role: 'Duque' } } : {}),
-    };
-    game.responseQueue = stepId === 'block' ? ['isa', 'you', 'bea'] : ['you', 'bea', 'vit'];
-    game.log.push({ type: 'action_declared', action: 'foreign_aid', actorId: 'vit', at: 2 });
-    if (stepId === 'block-claim') {
-      game.log.push({ type: 'block_declared', action: 'foreign_aid', playerId: 'isa', role: 'Duque', at: 3 });
-    }
-  }
-  if (stepId === 'loss') {
-    game.phase = 'choose_influence';
-    game.currentPlayerId = 'isa';
-    game.pending = {
-      action: 'coup',
-      actorId: 'isa',
-      targetId: 'bea',
-      claimedRole: null,
-      paidCost: 7,
-      lossPlayerId: 'bea',
-      afterLoss: 'finish_turn',
-    };
-    game.log.push({ type: 'action_declared', action: 'coup', actorId: 'isa', targetId: 'bea', at: 2 });
-  }
-  if (stepId === 'victory') {
-    game.status = 'finished';
-    game.phase = 'finished';
-    game.currentPlayerId = 'isa';
-    game.winnerId = 'isa';
-    game.players[0].cards.forEach((card) => (card.revealed = true));
-    game.players[1].cards.forEach((card) => (card.revealed = true));
-    game.players[2].cards.forEach((card) => (card.revealed = true));
-    game.log.push({ type: 'game_finished', winnerId: 'isa', reason: 'last_survivor', at: 4 });
-  }
-  return game;
 }
 
-export function tableExperimentHTML() {
-  return `<main class="tabletop-experiment" data-camera="auto">
-    <canvas id="tabletop-canvas" aria-label="Experimento de mesa 3D da La Corte"></canvas>
+function tabletopRosterHTML(state, context) {
+  const decisionPlayerId = awaitedPlayerId(state.game);
+  return `<aside class="tabletop-roster" id="tabletop-roster" aria-label="Influências e moedas da corte"><span class="tabletop-roster-title">A CORTE</span>${state.game.players
+    .map((seat) => {
+      const connected = state.room?.seats.find((candidate) => candidate.id === seat.id)?.connected ?? true;
+      const alive = seat.cards.some((card) => !card.revealed);
+      return `<article class="tabletop-roster-player ${decisionPlayerId === seat.id ? 'active' : ''} ${alive ? '' : 'eliminated'} ${connected ? '' : 'offline'}"><button type="button" class="tabletop-roster-name" data-tabletop-focus-seat="${escapeHTML(seat.id)}" title="Focar ${escapeHTML(seat.name)}" aria-label="Focar a câmera em ${escapeHTML(seat.name)}"><span>${escapeHTML(seat.name)}</span>${seat.id === state.myId ? '<small>VOCÊ</small>' : ''}</button><span class="tabletop-roster-coins" aria-label="${seat.coins} moedas">◆ ${seat.coins}</span><span class="tabletop-roster-influences">${seat.cards
+        .map(
+          (card) =>
+            `<i class="${card.revealed ? 'lost' : 'hidden'}" ${card.revealed ? `style="--portrait:url('${context.portraits[card.role]}')"` : ''} aria-label="${card.revealed ? `${card.role}, influência perdida` : 'Influência ativa'}">${card.revealed ? '<b>×</b>' : ''}</i>`,
+        )
+        .join('')}</span></article>`;
+    })
+    .join(
+      '',
+    )}<small class="tabletop-roster-hint">CLIQUE EM UM NOME PARA FOCAR</small><section class="tabletop-roster-settings" aria-label="Preferências da experiência"><button class="tabletop-theme" id="tabletop-theme" type="button" title="Alternar ambiente"><span>☀</span><small>Modo diurno</small></button>${audioTogglesHTML(context)}${context.labAccess ? '<a class="tabletop-lab-link" href="/3d/lab" aria-label="Abrir laboratório 3D" title="Abrir laboratório 3D"><span>◇</span><small>Abrir laboratório 3D</small></a>' : ''}</section></aside>`;
+}
+
+function gameplayHTML(state, context) {
+  const game = state.game;
+  const roster = tabletopRosterHTML(state, context);
+  if (game.status !== 'finished') return roster + handHTML(state, context.portraits) + modalHTML(state, context);
+  const winner = player(game, game.winnerId);
+  const defeated = game.finishReason === 'humans_eliminated';
+  return `${roster}<section class="tabletop-result"><span>FIM DA PARTIDA</span><strong>${defeated ? 'Você caiu da corte' : `${escapeHTML(winner?.name ?? '?')} venceu`}</strong><button class="primary" id="tabletop-again">Jogar novamente</button></section>`;
+}
+
+function reactionDockHTML(state, { open, throwable }) {
+  if (!state.game || !state.myId) return '';
+  const targets = state.game.players.filter(
+    (candidate) => candidate.id !== state.myId && candidate.cards.some((card) => !card.revealed),
+  );
+  const panel = !open
+    ? ''
+    : throwable
+      ? `<aside class="tabletop-reaction-panel" role="dialog" aria-label="Escolha quem receberá o arremesso"><span>ESCOLHA O ALVO</span><div class="tabletop-reaction-targets">${targets.map((target) => `<button type="button" data-reaction-target="${escapeHTML(target.id)}">${escapeHTML(target.name)}</button>`).join('')}</div><button type="button" class="tabletop-reaction-back" data-reaction-back>← Voltar</button></aside>`
+      : `<aside class="tabletop-reaction-panel" role="dialog" aria-label="Reações da corte"><span>REAGIR</span><div class="tabletop-reaction-emojis">${TABLETOP_EMOJIS.map((emoji) => `<button type="button" data-reaction-emoji="${emoji}" aria-label="Reagir com ${emoji}">${emoji}</button>`).join('')}</div><span>ARREMESSAR</span><div class="tabletop-reaction-throws">${TABLETOP_THROWABLES.map((item) => `<button type="button" data-reaction-throw="${item.id}" title="${item.label}"><b>${item.icon}</b><small>${item.label}</small></button>`).join('')}</div></aside>`;
+  return `<div class="tabletop-reactions ${open ? 'open' : ''}">${panel}<button type="button" class="tabletop-reaction-trigger" id="tabletop-reaction-trigger" aria-expanded="${open}" aria-label="${open ? 'Fechar reações' : 'Abrir reações'}"><span>${open ? '×' : '☺'}</span><small>Reagir</small></button></div>`;
+}
+
+export function tableExperimentHTML({ testMode = false } = {}) {
+  const mode = testMode ? 'lab' : 'game';
+  return `<main class="tabletop-experiment" data-camera="auto" data-interface="${mode}">
+    <canvas id="tabletop-canvas" aria-label="Mesa 3D jogável da La Corte"></canvas>
     <div class="tabletop-loading" id="tabletop-loading"><i></i><span>Convocando a corte…</span></div>
     <nav class="tabletop-topbar">
-      <a class="tabletop-brand" href="/" aria-label="Voltar à La Corte">LA <span>CORTE</span><small>LABORATÓRIO 3D</small></a>
-      <div class="tabletop-engine-badge"><i></i><span>TABLETOP STAGE</span><small>ENGINE COMUM · AMBIENTE COUP</small></div>
+      ${testMode ? '<a class="tabletop-brand" href="/3d" aria-label="Voltar ao jogo 3D">LA <span>CORTE</span><small>LABORATÓRIO 3D</small></a>' : ''}
+      ${testMode ? '<div class="tabletop-engine-badge"><i></i><span>TABLETOP STAGE</span><small>MOTOR AUTORITATIVO · INSTRUMENTAÇÃO</small></div>' : ''}
       <div class="tabletop-top-actions">
-        <button class="tabletop-benchmark" id="tabletop-benchmark" type="button"><span>◷</span><small>Medir FPS</small></button>
-        <button class="tabletop-quality" id="tabletop-quality" type="button"><span>◆</span><small>Cinemático</small></button>
-        <button class="tabletop-theme" id="tabletop-theme" type="button"><span>☀</span><small>Modo diurno</small></button>
-        <a class="tabletop-exit" href="/">Voltar ao jogo</a>
+        ${testMode ? '<button class="tabletop-benchmark" id="tabletop-benchmark" type="button"><span>◷</span><small>Medir FPS</small></button>' : ''}
+        ${testMode ? '<button class="tabletop-quality" id="tabletop-quality" type="button"><span>◆</span><small>Cinemático</small></button>' : ''}
+        ${testMode ? '' : `<button class="tabletop-roster-toggle" id="tabletop-roster-toggle" type="button" aria-controls="tabletop-roster" aria-expanded="false"><span>${rosterBookIcon(false)}</span><small>A corte</small></button>`}
+        <span class="tabletop-chat-slot" id="tabletop-chat-slot"></span>
+        ${testMode ? '<button class="tabletop-theme" id="tabletop-theme" type="button"><span>☀</span><small>Modo diurno</small></button>' : ''}
+        ${testMode ? '<a class="tabletop-exit" href="/3d" aria-label="Voltar ao jogo 3D"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao jogo 3D</span></a>' : '<button class="tabletop-exit" id="tabletop-exit-request" type="button" aria-expanded="false" aria-controls="tabletop-exit-confirm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao salão</span></button>'}
       </div>
     </nav>
-    <section class="tabletop-story" aria-live="polite">
-      <span id="tabletop-kicker">${escapeHTML(STEPS[0].label)} · ATO 01</span>
-      <h1 id="tabletop-title">${escapeHTML(STEPS[0].title)}</h1>
-      <p id="tabletop-copy">${escapeHTML(STEPS[0].copy)}</p>
+    ${testMode ? '' : '<aside class="tabletop-exit-confirm" id="tabletop-exit-confirm" hidden><span>ABANDONAR A PARTIDA?</span><p>O progresso desta mesa será encerrado.</p><div><button type="button" id="tabletop-exit-cancel">Continuar jogando</button><a href="/">Sair da partida</a></div></aside>'}
+    <section class="tabletop-story" aria-live="polite" aria-atomic="true">
+      <span id="tabletop-kicker">TURNO · ATO 01</span>
+      <h1 id="tabletop-title">A corte está reunida</h1>
+      <p id="tabletop-copy">A partida será decidida pelo mesmo motor da mesa 2D.</p>
     </section>
-    <aside class="tabletop-legend">
-      <span>PALCO 3D</span>
-      <p>Câmara palaciana 360° · skyline · portal · luz · assentos</p>
-      <i></i>
-      <span>COUP</span>
-      <p>Regras · sigilo · ações · autoridade</p>
-    </aside>
-    <aside class="tabletop-benchmark-panel" id="tabletop-benchmark-panel" aria-live="polite">
+    ${
+      testMode
+        ? `<aside class="tabletop-legend">
+      <span>CENA ESTÁTICA</span>
+      <p id="tabletop-decision">Simulação pausada</p>
+      <i></i><span>LAB 3D</span><p>Ambiente · câmeras · luz · desempenho</p>
+    </aside>`
+        : ''
+    }
+    ${
+      testMode
+        ? `<aside class="tabletop-benchmark-panel" id="tabletop-benchmark-panel" aria-live="polite">
       <span>BENCHMARK 3D</span>
       <strong id="tabletop-benchmark-value">— FPS</strong>
       <small id="tabletop-benchmark-detail">2 s aquecimento · 8 s amostragem</small>
-    </aside>
-    <div class="tabletop-controls">
-      <div class="tabletop-beats" role="group" aria-label="Momentos da partida">
-        ${STEPS.map((step, index) => `<button data-tabletop-step="${step.id}" class="${index === 0 ? 'active' : ''}"><b>${String(index + 1).padStart(2, '0')}</b><span>${escapeHTML(step.label)}</span></button>`).join('')}
-      </div>
+    </aside>`
+        : ''
+    }
+    <div class="tabletop-gameplay" id="tabletop-gameplay"></div>
+    <div id="tabletop-reaction-layer"></div>
+    <div id="tabletop-chat-layer"></div>
+    ${
+      testMode
+        ? `<div class="tabletop-controls tabletop-lab-controls">
       <div class="tabletop-cameras" role="group" aria-label="Câmeras">
         <span>CÂMERA</span>
         ${[
@@ -229,22 +183,40 @@ export function tableExperimentHTML() {
           )
           .join('')}
       </div>
-      <button class="tabletop-play" id="tabletop-play" aria-pressed="true"><i></i><span>PAUSAR SEQUÊNCIA</span></button>
     </div>
-    <p class="tabletop-hint">ARRASTE PARA OLHAR · RODA PARA APROXIMAR</p>
+    <p class="tabletop-hint">ARRASTE PARA OLHAR · RODA PARA APROXIMAR</p>`
+        : ''
+    }
   </main>`;
 }
 
-export async function mountTableExperiment() {
+export async function mountTableExperiment({
+  initialState,
+  context,
+  dispatch,
+  requestRender,
+  restart,
+  toggleSounds,
+  toggleVoices,
+  sendReaction,
+  bindChat,
+  testMode,
+}) {
   document.body.classList.add('is-tabletop-lab');
-  const canvas = document.querySelector('#tabletop-canvas');
-  const loading = document.querySelector('#tabletop-loading');
+  const root = document.querySelector('.tabletop-experiment');
+  const canvas = root.querySelector('#tabletop-canvas');
+  const loading = root.querySelector('#tabletop-loading');
   let scene = null;
-  let activeIndex = 0;
-  let playing = true;
-  let interval = null;
   let benchmarkInterval = null;
   let benchmarkKit = null;
+  let currentState = initialState;
+  let currentContext = context;
+  let rosterOpen = !matchMedia('(max-width: 820px)').matches;
+  let focusedSeat = null;
+  let playerTurnCamera = false;
+  let reactionOpen = false;
+  let reactionThrowable = null;
+  const processedReactions = new Set();
   const requestedTheme = new URLSearchParams(location.search).get('theme');
   let theme = ['light', 'dark'].includes(requestedTheme)
     ? requestedTheme
@@ -253,8 +225,40 @@ export async function mountTableExperiment() {
       : 'dark';
   let quality = initialTabletopQuality({ search: location.search, storage: localStorage });
 
+  const chatState = () => {
+    if (!testMode) return currentState;
+    return {
+      ...currentState,
+      online: true,
+      connection: 'connected',
+      screen: 'game',
+      room: currentState.room ?? { code: 'LAB3D', seats: currentState.game.players },
+      chatUnread: currentState.chatOpen ? 0 : currentState.chatUnread || 2,
+      chatMessages: currentState.chatMessages.length
+        ? currentState.chatMessages
+        : [
+            {
+              id: 'lab-chat-1',
+              playerId: 'bot-0',
+              playerName: 'Beatrice',
+              text: 'A corte observa cada movimento.',
+              sentAt: Date.now() - 90_000,
+              kind: 'message',
+            },
+            {
+              id: 'lab-chat-2',
+              playerId: currentState.myId,
+              playerName: currentState.name || 'Lorenzo',
+              text: 'Então que observem com atenção.',
+              sentAt: Date.now() - 25_000,
+              kind: 'taunt',
+            },
+          ],
+    };
+  };
+
   const paintPovControl = (selection) => {
-    const button = document.querySelector('[data-tabletop-camera="pov"]');
+    const button = root.querySelector('[data-tabletop-camera="pov"]');
     if (!button) return;
     button.textContent = selection ? `POV · ${selection.name}` : 'POV';
     button.title = selection
@@ -264,11 +268,52 @@ export async function mountTableExperiment() {
   };
 
   const paintQualityControl = () => {
-    const button = document.querySelector('#tabletop-quality');
+    const button = root.querySelector('#tabletop-quality');
     if (!button) return;
     button.setAttribute('aria-label', `Qualidade 3D: ${quality.label}. Ativar próximo perfil.`);
     button.dataset.quality = quality.id;
     button.querySelector('small').textContent = quality.label;
+  };
+
+  const paintRosterControl = () => {
+    root.dataset.roster = rosterOpen ? 'open' : 'closed';
+    root.dataset.seatFocus = focusedSeat ? 'active' : 'idle';
+    const button = root.querySelector('#tabletop-roster-toggle');
+    if (!button) return;
+    button.setAttribute('aria-expanded', String(rosterOpen));
+    button.setAttribute(
+      'aria-label',
+      focusedSeat
+        ? `Voltar à câmera automática e fechar a corte. Assento em foco: ${focusedSeat.name}`
+        : rosterOpen
+          ? 'Ocultar estado da corte'
+          : 'Mostrar estado da corte',
+    );
+    button.querySelector('span').innerHTML = rosterBookIcon(rosterOpen);
+    button.querySelector('small').textContent = 'A corte';
+  };
+
+  const focusRosterSeat = (seatId) => {
+    const selection = scene?.focusSeat(seatId);
+    if (!selection) return;
+    root.dataset.camera = 'inspect';
+    focusedSeat = selection;
+    paintRosterControl();
+    root.querySelectorAll('[data-tabletop-camera]').forEach((button) => button.classList.remove('active'));
+  };
+
+  const bindRosterFocus = (scope) => {
+    scope.querySelectorAll('[data-tabletop-focus-seat]').forEach((button) => {
+      button.addEventListener('click', () => focusRosterSeat(button.dataset.tabletopFocusSeat));
+    });
+  };
+
+  const bindRosterSettings = (scope) => {
+    scope.querySelector('#tabletop-theme')?.addEventListener('click', () => {
+      applyTheme(theme === 'light' ? 'dark' : 'light');
+    });
+    scope.querySelector('#sound-toggle')?.addEventListener('click', toggleSounds);
+    scope.querySelector('#voice-toggle')?.addEventListener('click', toggleVoices);
   };
 
   const applyQuality = (nextQuality, { persist = true } = {}) => {
@@ -279,11 +324,12 @@ export async function mountTableExperiment() {
   };
 
   const paintThemeControl = () => {
-    const button = document.querySelector('#tabletop-theme');
+    const button = root.querySelector('#tabletop-theme');
     if (!button) return;
     const light = theme === 'light';
     button.setAttribute('aria-pressed', String(light));
     button.setAttribute('aria-label', light ? 'Ativar ambiente noturno' : 'Ativar ambiente diurno');
+    button.setAttribute('title', light ? 'Ativar ambiente noturno' : 'Ativar ambiente diurno');
     button.querySelector('span').textContent = light ? '☾' : '☀';
     button.querySelector('small').textContent = light ? 'Modo noturno' : 'Modo diurno';
   };
@@ -297,36 +343,164 @@ export async function mountTableExperiment() {
     paintThemeControl();
   };
 
-  const showStep = (index) => {
-    activeIndex = (index + STEPS.length) % STEPS.length;
-    const step = STEPS[activeIndex];
-    const view = projectCoupTableView(demoGame(step.id), 'you');
-    scene?.sync(view);
-    document.querySelector('#tabletop-kicker').textContent =
-      `${step.label} · ATO ${String(activeIndex + 1).padStart(2, '0')}`;
-    document.querySelector('#tabletop-title').textContent = step.title;
-    document.querySelector('#tabletop-copy').textContent = step.copy;
-    let activeStepButton = null;
-    document.querySelectorAll('[data-tabletop-step]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.tabletopStep === step.id);
-      if (button.dataset.tabletopStep === step.id) activeStepButton = button;
+  const paintChat = () => {
+    const chatSlot = root.querySelector('#tabletop-chat-slot');
+    const chatLayer = root.querySelector('#tabletop-chat-layer');
+    const visibleChatState = chatState();
+    if (chatSlot) chatSlot.innerHTML = chatToggleHTML(visibleChatState);
+    if (chatLayer) chatLayer.innerHTML = chatPanelHTML(visibleChatState);
+    bindChat?.();
+  };
+
+  const paintReactionDock = () => {
+    const layer = root.querySelector('#tabletop-reaction-layer');
+    if (!layer) return;
+    layer.innerHTML = reactionDockHTML(currentState, {
+      open: reactionOpen,
+      throwable: reactionThrowable,
     });
-    if (matchMedia('(max-width: 820px)').matches) {
-      activeStepButton?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    layer.querySelector('#tabletop-reaction-trigger')?.addEventListener('click', () => {
+      reactionOpen = !reactionOpen;
+      reactionThrowable = null;
+      if (reactionOpen && rosterOpen) {
+        rosterOpen = false;
+        paintRosterControl();
+      }
+      paintReactionDock();
+    });
+    layer.querySelectorAll('[data-reaction-emoji]').forEach((button) => {
+      button.addEventListener('click', () => {
+        sendReaction?.({ kind: 'emoji', emoji: button.dataset.reactionEmoji });
+        reactionOpen = false;
+        paintReactionDock();
+      });
+    });
+    layer.querySelectorAll('[data-reaction-throw]').forEach((button) => {
+      button.addEventListener('click', () => {
+        reactionThrowable = button.dataset.reactionThrow;
+        paintReactionDock();
+      });
+    });
+    layer.querySelectorAll('[data-reaction-target]').forEach((button) => {
+      button.addEventListener('click', () => {
+        sendReaction?.({ kind: 'throw', throwable: reactionThrowable, targetId: button.dataset.reactionTarget });
+        reactionOpen = false;
+        reactionThrowable = null;
+        paintReactionDock();
+      });
+    });
+    layer.querySelector('[data-reaction-back]')?.addEventListener('click', () => {
+      reactionThrowable = null;
+      paintReactionDock();
+    });
+  };
+
+  const playPendingReactions = () => {
+    if (!scene) return;
+    for (const reaction of currentState.tabletopReactions ?? []) {
+      if (processedReactions.has(reaction.id)) continue;
+      const played =
+        reaction.kind === 'throw'
+          ? scene.throwReaction(reaction.playerId, reaction.targetId, reaction.throwable)
+          : scene.showEmojiReaction(reaction.playerId, reaction.emoji);
+      if (played) processedReactions.add(reaction.id);
     }
+    if (processedReactions.size > 96) {
+      const visibleIds = new Set((currentState.tabletopReactions ?? []).map((reaction) => reaction.id));
+      for (const id of processedReactions) if (!visibleIds.has(id)) processedReactions.delete(id);
+    }
+  };
+
+  const frozenLabView = (game) => {
+    const view = projectCoupTableView(game, currentState.myId);
+    return {
+      ...view,
+      id: `lab:${view.id}`,
+      phase: 'lab',
+      beat: 'idle',
+      currentPlayer: null,
+      winner: null,
+      action: null,
+      block: null,
+      influenceLoser: null,
+      responsePlayer: null,
+      latestEvent: null,
+      seats: view.seats.map((seat) => ({
+        ...seat,
+        isCurrent: false,
+        isActor: false,
+        isTarget: false,
+        isBlocker: false,
+        isWinner: false,
+      })),
+    };
+  };
+
+  const paintState = () => {
+    const game = currentState.game;
+    const gameplay = root.querySelector('#tabletop-gameplay');
+    paintChat();
+    paintReactionDock();
+
+    if (testMode) {
+      root.dataset.phase = 'lab';
+      root.dataset.decision = 'other';
+      gameplay.replaceChildren();
+      scene?.sync(frozenLabView(game));
+      playPendingReactions();
+      scene?.setDecisionClock({ visible: false });
+      paintPovControl(scene?.povSelection());
+      return;
+    }
+
+    const story = narrative(game);
+    const awaited = awaitedPlayerId(game);
+    const decisionPlayer = player(game, awaited);
+    root.dataset.phase = game.phase;
+    root.querySelector('#tabletop-kicker').textContent =
+      `${story.label} · ATO ${String(Math.max(1, game.turn)).padStart(2, '0')}`;
+    root.querySelector('#tabletop-title').textContent = story.title;
+    root.querySelector('#tabletop-copy').textContent = story.copy;
+    const decision = root.querySelector('#tabletop-decision');
+    if (decision)
+      decision.textContent =
+        game.status === 'finished'
+          ? 'Partida encerrada'
+          : awaited === currentState.myId
+            ? 'Sua decisão'
+            : `Aguardando ${decisionPlayer?.name ?? 'a corte'}`;
+    root.dataset.decision = awaited === currentState.myId || currentState.targetAction ? 'self' : 'other';
+    gameplay.innerHTML = gameplayHTML(currentState, currentContext);
+    bindGameDecisionControls(gameplay, {
+      state: currentState,
+      dispatch,
+      render: requestRender,
+    });
+    bindRosterFocus(gameplay);
+    bindRosterSettings(gameplay);
+    paintThemeControl();
+    gameplay.querySelector('#tabletop-again')?.addEventListener('click', restart);
+    scene?.sync(projectCoupTableView(game, currentState.myId));
+    playPendingReactions();
+    const shouldUsePlayerCamera =
+      game.status === 'playing' && game.phase === 'turn' && game.currentPlayerId === currentState.myId;
+    if (scene && shouldUsePlayerCamera !== playerTurnCamera) {
+      playerTurnCamera = shouldUsePlayerCamera;
+      scene.setCamera(shouldUsePlayerCamera ? 'player' : 'auto');
+      root.dataset.camera = shouldUsePlayerCamera ? 'player' : 'auto';
+    }
+    scene?.setDecisionClock({
+      ...currentContext.clock,
+      visible: game.status === 'playing' && game.phase === 'turn',
+    });
     paintPovControl(scene?.povSelection());
   };
 
-  const resetInterval = () => {
-    clearInterval(interval);
-    if (playing) interval = setInterval(() => showStep(activeIndex + 1), 5200);
-  };
-
   const paintBenchmark = (state, result = null) => {
-    const panel = document.querySelector('#tabletop-benchmark-panel');
-    const button = document.querySelector('#tabletop-benchmark');
-    const value = document.querySelector('#tabletop-benchmark-value');
-    const detail = document.querySelector('#tabletop-benchmark-detail');
+    const panel = root.querySelector('#tabletop-benchmark-panel');
+    const button = root.querySelector('#tabletop-benchmark');
+    const value = root.querySelector('#tabletop-benchmark-value');
+    const detail = root.querySelector('#tabletop-benchmark-detail');
     panel?.classList.toggle('visible', Boolean(state || result));
     if (button) {
       button.disabled = Boolean(state);
@@ -355,10 +529,12 @@ export async function mountTableExperiment() {
     } finally {
       clearInterval(benchmarkInterval);
       benchmarkInterval = null;
-      document.querySelector('#tabletop-benchmark')?.removeAttribute('disabled');
+      root.querySelector('#tabletop-benchmark')?.removeAttribute('disabled');
     }
   };
 
+  paintRosterControl();
+  paintState();
   try {
     const { CoupTableScene } = await import('../lib/tabletop/coup-table.js');
     scene = new CoupTableScene(canvas, { theme, quality: quality.id });
@@ -369,26 +545,19 @@ export async function mountTableExperiment() {
       globalScope: window,
       logger: console,
       prepare() {
-        playing = false;
-        resetInterval();
-        document.querySelector('#tabletop-play')?.setAttribute('aria-pressed', 'false');
-        const playLabel = document.querySelector('#tabletop-play span');
-        if (playLabel) playLabel.textContent = 'REPRODUZIR SEQUÊNCIA';
-        showStep(1);
         scene.setCamera('table');
-        document.querySelector('.tabletop-experiment')?.setAttribute('data-camera', 'table');
-        document.querySelectorAll('[data-tabletop-camera]').forEach((button) => {
+        root.dataset.camera = 'table';
+        root.querySelectorAll('[data-tabletop-camera]').forEach((button) => {
           button.classList.toggle('active', button.dataset.tabletopCamera === 'table');
         });
       },
     });
     applyTheme(theme, { persist: false });
     applyQuality(quality, { persist: false });
-    showStep(0);
+    paintState();
     requestAnimationFrame(() => loading?.classList.add('hidden'));
-    resetInterval();
     const benchmarkOptions = benchmarkOptionsFromSearch(location.search);
-    if (benchmarkOptions.autorun) setTimeout(() => runBenchmark(benchmarkOptions.durationMs), 450);
+    if (testMode && benchmarkOptions.autorun) setTimeout(() => runBenchmark(benchmarkOptions.durationMs), 450);
   } catch (error) {
     console.error('Não foi possível iniciar a mesa 3D:', error);
     loading.innerHTML =
@@ -396,49 +565,79 @@ export async function mountTableExperiment() {
     loading.classList.add('error');
   }
 
-  document.querySelectorAll('[data-tabletop-step]').forEach((button) => {
-    button.addEventListener('click', () => {
-      showStep(STEPS.findIndex((step) => step.id === button.dataset.tabletopStep));
-      resetInterval();
-    });
-  });
-  document.querySelectorAll('[data-tabletop-camera]').forEach((button) => {
+  root.querySelectorAll('[data-tabletop-camera]').forEach((button) => {
     button.addEventListener('click', () => {
       const cameraName = button.dataset.tabletopCamera;
       const selection =
         cameraName === 'pov' && button.classList.contains('active')
           ? scene?.cyclePovSeat()
           : scene?.setCamera(cameraName);
-      document.querySelector('.tabletop-experiment')?.setAttribute('data-camera', cameraName);
+      root.dataset.camera = cameraName;
       paintPovControl(selection ?? scene?.povSelection());
-      document.querySelectorAll('[data-tabletop-camera]').forEach((candidate) => candidate.classList.remove('active'));
+      root.querySelectorAll('[data-tabletop-camera]').forEach((candidate) => candidate.classList.remove('active'));
       button.classList.add('active');
     });
   });
-  document.querySelector('#tabletop-play')?.addEventListener('click', (event) => {
-    playing = !playing;
-    event.currentTarget.setAttribute('aria-pressed', String(playing));
-    event.currentTarget.querySelector('span').textContent = playing ? 'PAUSAR SEQUÊNCIA' : 'REPRODUZIR SEQUÊNCIA';
-    resetInterval();
+  if (testMode) {
+    root.querySelector('#tabletop-theme')?.addEventListener('click', () => {
+      applyTheme(theme === 'light' ? 'dark' : 'light');
+    });
+  }
+  const exitRequest = root.querySelector('#tabletop-exit-request');
+  const exitConfirm = root.querySelector('#tabletop-exit-confirm');
+  const closeExitConfirm = () => {
+    if (!exitConfirm) return;
+    exitConfirm.hidden = true;
+    exitRequest?.setAttribute('aria-expanded', 'false');
+  };
+  exitRequest?.addEventListener('click', () => {
+    const opening = exitConfirm?.hidden ?? false;
+    if (!exitConfirm) return;
+    exitConfirm.hidden = !opening;
+    exitRequest.setAttribute('aria-expanded', String(opening));
   });
-  document.querySelector('#tabletop-theme')?.addEventListener('click', () => {
-    applyTheme(theme === 'light' ? 'dark' : 'light');
+  root.querySelector('#tabletop-exit-cancel')?.addEventListener('click', closeExitConfirm);
+  root.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeExitConfirm();
   });
-  document.querySelector('#tabletop-quality')?.addEventListener('click', () => {
+  root.querySelector('#tabletop-roster-toggle')?.addEventListener('click', () => {
+    if (reactionOpen) {
+      reactionOpen = false;
+      reactionThrowable = null;
+      paintReactionDock();
+    }
+    if (focusedSeat) {
+      scene?.setCamera('auto');
+      root.dataset.camera = 'auto';
+      focusedSeat = null;
+      rosterOpen = false;
+      paintRosterControl();
+      return;
+    }
+    rosterOpen = !rosterOpen;
+    paintRosterControl();
+  });
+  root.querySelector('#tabletop-quality')?.addEventListener('click', () => {
     applyQuality(nextTabletopQuality(quality.id));
   });
-  document.querySelector('#tabletop-benchmark')?.addEventListener('click', () => runBenchmark());
+  root.querySelector('#tabletop-benchmark')?.addEventListener('click', () => runBenchmark());
 
   const syncThemeFromStorage = (event) => {
     if (event.key === 'la-corte-theme' && event.newValue) applyTheme(event.newValue, { persist: false });
   };
   window.addEventListener('storage', syncThemeFromStorage);
 
-  return () => {
-    clearInterval(interval);
-    clearInterval(benchmarkInterval);
-    window.removeEventListener('storage', syncThemeFromStorage);
-    scene?.dispose();
-    document.body.classList.remove('is-tabletop-lab');
+  return {
+    update(nextState, nextContext) {
+      currentState = nextState;
+      currentContext = nextContext;
+      paintState();
+    },
+    dispose() {
+      clearInterval(benchmarkInterval);
+      window.removeEventListener('storage', syncThemeFromStorage);
+      scene?.dispose();
+      document.body.classList.remove('is-tabletop-lab');
+    },
   };
 }

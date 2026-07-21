@@ -150,8 +150,9 @@ function modalActionTargetHTML(game, pending) {
     : '';
 }
 
-function modalContext(game) {
-  const events = game.log.slice(-3).reverse();
+function modalContext(game, { omitCurrent = false } = {}) {
+  const history = omitCurrent ? game.log.slice(0, -1) : game.log;
+  const events = history.slice(-3).reverse();
   const revealed = game.players.flatMap((player) =>
     player.cards.filter((card) => card.revealed).map((card) => card.role),
   );
@@ -174,14 +175,14 @@ function waitingModal(state, context, title, copy) {
 
 function targetModal(state) {
   const targets = state.game.players.filter((player) => player.id !== state.myId && isAlive(player));
-  return `<div class="modal-wrap"><div class="modal"><div class="eyebrow">Escolha seu rival</div><h2>${ACTIONS[state.targetAction].label}</h2><div class="targets">${targets.map((player) => `<button class="target" data-target="${player.id}" ${state.targetAction === 'steal' && player.coins === 0 ? 'disabled' : ''}><b>${escapeHTML(player.name)}</b> ${modalAssetsHTML(state.game, player.id)}</button>`).join('')}</div><button class="ghost" id="cancel">Cancelar</button></div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-target"><div class="eyebrow">Escolha seu rival</div><h2>${ACTIONS[state.targetAction].label}</h2><div class="targets">${targets.map((player) => `<button class="target" data-target="${player.id}" ${state.targetAction === 'steal' && player.coins === 0 ? 'disabled' : ''}><b>${escapeHTML(player.name)}</b> ${modalAssetsHTML(state.game, player.id)}</button>`).join('')}</div><button class="ghost" id="cancel">Cancelar</button></div></div>`;
 }
 
 function challengeActionModal(state, context) {
   const game = state.game;
   const pending = game.pending;
   const target = pending.targetId ? ` para${modalActionTargetHTML(game, pending)}` : '';
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Alegação de personagem</div><h2>${modalPlayerHTML(game, pending.actorId)} diz ser ${pending.claimedRole}${target}</h2>${otherPlayersHTML(game, [pending.actorId, pending.targetId])}<p class="modal-copy">Se contestar e ele provar a carta, você perde uma influência. Se for blefe, ele perde.</p>${timerHTML(game, context.clock)}${responseProgressHTML(state)}<div class="response-actions"><button class="danger" id="challenge">Contestar alegação</button><button class="primary" id="allow">Permitir ação</button></div></div>${modalContext(game)}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Alegação de personagem</div><h2>${modalPlayerHTML(game, pending.actorId)} diz ser ${pending.claimedRole}${target}</h2>${otherPlayersHTML(game, [pending.actorId, pending.targetId])}<p class="modal-copy">Se contestar e ele provar a carta, você perde uma influência. Se for blefe, ele perde.</p>${timerHTML(game, context.clock)}${responseProgressHTML(state)}<div class="response-actions"><button class="danger" id="challenge">Contestar alegação</button><button class="primary" id="allow">Permitir ação</button></div></div>${modalContext(game, { omitCurrent: true })}</div></div>`;
 }
 
 function blockChoiceModal(state, context) {
@@ -191,7 +192,7 @@ function blockChoiceModal(state, context) {
   const intent = pending.targetId
     ? `quer${modalActionTargetHTML(game, pending)}`
     : `quer ${ACTIONS[pending.action].label.toLowerCase()}`;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${modalPlayerHTML(game, pending.actorId)} ${intent}</h2>${otherPlayersHTML(game, [pending.actorId, pending.targetId])}<p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p>${timerHTML(game, context.clock)}${responseProgressHTML(state)}<div class="card-grid">${roles.map((role) => `<button class="role-card" data-block-role="${role}" style="--portrait:url('${context.portraits[role]}')"><h3>${role}</h3><p>${BLOCK_HINTS[role]}</p></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext(game)}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Ação bloqueável</div><h2>${modalPlayerHTML(game, pending.actorId)} ${intent}</h2>${otherPlayersHTML(game, [pending.actorId, pending.targetId])}<p class="modal-copy">Você pode impedir esta ação alegando uma das influências permitidas. Outros jogadores podem contestar seu bloqueio.</p>${timerHTML(game, context.clock)}${responseProgressHTML(state)}<div class="card-grid">${roles.map((role) => `<button class="role-card" data-block-role="${role}" style="--portrait:url('${context.portraits[role]}')"><h3>${role}</h3><p>${BLOCK_HINTS[role]}</p></button>`).join('')}</div><button class="ghost" id="allow-block">Permitir ação</button></div>${modalContext(game, { omitCurrent: true })}</div></div>`;
 }
 
 function blockClaimModal(state, context) {
@@ -199,7 +200,7 @@ function blockClaimModal(state, context) {
   const pending = game.pending;
   const block = pending.block;
   const eyebrow = pending.action === 'assassinate' ? 'Alvo do assassinato · Bloqueio declarado' : 'Bloqueio declarado';
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">${eyebrow}</div><h2>${modalPlayerHTML(game, block.playerId)} diz ser ${block.role}</h2>${otherPlayersHTML(game, [block.playerId, pending.actorId])}<p class="modal-copy">${playerName(game, block.playerId)} bloqueou ${ACTIONS[pending.action].label.toLowerCase()}. Você pode aceitar ou contestar a alegação.</p>${timerHTML(game, context.clock)}${responseProgressHTML(state)}<div class="response-actions"><button class="danger" id="contest-block">Contestar bloqueio</button><button class="primary" id="accept-block">Aceitar bloqueio</button></div></div>${modalContext(game)}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">${eyebrow}</div><h2>${modalPlayerHTML(game, block.playerId)} diz ser ${block.role}</h2>${otherPlayersHTML(game, [block.playerId, pending.actorId])}<p class="modal-copy">${playerName(game, block.playerId)} bloqueou ${ACTIONS[pending.action].label.toLowerCase()}. Você pode aceitar ou contestar a alegação.</p>${timerHTML(game, context.clock)}${responseProgressHTML(state)}<div class="response-actions"><button class="danger" id="contest-block">Contestar bloqueio</button><button class="primary" id="accept-block">Aceitar bloqueio</button></div></div>${modalContext(game, { omitCurrent: true })}</div></div>`;
 }
 
 function revealModal(state, context) {
@@ -264,17 +265,76 @@ export function modalHTML(state, context) {
   return '';
 }
 
+export function bindGameDecisionControls(root, { state, dispatch, render }) {
+  root.querySelectorAll('[data-action]').forEach((button) => {
+    button.onclick = () => {
+      const key = button.dataset.action;
+      if (ACTIONS[key].targeted) {
+        state.targetAction = key;
+        render();
+        return;
+      }
+      dispatch({ type: 'declare_action', actorId: state.myId, action: key });
+    };
+  });
+  root.querySelectorAll('[data-target]').forEach((button) => {
+    button.onclick = () =>
+      dispatch({
+        type: 'declare_action',
+        actorId: state.myId,
+        action: state.targetAction,
+        targetId: button.dataset.target,
+      });
+  });
+  root.querySelector('#cancel')?.addEventListener('click', () => {
+    state.targetAction = null;
+    render();
+  });
+  root
+    .querySelector('#challenge')
+    ?.addEventListener('click', () => dispatch({ type: 'challenge', actorId: state.myId }));
+  root.querySelector('#allow')?.addEventListener('click', () => dispatch({ type: 'pass', actorId: state.myId }));
+  root.querySelectorAll('[data-block-role]').forEach((button) => {
+    button.onclick = () => dispatch({ type: 'block', actorId: state.myId, role: button.dataset.blockRole });
+  });
+  root.querySelector('#allow-block')?.addEventListener('click', () => dispatch({ type: 'pass', actorId: state.myId }));
+  root
+    .querySelector('#contest-block')
+    ?.addEventListener('click', () => dispatch({ type: 'challenge', actorId: state.myId }));
+  root.querySelector('#accept-block')?.addEventListener('click', () => dispatch({ type: 'pass', actorId: state.myId }));
+  root.querySelectorAll('[data-reveal]').forEach((button) => {
+    button.onclick = () => dispatch({ type: 'reveal_influence', actorId: state.myId, cardId: button.dataset.reveal });
+  });
+  root.querySelectorAll('[data-pick]').forEach((button) => {
+    button.onclick = () => {
+      const id = button.dataset.pick;
+      const count = state.game.pending.exchangeCount;
+      if (state.exchangePicks.includes(id)) {
+        state.exchangePicks = state.exchangePicks.filter((pick) => pick !== id);
+      } else if (state.exchangePicks.length < count) {
+        state.exchangePicks = [...state.exchangePicks, id];
+      }
+      render();
+    };
+  });
+  root.querySelector('#confirm-exchange')?.addEventListener('click', () => {
+    dispatch({ type: 'choose_exchange', actorId: state.myId, cardIds: state.exchangePicks });
+  });
+}
+
 function soundToggleHTML(context) {
   const muted = context.soundsMuted;
-  return `<button class="audio-toggle sound-toggle" id="sound-toggle" type="button" aria-pressed="${muted}" aria-label="${muted ? 'Ativar efeitos sonoros' : 'Silenciar efeitos sonoros'}"><span class="audio-icon sound-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path class="sound-speaker" d="M4 9h4l5-4v14l-5-4H4Z"/><path class="sound-waves" d="M16 9.2a4 4 0 0 1 0 5.6M18.5 6.8a7.3 7.3 0 0 1 0 10.4"/></svg></span><small>${muted ? 'Sons desligados' : 'Sons ligados'}</small></button>`;
+  const label = muted ? 'Ativar efeitos sonoros' : 'Silenciar efeitos sonoros';
+  return `<button class="audio-toggle sound-toggle" id="sound-toggle" type="button" aria-pressed="${muted}" aria-label="${label}" title="${label}"><span class="audio-icon sound-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path class="sound-speaker" d="M4 9h4l5-4v14l-5-4H4Z"/><path class="sound-waves" d="M16 9.2a4 4 0 0 1 0 5.6M18.5 6.8a7.3 7.3 0 0 1 0 10.4"/></svg></span><small>${muted ? 'Sons desligados' : 'Sons ligados'}</small></button>`;
 }
 
 function voiceToggleHTML(context) {
   const muted = context.voicesMuted;
-  return `<button class="audio-toggle voice-toggle" id="voice-toggle" type="button" aria-pressed="${muted}" aria-label="${muted ? 'Ativar vozes' : 'Silenciar vozes'}"><span class="audio-icon voice-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="7" r="3"/><path d="M3.5 18c.5-3.3 2.2-5 4.5-5s4 1.7 4.5 5M15 8.5a3.8 3.8 0 0 1 0 5M18 6.5a6.7 6.7 0 0 1 0 9"/></svg></span><small>${muted ? 'Vozes desligadas' : 'Vozes ligadas'}</small></button>`;
+  const label = muted ? 'Ativar vozes' : 'Silenciar vozes';
+  return `<button class="audio-toggle voice-toggle" id="voice-toggle" type="button" aria-pressed="${muted}" aria-label="${label}" title="${label}"><span class="audio-icon voice-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="7" r="3"/><path d="M3.5 18c.5-3.3 2.2-5 4.5-5s4 1.7 4.5 5M15 8.5a3.8 3.8 0 0 1 0 5M18 6.5a6.7 6.7 0 0 1 0 9"/></svg></span><small>${muted ? 'Vozes desligadas' : 'Vozes ligadas'}</small></button>`;
 }
 
-const audioTogglesHTML = (context) =>
+export const audioTogglesHTML = (context) =>
   `<div class="audio-toggles" role="group" aria-label="Controles de áudio">${soundToggleHTML(context)}${voiceToggleHTML(context)}</div>`;
 
 export function gameHTML(state, context) {

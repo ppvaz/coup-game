@@ -1,4 +1,4 @@
-const BOT_DELAY = [1_800, 2_400];
+const BOT_DELAY = [2_800, 3_600];
 
 export function botDelayMs(random = Math.random) {
   const [minimum, maximum] = BOT_DELAY;

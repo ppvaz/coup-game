@@ -1040,6 +1040,7 @@ html[data-theme='light'] .chat-taunts button {
   }
   .tabletop-brand small,
   .tabletop-engine-badge,
+  .tabletop-mode-badge,
   .tabletop-legend,
   .tabletop-hint {
     display: none;
@@ -1049,12 +1050,14 @@ html[data-theme='light'] .chat-taunts button {
     font-size: 7px;
   }
   .tabletop-theme,
+  .tabletop-roster-toggle,
   .tabletop-quality,
   .tabletop-benchmark {
     min-height: 32px;
     padding: 6px 9px;
   }
   .tabletop-theme small,
+  .tabletop-roster-toggle small,
   .tabletop-quality small,
   .tabletop-benchmark small {
     display: none;
@@ -1093,13 +1096,13 @@ html[data-theme='light'] .chat-taunts button {
     overflow-x: auto;
     scroll-snap-type: x mandatory;
   }
-  .tabletop-beats button {
+  .tabletop-beats > div {
     min-width: 74px;
     min-height: 50px;
     padding: 7px 8px;
     scroll-snap-align: start;
   }
-  .tabletop-beats button span {
+  .tabletop-beats > div span {
     margin-top: 5px;
     font-size: 9px;
   }
@@ -1118,6 +1121,30 @@ html[data-theme='light'] .chat-taunts button {
     min-height: 30px;
     padding: 0 7px;
   }
+  .tabletop-experiment[data-interface='lab'] .tabletop-lab-controls {
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .tabletop-experiment[data-interface='lab'] .tabletop-cameras {
+    position: static;
+    max-width: 100%;
+  }
+  .tabletop-gameplay > .hand {
+    bottom: 108px;
+    width: calc(100vw - 20px);
+  }
+  .tabletop-gameplay .actions {
+    display: flex;
+    position: static;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+  .tabletop-gameplay .action {
+    min-width: 96px;
+    scroll-snap-align: start;
+  }
   .tabletop-play {
     width: 46px;
     min-height: 50px;
@@ -1131,6 +1158,31 @@ html[data-theme='light'] .chat-taunts button {
     width: 8px;
     height: 8px;
     margin: 0;
+  }
+}
+
+@media (min-width: 821px) and (orientation: portrait) {
+  .tabletop-experiment[data-interface='game'] .tabletop-story {
+    width: min(520px, 58vw);
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-story h1 {
+    font-size: clamp(46px, 5.5vw, 62px);
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-story p {
+    max-width: 430px;
+    font-size: 13px;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-gameplay > .hand {
+    width: calc(100vw - 40px);
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-gameplay .action {
+    min-height: 62px;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-gameplay .action b {
+    font-size: 16px;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-gameplay .action small {
+    font-size: 9px;
   }
 }
 
@@ -1159,14 +1211,12 @@ html[data-theme='light'] .chat-taunts button {
   .tabletop-exit {
     width: 30px;
     overflow: hidden;
-    color: transparent;
-    font-size: 0;
   }
-  .tabletop-exit::before {
-    content: '↩';
-    color: #bdb3a3;
-    font-size: 15px;
-    line-height: 1;
+  .tabletop-exit svg {
+    margin: 0;
+  }
+  .tabletop-exit span {
+    display: none;
   }
   .tabletop-benchmark-panel {
     top: 62px;
@@ -1188,11 +1238,28 @@ html[data-theme='light'] .chat-taunts button {
     line-height: 0.9;
   }
   .tabletop-story p {
-    display: none;
+    display: block;
+    max-width: min(260px, calc(100vw - 76px));
+    margin-top: 8px;
+    padding: 5px 0 5px 8px;
+    border-left: 1px solid rgba(217, 181, 107, 0.54);
+    color: rgba(238, 230, 214, 0.82);
+    font-size: 9px;
+    line-height: 1.35;
+    text-shadow: 0 2px 8px #000;
   }
   .tabletop-experiment[data-camera='player'] .tabletop-story {
-    opacity: 0;
-    visibility: hidden;
+    top: 18px;
+    width: calc(100vw - 70px);
+    opacity: 1;
+    visibility: visible;
+  }
+  .tabletop-experiment[data-camera='player'] .tabletop-story > span,
+  .tabletop-experiment[data-camera='player'] .tabletop-story h1 {
+    display: none;
+  }
+  .tabletop-experiment[data-camera='player'] .tabletop-story p {
+    margin-top: 0;
   }
   .tabletop-controls {
     left: 6px;
@@ -1200,12 +1267,12 @@ html[data-theme='light'] .chat-taunts button {
     bottom: max(6px, env(safe-area-inset-bottom));
     gap: 5px;
   }
-  .tabletop-beats button {
+  .tabletop-beats > div {
     min-width: 64px;
     min-height: 44px;
     padding: 5px 6px;
   }
-  .tabletop-beats button span {
+  .tabletop-beats > div span {
     margin-top: 3px;
     font-size: 8px;
   }
@@ -1222,15 +1289,334 @@ html[data-theme='light'] .chat-taunts button {
     font-size: 7px;
     flex: 0 0 auto;
   }
+  .tabletop-gameplay > .hand {
+    bottom: 102px;
+    width: calc(100vw - 12px);
+  }
+  .tabletop-gameplay .action {
+    min-width: 88px;
+    min-height: 42px;
+    padding: 6px 8px;
+  }
+  .tabletop-result {
+    bottom: 102px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: calc(100vw - 12px);
+    max-width: none;
+    gap: 2px 10px;
+    padding: 9px 10px;
+    white-space: normal;
+  }
+  .tabletop-result span,
+  .tabletop-result strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tabletop-result strong {
+    font-size: 18px;
+    white-space: nowrap;
+  }
+  .tabletop-result button {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: stretch;
+    min-width: 106px;
+    padding: 8px 10px;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-topbar {
+    height: 0;
+    padding: 0;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-brand {
+    top: 8px;
+    left: 8px;
+    padding: 8px 10px;
+    font-size: 18px;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-top-actions {
+    top: 18px;
+    right: 8px;
+    width: 40px;
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-top-actions > button,
+  .tabletop-experiment[data-interface='game'] .tabletop-top-actions .chat-toggle {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-exit {
+    width: 40px;
+    min-height: 40px;
+    justify-content: center;
+    padding: 0;
+    overflow: hidden;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-exit svg {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-exit span {
+    display: none;
+  }
+  .tabletop-exit-confirm {
+    top: 18px;
+    right: 56px;
+    width: min(218px, calc(100vw - 68px));
+    padding: 12px;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-story {
+    top: 18px;
+    left: 11px;
+    width: calc(100vw - 22px);
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-story h1 {
+    max-width: 78vw;
+    font-size: clamp(30px, 9vw, 40px);
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-roster {
+    top: 168px;
+    right: 8px;
+    width: 142px;
+    padding: 4px;
+  }
+  .tabletop-roster-title {
+    padding: 1px 3px 5px;
+    font-size: 6px;
+  }
+  .tabletop-roster-player {
+    gap: 3px;
+    min-height: 22px;
+    padding: 1px 2px;
+  }
+  .tabletop-roster-name {
+    padding: 3px 0;
+  }
+  .tabletop-roster-name span {
+    font-size: 7px;
+  }
+  .tabletop-roster-name small,
+  .tabletop-roster-hint {
+    display: none;
+  }
+  .tabletop-roster-coins {
+    font-size: 7px;
+  }
+  .tabletop-roster-influences {
+    gap: 2px;
+  }
+  .tabletop-roster-influences i {
+    width: 8px;
+    height: 12px;
+  }
+  .tabletop-roster-influences i.hidden::after {
+    inset: 1px;
+  }
+  .tabletop-roster-influences i.lost b {
+    font-size: 9px;
+  }
+  .tabletop-roster-settings {
+    gap: 4px;
+    margin-top: 5px;
+    padding: 6px 2px 1px;
+  }
+  .tabletop-roster-settings .tabletop-theme,
+  .tabletop-roster-settings .audio-toggle,
+  .tabletop-lab-link {
+    width: 30px;
+    min-height: 30px;
+    flex-basis: 30px;
+    padding: 0;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-roster-settings .tabletop-theme {
+    width: 30px;
+    min-height: 30px;
+    padding: 0;
+  }
+  .tabletop-roster-settings .tabletop-theme small,
+  .tabletop-roster-settings .audio-toggle small,
+  .tabletop-lab-link small {
+    display: none;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-roster-settings .tabletop-theme small {
+    display: none;
+  }
+  .tabletop-experiment[data-interface='game'] .tabletop-gameplay > .hand,
+  .tabletop-experiment[data-interface='game'] .tabletop-result {
+    bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  .tabletop-gameplay .modal-wrap {
+    padding: 0 8px max(8px, env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, transparent 50%, rgba(4, 3, 3, 0.24));
+  }
+  .tabletop-reactions {
+    right: 8px;
+    bottom: max(76px, calc(env(safe-area-inset-bottom) + 68px));
+  }
+  .tabletop-reactions.open {
+    left: 8px;
+    bottom: max(122px, calc(env(safe-area-inset-bottom) + 114px));
+    width: auto;
+  }
+  .tabletop-reaction-trigger {
+    width: 40px;
+    min-height: 40px;
+    padding: 4px;
+  }
+  .tabletop-reaction-trigger span {
+    font-size: 17px;
+  }
+  .tabletop-reaction-trigger small {
+    display: none;
+  }
+  .tabletop-reactions.open .tabletop-reaction-trigger {
+    position: absolute;
+    z-index: 1;
+    top: 6px;
+    right: 6px;
+    width: 32px;
+    min-height: 32px;
+  }
+  .tabletop-reaction-panel {
+    width: 100%;
+    max-height: min(42dvh, 270px);
+    padding: 10px 42px 10px 10px;
+    overflow-y: auto;
+  }
+  .tabletop-reaction-emojis {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .tabletop-reaction-throws {
+    display: flex;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  .tabletop-reaction-throws button {
+    flex: 0 0 72px;
+  }
+  .tabletop-reaction-panel button {
+    min-height: 34px;
+  }
+  .tabletop-reaction-emojis button {
+    padding: 2px;
+    font-size: 16px;
+  }
+  .tabletop-gameplay .modal,
+  .tabletop-gameplay .modal-with-context {
+    width: 100%;
+    max-height: min(38dvh, 300px);
+  }
+  .tabletop-gameplay .modal {
+    padding: 11px;
+  }
+  .tabletop-gameplay .modal-with-context {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0;
+  }
+  .tabletop-gameplay .modal-main {
+    padding: 11px;
+  }
+  .tabletop-gameplay .modal h2 {
+    margin: 6px 0;
+    font-size: 19px;
+  }
+  .tabletop-gameplay .modal-target > #cancel {
+    top: 9px;
+    right: 9px;
+  }
+  .tabletop-gameplay .modal-roster {
+    display: none;
+  }
+  .tabletop-gameplay .modal-copy {
+    margin: 5px 0;
+    font-size: 9px;
+    line-height: 1.35;
+  }
+  .tabletop-gameplay .modal-main .turn-timer,
+  .tabletop-gameplay .modal .turn-timer {
+    margin-top: 7px;
+  }
+  .tabletop-gameplay .response-actions {
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .tabletop-gameplay .response-actions button {
+    min-height: 38px;
+    padding: 7px 8px;
+    font-size: 10px;
+  }
+  .tabletop-gameplay .modal-main:has(> #allow-block) {
+    display: flex;
+    flex-direction: column;
+  }
+  .tabletop-gameplay .modal-main:has(> #allow-block) > #allow-block {
+    order: 1;
+    width: 100%;
+    min-height: 38px;
+    margin: 8px 0 0;
+  }
+  .tabletop-gameplay .modal-main:has(> #allow-block) > .card-grid {
+    order: 2;
+  }
+  .tabletop-gameplay .card-grid {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    margin: 12px 0;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+  .tabletop-gameplay .card-grid .role-card {
+    width: 88px;
+    min-width: 88px;
+    height: 116px;
+    padding: 8px;
+    scroll-snap-align: start;
+  }
+  .tabletop-gameplay .card-grid .role-card h3 {
+    margin-top: 34px;
+    font-size: 16px;
+  }
+  .tabletop-gameplay .card-grid .role-card p {
+    display: none;
+  }
+  .tabletop-gameplay .modal-context {
+    display: block;
+    padding: 9px 11px 11px;
+  }
+  .tabletop-gameplay .context-title {
+    display: none;
+  }
+  .tabletop-gameplay .context-revealed {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .tabletop-gameplay .context-events {
+    gap: 0;
+  }
+  .tabletop-gameplay .context-events p {
+    font-size: 8px;
+  }
+  html[data-theme='light'] .tabletop-gameplay .modal-wrap {
+    background: linear-gradient(180deg, transparent 50%, rgba(83, 62, 38, 0.16));
+  }
   .tabletop-play {
     width: 40px;
     min-height: 44px;
     flex-basis: 40px;
   }
-}
-
-html[data-theme='light'] .tabletop-exit::before {
-  color: #493621;
 }
 
 @media (prefers-reduced-motion: reduce) {

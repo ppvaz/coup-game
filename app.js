@@ -1,15 +1,17 @@
 import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/supabase.js';
-import { ACTIONS, createGame, dispatchGame, viewForPlayer } from './src/game/coup.js';
+import { createGame, dispatchGame, viewForPlayer } from './src/game/coup.js';
 import { reconstructGame } from './src/game/handover.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
 import { RECONNECT_GIVE_UP_MS, trackPresence } from './src/lib/realtime.js';
 import { createSoundManager } from './src/lib/sounds.js';
+import { consumeLabAccess } from './src/lib/lab-access.js';
 import { botDelayMs } from './src/lib/bot-timing.js';
 import { decisionClockKey } from './src/lib/decision-clock.js';
+import { appendTabletopReaction } from './src/lib/tabletop/reactions.js';
 import { voiceFilesForTransition } from './src/lib/voice-announcer.js';
 import { CHAT_MAX_LENGTH, appendChatMessage, createChatGuard, normalizeChatText } from './src/rooms/chat.js';
 import { chatPanelHTML, connectionUIHTML, lobbyHTML, roomHTML } from './src/ui/screens.js';
-import { gameHTML } from './src/ui/game-views.js';
+import { bindGameDecisionControls, gameHTML } from './src/ui/game-views.js';
 import {
   HOST_GRACE_MS,
   continuityPlan,
@@ -69,13 +71,22 @@ const PHASE_SECONDS = {
 
 const $ = (selector) => document.querySelector(selector);
 
-const isTabletopExperiment = /^\/3d\/?$/.test(location.pathname);
+const labAccess = consumeLabAccess({
+  href: location.href,
+  secret: import.meta.env.VITE_CORTE_3D_LAB_KEY || (import.meta.env.DEV ? 'corte-lab' : ''),
+  storage: localStorage,
+});
+if (labAccess.consumed) history.replaceState(history.state, '', labAccess.cleanPath);
+const requestedTabletopLab = /^\/3d\/lab\/?$/.test(location.pathname);
+if (requestedTabletopLab && !labAccess.allowed) history.replaceState(history.state, '', '/3d');
+const isTabletopExperiment = /^\/3d(?:\/lab)?\/?$/.test(location.pathname);
+const isTabletopLab = labAccess.allowed && /^\/3d\/lab\/?$/.test(location.pathname);
 const roomPathMatch = location.pathname.match(/^\/sala\/([A-Z2-9]{5})\/?$/i);
 const inviteCode = (roomPathMatch?.[1] || new URLSearchParams(location.search).get('room') || '')
   .toUpperCase()
   .replace(/[^A-Z2-9]/g, '')
   .slice(0, 5);
-const resumeSnapshot = loadOnlineSession(sessionStorage, inviteCode);
+const resumeSnapshot = isTabletopExperiment ? null : loadOnlineSession(sessionStorage, inviteCode);
 
 let state = {
   screen: 'lobby',
@@ -99,6 +110,7 @@ let state = {
   chatDraft: '',
   chatUnread: 0,
   chatError: null,
+  tabletopReactions: [],
 };
 if (resumeSnapshot) {
   state = {
@@ -129,7 +141,9 @@ let connectionId = null;
 let warnedClockKey = '';
 let chatErrorTimer = null;
 let reconnectingSince = 0;
-let disposeTableExperiment = null;
+let lastTabletopReactionAt = 0;
+let tableExperimentController = null;
+let tableExperimentMount = null;
 if (resumeSnapshot?.game) {
   clock = {
     key: 'restored',
@@ -145,6 +159,7 @@ const gameViewContext = () => ({
   clock,
   soundsMuted: sounds.isMuted(),
   voicesMuted: sounds.isVoicesMuted(),
+  labAccess: labAccess.allowed,
 });
 const chatGuard = createChatGuard();
 const unlockSounds = () => sounds.unlock().catch(() => {});
@@ -165,6 +180,29 @@ themeToggle.onclick = () => {
 paintThemeToggle();
 
 const sendRoom = (event, payload = {}) => roomChannel?.send({ type: 'broadcast', event, payload });
+
+function addTabletopReaction(value) {
+  const next = appendTabletopReaction(state.tabletopReactions, value, {
+    playerIds: state.game?.players.map((player) => player.id) ?? [],
+  });
+  if (next === state.tabletopReactions) return false;
+  state.tabletopReactions = next;
+  return true;
+}
+
+function sendTabletopReaction(draft) {
+  if (!state.game || !state.myId || Date.now() - lastTabletopReactionAt < 700) return;
+  const reaction = {
+    ...draft,
+    id: crypto.randomUUID(),
+    playerId: state.myId,
+    sentAt: Date.now(),
+  };
+  if (!addTabletopReaction(reaction)) return;
+  lastTabletopReactionAt = reaction.sentAt;
+  if (state.online) sendRoom('tabletop_reaction', { ...reaction, senderId: state.myId });
+  render();
+}
 
 function announceGameState(previous, next) {
   if (!next) return;
@@ -412,6 +450,7 @@ function resetClock() {
 }
 
 function tickClock() {
+  if (isTabletopLab) return;
   if (!state.game || state.game.status !== 'playing' || !clock.deadline) return;
   const remaining = Math.max(0, clock.deadline - Date.now());
   const seconds = Math.ceil(remaining / 1000);
@@ -454,7 +493,7 @@ setInterval(watchTableContinuity, 2_000);
 
 function scheduleBots() {
   clearTimeout(botTimer);
-  if (state.online || state.game?.status !== 'playing') return;
+  if (isTabletopLab || state.online || state.game?.status !== 'playing') return;
   const awaited = awaitedPlayerId(state.game);
   const player = state.game.players.find((candidate) => candidate.id === awaited);
   if (player?.kind !== 'bot') return;
@@ -470,6 +509,7 @@ function startLocal() {
     ...NAMES.map((name, index) => ({ id: `bot-${index}`, name, kind: 'bot' })),
   ];
   state.myId = 'me';
+  state.tabletopReactions = [];
   state.game = createGame(seats, { stopWhenHumansEliminated: true, startingPlayerId: previousWinnerId });
   announceGameState(null, state.game);
   state.screen = 'game';
@@ -478,9 +518,64 @@ function startLocal() {
   scheduleBots();
 }
 
+function resetTabletopLocalGame() {
+  clearTimeout(botTimer);
+  warnedClockKey = '';
+  const previousWinnerId = state.game?.winnerId;
+  state.name ||= 'Lorenzo';
+  state.myId = 'me';
+  state.tabletopReactions = [];
+  state.game = createGame(
+    [
+      { id: 'me', name: state.name, kind: 'human' },
+      { id: 'bot-0', name: 'Beatrice', kind: 'bot' },
+      { id: 'bot-1', name: 'Vittorio', kind: 'bot' },
+      { id: 'bot-2', name: 'Isabella', kind: 'bot' },
+      { id: 'bot-3', name: 'Catarina', kind: 'bot' },
+      { id: 'bot-4', name: 'Otávio', kind: 'bot' },
+    ],
+    { stopWhenHumansEliminated: true, startingPlayerId: previousWinnerId },
+  );
+  state.screen = 'game';
+  state.targetAction = null;
+  state.exchangePicks = [];
+  announceGameState(null, state.game);
+  resetClock();
+}
+
+function resetTabletopLabScene() {
+  clearTimeout(botTimer);
+  warnedClockKey = '';
+  state.name ||= 'Lorenzo';
+  state.myId = 'me';
+  state.tabletopReactions = [];
+  state.game = createGame(
+    [
+      { id: 'me', name: state.name, kind: 'human' },
+      { id: 'bot-0', name: 'Beatrice', kind: 'bot' },
+      { id: 'bot-1', name: 'Vittorio', kind: 'bot' },
+      { id: 'bot-2', name: 'Isabella', kind: 'bot' },
+      { id: 'bot-3', name: 'Catarina', kind: 'bot' },
+      { id: 'bot-4', name: 'Otávio', kind: 'bot' },
+    ],
+    { stopWhenHumansEliminated: true },
+  );
+  state.screen = 'game';
+  state.targetAction = null;
+  state.exchangePicks = [];
+  clock = { key: '', deadline: 0, total: 0 };
+}
+
+function startTabletopLocal() {
+  resetTabletopLocalGame();
+  render();
+  scheduleBots();
+}
+
 function startOnline() {
   warnedClockKey = '';
   const previousWinnerId = state.game?.winnerId;
+  state.tabletopReactions = [];
   const readySeats = nextGameSeats(state.room);
   if (readySeats.length < 2) {
     render();
@@ -837,6 +932,10 @@ async function connectRoom(kind) {
       setChatError(`Muitas mensagens. Aguarde ${Math.ceil(retryAfter / 1000)}s para continuar.`, retryAfter);
       render();
     })
+    .on('broadcast', { event: 'tabletop_reaction' }, ({ payload }) => {
+      if (payload?.senderId !== payload?.playerId || !hasRoomSeat(state.room, payload.playerId)) return;
+      if (addTabletopReaction(payload)) render();
+    })
     .on('broadcast', { event: 'handover_request' }, ({ payload }) => replyToHandover(payload))
     .on('broadcast', { event: 'handover_response' }, ({ payload }) => collectHandover(payload))
     .on('presence', { event: 'sync' }, handlePresenceSync)
@@ -965,6 +1064,7 @@ function leaveTable() {
   state.chatDraft = '';
   state.chatUnread = 0;
   state.chatError = null;
+  state.tabletopReactions = [];
   clearOnlineSession(sessionStorage);
   const channel = roomChannel;
   roomChannel = null;
@@ -1001,17 +1101,40 @@ function renderApp() {
   const root = $('#app');
   const restoreChatFocus = document.activeElement?.id === 'chat-input';
   if (isTabletopExperiment) {
-    disposeTableExperiment?.();
-    root.innerHTML = tableExperimentHTML();
-    mountTableExperiment().then((dispose) => {
-      disposeTableExperiment = dispose;
-    });
+    if (!state.game) {
+      if (isTabletopLab) resetTabletopLabScene();
+      else resetTabletopLocalGame();
+    }
+    if (tableExperimentController) {
+      tableExperimentController.update(state, gameViewContext());
+      return;
+    }
+    if (!tableExperimentMount) {
+      root.innerHTML = tableExperimentHTML({ testMode: isTabletopLab });
+      tableExperimentMount = mountTableExperiment({
+        initialState: state,
+        context: gameViewContext(),
+        dispatch,
+        requestRender: render,
+        restart: startTabletopLocal,
+        toggleSounds: toggleGameSounds,
+        toggleVoices: toggleGameVoices,
+        sendReaction: sendTabletopReaction,
+        bindChat,
+        testMode: isTabletopLab,
+      }).then((controller) => {
+        tableExperimentController = controller;
+        controller.update(state, gameViewContext());
+        if (!isTabletopLab) scheduleBots();
+        return controller;
+      });
+    }
     return;
   }
   if (state.screen === 'lobby') {
     root.innerHTML =
       lobbyHTML(state) +
-      '<a class="lab-entry" href="/3d"><i></i> Experimento de mesa 3D</a>' +
+      '<a class="lab-entry" href="/3d"><i></i> Corte 3D · WIP</a>' +
       connectionUIHTML(state) +
       chatPanelHTML(state);
     bindLobby();
@@ -1089,76 +1212,23 @@ function bindRoom() {
   });
 }
 
+function toggleGameSounds() {
+  const muted = sounds.toggle();
+  if (!muted) sounds.play('action');
+  render();
+}
+
+function toggleGameVoices() {
+  sounds.toggleVoices();
+  render();
+}
+
 function bindGame() {
   $('#leave').onclick = leaveTable;
-  $('#sound-toggle')?.addEventListener('click', () => {
-    const muted = sounds.toggle();
-    if (!muted) sounds.play('action');
-    render();
-  });
-  $('#voice-toggle')?.addEventListener('click', () => {
-    sounds.toggleVoices();
-    render();
-  });
+  $('#sound-toggle')?.addEventListener('click', toggleGameSounds);
+  $('#voice-toggle')?.addEventListener('click', toggleGameVoices);
   $('#again')?.addEventListener('click', () => (state.online ? startOnline() : startLocal()));
-  document.querySelectorAll('[data-action]').forEach(
-    (button) =>
-      (button.onclick = () => {
-        const key = button.dataset.action;
-        if (ACTIONS[key].targeted) {
-          state.targetAction = key;
-          render();
-          return;
-        }
-        dispatch({ type: 'declare_action', actorId: state.myId, action: key });
-      }),
-  );
-  document.querySelectorAll('[data-target]').forEach(
-    (button) =>
-      (button.onclick = () => {
-        dispatch({
-          type: 'declare_action',
-          actorId: state.myId,
-          action: state.targetAction,
-          targetId: button.dataset.target,
-        });
-      }),
-  );
-  $('#cancel')?.addEventListener('click', () => {
-    state.targetAction = null;
-    render();
-  });
-  $('#challenge')?.addEventListener('click', () => dispatch({ type: 'challenge', actorId: state.myId }));
-  $('#allow')?.addEventListener('click', () => dispatch({ type: 'pass', actorId: state.myId }));
-  document
-    .querySelectorAll('[data-block-role]')
-    .forEach(
-      (button) =>
-        (button.onclick = () => dispatch({ type: 'block', actorId: state.myId, role: button.dataset.blockRole })),
-    );
-  $('#allow-block')?.addEventListener('click', () => dispatch({ type: 'pass', actorId: state.myId }));
-  $('#contest-block')?.addEventListener('click', () => dispatch({ type: 'challenge', actorId: state.myId }));
-  $('#accept-block')?.addEventListener('click', () => dispatch({ type: 'pass', actorId: state.myId }));
-  document
-    .querySelectorAll('[data-reveal]')
-    .forEach(
-      (button) =>
-        (button.onclick = () =>
-          dispatch({ type: 'reveal_influence', actorId: state.myId, cardId: button.dataset.reveal })),
-    );
-  document.querySelectorAll('[data-pick]').forEach(
-    (button) =>
-      (button.onclick = () => {
-        const id = button.dataset.pick;
-        const count = state.game.pending.exchangeCount;
-        if (state.exchangePicks.includes(id)) state.exchangePicks = state.exchangePicks.filter((pick) => pick !== id);
-        else if (state.exchangePicks.length < count) state.exchangePicks = [...state.exchangePicks, id];
-        render();
-      }),
-  );
-  $('#confirm-exchange')?.addEventListener('click', () =>
-    dispatch({ type: 'choose_exchange', actorId: state.myId, cardIds: state.exchangePicks }),
-  );
+  bindGameDecisionControls(document, { state, dispatch, render });
 }
 
 function bindChat(restoreFocus = false) {

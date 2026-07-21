@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { TabletopStage, canvasTexture, disposeObject3D, textTexture } from '@la-corte/tabletop-stage';
 import { createCoupEnvironment } from './coup-environment.js';
 import { resolveTabletopQuality } from './quality-profiles.js';
+import { TABLETOP_THROWABLES } from './reactions.js';
 import duquePortrait from '../../../assets/characters/duque.png';
 import assassinaPortrait from '../../../assets/characters/assassina.png';
 import capitaoPortrait from '../../../assets/characters/capitao.png';
@@ -62,6 +63,8 @@ const ACTION_ART = {
   coup: coupArt,
 };
 
+const THROWABLE_TYPES = new Set(TABLETOP_THROWABLES.map((item) => item.id));
+
 const THEME_PROFILES = {
   dark: {
     clearColor: 0x171411,
@@ -93,6 +96,193 @@ function mesh(geometry, material, { position, rotation, scale, cast = true, rece
   value.castShadow = cast;
   value.receiveShadow = receive;
   return value;
+}
+
+function createEmojiSprite(emoji) {
+  const texture = canvasTexture(
+    (context, canvas) => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = 'rgba(12, 9, 7, 0.88)';
+      context.beginPath();
+      context.roundRect(18, 22, canvas.width - 36, canvas.height - 54, 36);
+      context.fill();
+      context.strokeStyle = '#d9b56b';
+      context.lineWidth = 6;
+      context.stroke();
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.font = '112px sans-serif';
+      context.fillText(emoji, canvas.width / 2, canvas.height / 2 - 4);
+    },
+    { width: 256, height: 256 },
+  );
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    toneMapped: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(1.25, 1.25, 1);
+  sprite.renderOrder = 20;
+  return sprite;
+}
+
+function createThrowable(type) {
+  const group = new THREE.Group();
+  group.name = `court-throwable-${type}`;
+  if (type === 'tomato') {
+    group.add(mesh(new THREE.SphereGeometry(0.22, 10, 7), standardMaterial(0xb52e2f), { cast: false }));
+    const leaves = mesh(new THREE.ConeGeometry(0.13, 0.1, 5), standardMaterial(0x35542b), {
+      position: [0, 0.22, 0],
+      cast: false,
+    });
+    group.add(leaves);
+  } else if (type === 'glove') {
+    const leather = standardMaterial(0xe5d2ae);
+    group.add(mesh(new THREE.BoxGeometry(0.28, 0.34, 0.12), leather, { cast: false }));
+    for (let index = 0; index < 4; index += 1) {
+      group.add(
+        mesh(new THREE.CapsuleGeometry(0.035, 0.2, 3, 6), standardMaterial(0xe5d2ae), {
+          position: [-0.105 + index * 0.07, 0.25 + Math.abs(1.5 - index) * 0.015, 0],
+          cast: false,
+        }),
+      );
+    }
+  } else if (type === 'rose') {
+    group.add(
+      mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.62, 6), standardMaterial(0x315b32), {
+        rotation: [0, 0, 0.25],
+        cast: false,
+      }),
+    );
+    group.add(
+      mesh(new THREE.SphereGeometry(0.16, 9, 6), standardMaterial(0xa92739), {
+        position: [-0.08, 0.34, 0],
+        scale: [1, 0.8, 1],
+        cast: false,
+      }),
+    );
+  } else if (type === 'ambassador_card') {
+    const letter = standardMaterial(0xe3d8c3, {
+      emissive: 0xe3d8c3,
+      emissiveIntensity: 0.08,
+      roughness: 0.9,
+    });
+    const seal = standardMaterial(0x2f725a, { roughness: 0.68 });
+    group.add(mesh(new THREE.BoxGeometry(0.5, 0.34, 0.035), letter, { cast: false }));
+    group.add(
+      mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.028, 12), seal, {
+        position: [0, -0.015, 0.03],
+        rotation: [Math.PI / 2, 0, 0],
+        cast: false,
+      }),
+    );
+  } else if (type === 'assassin_dagger') {
+    const blade = standardMaterial(0xc6c1b7, { metalness: 0.78, roughness: 0.2 });
+    const grip = standardMaterial(0x43191b, { roughness: 0.7 });
+    const guard = standardMaterial(COLORS.gold, { metalness: 0.48, roughness: 0.34 });
+    group.add(
+      mesh(new THREE.ConeGeometry(0.085, 0.5, 4), blade, {
+        position: [0, 0.16, 0],
+        rotation: [0, Math.PI / 4, 0],
+        cast: false,
+      }),
+    );
+    group.add(mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.25, 7), grip, { position: [0, -0.21, 0], cast: false }));
+    group.add(mesh(new THREE.BoxGeometry(0.28, 0.045, 0.06), guard, { position: [0, -0.08, 0], cast: false }));
+  } else if (type === 'duke_coin') {
+    const coin = standardMaterial(COLORS.gold, {
+      emissive: COLORS.gold,
+      emissiveIntensity: 0.12,
+      metalness: 0.82,
+      roughness: 0.22,
+    });
+    group.add(
+      mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.055, 16), coin, {
+        rotation: [Math.PI / 2, 0, 0],
+        cast: false,
+      }),
+    );
+    group.add(
+      mesh(new THREE.TorusGeometry(0.15, 0.012, 5, 16), standardMaterial(COLORS.bronze), {
+        position: [0, 0, 0.031],
+        cast: false,
+      }),
+    );
+  }
+  return group;
+}
+
+function createDecisionHourglass() {
+  const group = new THREE.Group();
+  group.name = 'decision-hourglass';
+  group.position.set(0, 1.34, 0);
+  group.visible = false;
+
+  const frame = standardMaterial(COLORS.bronze, {
+    metalness: 0.72,
+    roughness: 0.3,
+  });
+  const sand = standardMaterial(COLORS.gold, {
+    emissive: COLORS.gold,
+    emissiveIntensity: 0.12,
+    roughness: 0.86,
+  });
+  const glass = new THREE.MeshPhysicalMaterial({
+    color: 0xe9dfcf,
+    transparent: true,
+    opacity: 0.2,
+    roughness: 0.08,
+    metalness: 0,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+
+  const baseGeometry = new THREE.CylinderGeometry(0.33, 0.38, 0.075, 12);
+  group.add(mesh(baseGeometry, frame, { position: [0, 0.04, 0] }));
+  group.add(mesh(baseGeometry, frame, { position: [0, 0.94, 0] }));
+
+  const postGeometry = new THREE.CylinderGeometry(0.024, 0.024, 0.82, 6);
+  const posts = new THREE.InstancedMesh(postGeometry, frame, 4);
+  const matrix = new THREE.Matrix4();
+  [
+    [-0.29, 0.49, -0.17],
+    [0.29, 0.49, -0.17],
+    [-0.29, 0.49, 0.17],
+    [0.29, 0.49, 0.17],
+  ].forEach((position, index) => {
+    matrix.makeTranslation(...position);
+    posts.setMatrixAt(index, matrix);
+  });
+  posts.instanceMatrix.needsUpdate = true;
+  posts.castShadow = true;
+  group.add(posts);
+
+  const glassProfile = [
+    new THREE.Vector2(0.24, 0.12),
+    new THREE.Vector2(0.25, 0.18),
+    new THREE.Vector2(0.07, 0.49),
+    new THREE.Vector2(0.25, 0.8),
+    new THREE.Vector2(0.24, 0.87),
+  ];
+  group.add(mesh(new THREE.LatheGeometry(glassProfile, 14), glass, { cast: false, receive: false }));
+
+  const topSand = mesh(new THREE.ConeGeometry(0.2, 1, 12), sand, {
+    position: [0, 0.64, 0],
+    rotation: [0, 0, Math.PI],
+    cast: false,
+  });
+  const bottomSand = mesh(new THREE.ConeGeometry(0.2, 1, 12), sand, {
+    position: [0, 0.12, 0],
+    cast: false,
+  });
+  const stream = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.22, 5), sand, {
+    position: [0, 0.49, 0],
+    cast: false,
+  });
+  group.add(topSand, bottomSand, stream);
+  return { group, sand, topSand, bottomSand, stream, urgent: false };
 }
 
 function plaqueTexture(name, subtitle, accent = '#d9b56b') {
@@ -643,9 +833,9 @@ export class CoupTableScene {
     });
     this.stage.defineCameraAct('throne', {
       position: [0, 4.15, 10.2],
-      target: [0, 1.75, -2.05],
+      target: [0, 1.75, 0],
       fov: 41,
-      portrait: { position: [0, 5.4, 11.1], target: [0, 1.8, -1.55], fov: 62 },
+      portrait: { position: [0, 5.4, 11.1], target: [0, 1.8, 0], fov: 62 },
     });
     this.stage.defineCameraAct('portal', {
       position: [0, 4.25, 5.8],
@@ -665,11 +855,18 @@ export class CoupTableScene {
     this.cameraOverridden = false;
     this.cameraName = 'table';
     this.currentPovSeatId = null;
+    this.currentFocusSeatId = null;
+    this.decisionClock = { deadline: 0, total: 0, visible: false };
     this.actionTexture = null;
     this.actionCaptionTexture = null;
     this.actionSignature = '';
     this.publicRole = null;
     this.publicRoleName = null;
+    this.winnerAvatar = null;
+    this.winnerAvatarId = null;
+    this.elapsed = 0;
+    this.emojiReactions = [];
+    this.flyingReactions = [];
 
     this.actionCard = new THREE.Group();
     const edge = standardMaterial(COLORS.gold, { metalness: 0.55, roughness: 0.3 });
@@ -705,9 +902,11 @@ export class CoupTableScene {
       },
     );
     this.stage.add(this.seal);
+    this.hourglass = createDecisionHourglass();
+    this.stage.add(this.hourglass.group);
     this.victoryLight = new THREE.SpotLight(0xffd78f, 0, 15, 0.38, 0.55, 1.4);
     this.victoryLight.position.set(0, 8, 4.2);
-    this.victoryLight.target.position.set(0, 1.4, -3.5);
+    this.victoryLight.target.position.set(0, 1.5, 0);
     this.stage.add(this.victoryLight);
     this.stage.add(this.victoryLight.target);
 
@@ -715,6 +914,9 @@ export class CoupTableScene {
   }
 
   rebuildSeats(view) {
+    this.winnerAvatar?.removeFromParent();
+    this.winnerAvatar = null;
+    this.winnerAvatarId = null;
     disposeObject3D(this.seatLayer);
     this.seatLayer = this.stage.add(new THREE.Group());
     this.seatLayer.name = 'coup-seats';
@@ -798,6 +1000,18 @@ export class CoupTableScene {
     this.cameraName = 'player';
     this.stage.setCameraAct('player', { immediate });
     return { id: self.id, name: self.name };
+  }
+
+  focusSeat(seatId, { immediate = false } = {}) {
+    const seats = this.view?.seats ?? [];
+    const seat = seats.find((candidate) => candidate.id === seatId);
+    if (!seat) return null;
+    this.currentFocusSeatId = seat.id;
+    this.stage.defineCameraAct('inspect', playerCameraForSeat(seat, seats.length));
+    this.cameraOverridden = true;
+    this.cameraName = 'inspect';
+    this.stage.setCameraAct('inspect', { immediate });
+    return { id: seat.id, name: seat.name };
   }
 
   updateSeat(seatView) {
@@ -888,6 +1102,70 @@ export class CoupTableScene {
     this.actionSignature = signature;
   }
 
+  showEmojiReaction(playerId, emoji) {
+    const seat = this.seats.get(playerId);
+    if (!seat || !emoji) return false;
+    if (this.emojiReactions.length >= 6) {
+      const oldest = this.emojiReactions.shift();
+      if (oldest) disposeObject3D(oldest.sprite);
+    }
+    const sprite = createEmojiSprite(emoji);
+    const origin = seat.group.position.clone().multiplyScalar(0.94);
+    origin.y = 3.05;
+    sprite.position.copy(origin);
+    this.stage.add(sprite);
+    this.emojiReactions.push({ sprite, origin, startedAt: this.elapsed, duration: 2.2 });
+    return true;
+  }
+
+  throwReaction(sourceId, targetId, type) {
+    const source = this.seats.get(sourceId);
+    const target = this.seats.get(targetId);
+    if (!source || !target || sourceId === targetId || !THROWABLE_TYPES.has(type)) return false;
+    if (this.flyingReactions.length >= 8) {
+      const oldest = this.flyingReactions.shift();
+      if (oldest) disposeObject3D(oldest.group);
+    }
+    const group = createThrowable(type);
+    const start = source.group.position.clone().multiplyScalar(0.86).setY(2.25);
+    const end = target.group.position.clone().multiplyScalar(0.9).setY(2.08);
+    const control = start.clone().lerp(end, 0.5).setY(4.15);
+    group.position.copy(start);
+    this.stage.add(group);
+    this.flyingReactions.push({
+      group,
+      start,
+      control,
+      end,
+      startedAt: this.elapsed,
+      duration: this.stage.reducedMotion ? 0.45 : 0.9,
+      spin: new THREE.Vector3(6.2, 8.1, 5.4),
+    });
+    return true;
+  }
+
+  updateWinnerAvatar(view) {
+    const winner = view.seats.find((seat) => seat.isWinner);
+    if (!winner) {
+      this.winnerAvatar?.removeFromParent();
+      this.winnerAvatar = null;
+      this.winnerAvatarId = null;
+      return;
+    }
+    if (this.winnerAvatarId === winner.id) return;
+    this.winnerAvatar?.removeFromParent();
+    const seat = this.seats.get(winner.id);
+    if (!seat) return;
+    this.winnerAvatar = seat.body.clone(true);
+    this.winnerAvatar.name = `winner-avatar-${winner.id}`;
+    this.winnerAvatar.visible = true;
+    this.winnerAvatar.position.set(0, 0.58, 0);
+    this.winnerAvatar.scale.setScalar(0.35);
+    this.winnerAvatar.rotation.set(0, 0, 0);
+    this.stage.add(this.winnerAvatar);
+    this.winnerAvatarId = winner.id;
+  }
+
   setPublicRole(role) {
     if (role === this.publicRoleName) return;
     if (this.publicRole) disposeObject3D(this.publicRole);
@@ -923,6 +1201,7 @@ export class CoupTableScene {
       this.seatSignature = signature;
     }
     for (const seat of view.seats) this.updateSeat(seat);
+    this.updateWinnerAvatar(view);
     this.updateActionCard(view);
     this.view = view;
     if (!this.currentPovSeatId || !view.seats.some((seat) => seat.id === this.currentPovSeatId)) {
@@ -931,6 +1210,7 @@ export class CoupTableScene {
     if (seatsChanged && this.cameraOverridden) {
       if (this.cameraName === 'pov') this.setPovSeat(this.currentPovSeatId, { immediate: true });
       if (this.cameraName === 'player') this.setPlayerCamera({ immediate: true });
+      if (this.cameraName === 'inspect') this.focusSeat(this.currentFocusSeatId, { immediate: true });
     }
     this.victoryLight.intensity = view.beat === 'victory' ? 95 : 0;
     this.environment.setMood(view.beat);
@@ -954,6 +1234,14 @@ export class CoupTableScene {
     this.cameraName = name === 'auto' ? cameraForBeat(this.view?.beat) : name;
     this.stage.setCameraAct(this.cameraName);
     return this.povSelection();
+  }
+
+  setDecisionClock({ deadline = 0, total = 0, visible = false } = {}) {
+    this.decisionClock = {
+      deadline: Math.max(0, Number(deadline) || 0),
+      total: Math.max(0, Number(total) || 0),
+      visible: Boolean(visible),
+    };
   }
 
   runPerformanceBenchmark({ warmupMs, durationMs, label = 'coup-standard' } = {}) {
@@ -993,8 +1281,33 @@ export class CoupTableScene {
   }
 
   update(elapsed, reducedMotion, delta) {
+    this.elapsed = elapsed;
     this.environment.update(elapsed, reducedMotion);
     this.seal.rotation.z = elapsed * 0.14;
+    const clockRemaining = Math.max(0, this.decisionClock.deadline - Date.now());
+    const clockRatio = this.decisionClock.total
+      ? THREE.MathUtils.clamp(clockRemaining / this.decisionClock.total, 0, 1)
+      : 0;
+    this.hourglass.group.visible = this.decisionClock.visible && this.decisionClock.total > 0;
+    if (this.hourglass.group.visible) {
+      const topHeight = Math.max(0.001, 0.31 * clockRatio);
+      const bottomHeight = Math.max(0.001, 0.31 * (1 - clockRatio));
+      this.hourglass.topSand.visible = clockRatio > 0.01;
+      this.hourglass.topSand.scale.y = topHeight;
+      this.hourglass.topSand.position.y = 0.49 + topHeight / 2;
+      this.hourglass.bottomSand.visible = clockRatio < 0.99;
+      this.hourglass.bottomSand.scale.y = bottomHeight;
+      this.hourglass.bottomSand.position.y = 0.1 + bottomHeight / 2;
+      this.hourglass.stream.visible = clockRemaining > 0 && clockRatio < 0.995;
+      const urgent = clockRemaining <= 5_000;
+      if (urgent !== this.hourglass.urgent) {
+        const color = urgent ? COLORS.danger : COLORS.gold;
+        this.hourglass.sand.color.setHex(color);
+        this.hourglass.sand.emissive.setHex(color);
+        this.hourglass.sand.emissiveIntensity = urgent ? 0.42 : 0.12;
+        this.hourglass.urgent = urgent;
+      }
+    }
     this.layoutCenterpiece();
     const centerEase = reducedMotion ? 1 : 1 - Math.exp(-Math.max(delta, 1 / 120) * 7);
     if (this.actionCard.visible) {
@@ -1009,11 +1322,51 @@ export class CoupTableScene {
       this.publicRole.position.y = 1.26 + (reducedMotion ? 0 : Math.sin(elapsed * 1.45 + 0.8) * 0.035);
       faceCameraYaw(this.publicRole, this.stage.camera, reducedMotion ? 1 : delta, 0.14);
     }
+    if (this.winnerAvatar) {
+      const winnerScale = reducedMotion ? 1 : this.winnerAvatar.scale.x + (1 - this.winnerAvatar.scale.x) * centerEase;
+      this.winnerAvatar.scale.setScalar(winnerScale);
+      this.winnerAvatar.position.y = reducedMotion
+        ? 0.7
+        : this.winnerAvatar.position.y +
+          (0.7 + Math.sin(elapsed * 1.35) * 0.025 - this.winnerAvatar.position.y) * centerEase;
+      faceCameraYaw(this.winnerAvatar, this.stage.camera, reducedMotion ? 1 : delta);
+    }
+    for (let index = this.emojiReactions.length - 1; index >= 0; index -= 1) {
+      const reaction = this.emojiReactions[index];
+      const progress = THREE.MathUtils.clamp((elapsed - reaction.startedAt) / reaction.duration, 0, 1);
+      reaction.sprite.position.y = reaction.origin.y + progress * 0.72;
+      reaction.sprite.material.opacity = 1 - Math.max(0, (progress - 0.68) / 0.32);
+      const scale = 1 + Math.sin(progress * Math.PI) * 0.16;
+      reaction.sprite.scale.set(1.25 * scale, 1.25 * scale, 1);
+      if (progress >= 1) {
+        disposeObject3D(reaction.sprite);
+        this.emojiReactions.splice(index, 1);
+      }
+    }
+    for (let index = this.flyingReactions.length - 1; index >= 0; index -= 1) {
+      const reaction = this.flyingReactions[index];
+      const progress = THREE.MathUtils.clamp((elapsed - reaction.startedAt) / reaction.duration, 0, 1);
+      const inverse = 1 - progress;
+      reaction.group.position
+        .copy(reaction.start)
+        .multiplyScalar(inverse * inverse)
+        .addScaledVector(reaction.control, 2 * inverse * progress)
+        .addScaledVector(reaction.end, progress * progress);
+      reaction.group.rotation.x = reaction.spin.x * progress;
+      reaction.group.rotation.y = reaction.spin.y * progress;
+      reaction.group.rotation.z = reaction.spin.z * progress;
+      if (progress >= 1) {
+        disposeObject3D(reaction.group);
+        this.flyingReactions.splice(index, 1);
+      }
+    }
     for (const [id, seat] of this.seats) {
       const state = this.view?.seats.find((candidate) => candidate.id === id);
       if (!state) continue;
-      seat.body.visible = !(this.cameraName === 'pov' && this.currentPovSeatId === id);
-      const compactPrivateHand = state.isSelf && this.cameraName === 'player' && this.stage.viewportMode === 'portrait';
+      seat.body.visible = !state.isWinner && !(this.cameraName === 'pov' && this.currentPovSeatId === id);
+      const inspectedSeat = this.cameraName === 'inspect' && this.currentFocusSeatId === id;
+      const compactPrivateHand =
+        this.stage.viewportMode === 'portrait' && ((state.isSelf && this.cameraName === 'player') || inspectedSeat);
       const influenceTargetX = compactPrivateHand ? 0.05 : 1.25;
       seat.influenceGroup.position.x += (influenceTargetX - seat.influenceGroup.position.x) * centerEase;
       if (state.isSelf) continue;
@@ -1026,6 +1379,10 @@ export class CoupTableScene {
   }
 
   dispose() {
+    for (const reaction of this.emojiReactions) disposeObject3D(reaction.sprite);
+    for (const reaction of this.flyingReactions) disposeObject3D(reaction.group);
+    this.emojiReactions = [];
+    this.flyingReactions = [];
     this.actionTexture?.dispose();
     this.actionCaptionTexture?.dispose();
     this.stage.dispose();

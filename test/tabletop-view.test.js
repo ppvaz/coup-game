@@ -49,3 +49,25 @@ test('alegação pública vira batida visual sem resolver a verdade', () => {
   assert.equal('truthful' in view.action, false);
   assert.equal(view.responsePlayer.id, 'b');
 });
+
+test('projeta seis jogadores com a mesma geografia para todos os observadores', () => {
+  const fullTable = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, name: id.toUpperCase() }));
+  const game = createGame(fullTable, { random: () => 0.42 });
+  const viewA = projectCoupTableView(game, 'a');
+  const viewD = projectCoupTableView(game, 'd');
+
+  assert.equal(viewD.seats.length, 6);
+  assert.deepEqual(
+    viewD.seats.map((seat) => seat.id),
+    ['a', 'b', 'c', 'd', 'e', 'f'],
+  );
+  assert.deepEqual(
+    viewD.seats.map((seat) => seat.azimuthRad),
+    [0, Math.PI / 3, (Math.PI * 2) / 3, Math.PI, (Math.PI * 4) / 3, (Math.PI * 5) / 3],
+  );
+  assert.equal(viewD.seats[3].isSelf, true);
+  assert.deepEqual(
+    viewD.seats.map((seat) => seat.azimuthRad),
+    viewA.seats.map((seat) => seat.azimuthRad),
+  );
+});

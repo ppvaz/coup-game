@@ -33,10 +33,11 @@ conselheiros, moedas, influências e as batidas de alegação, bloqueio, perda e
 vitória. Outro jogo implementa outro compositor sobre o mesmo `TabletopStage`.
 
 `src/lib/tabletop/coup-environment.js` compõe o fundo nativo da partida: câmara
-palaciana curva, piso de mármore, janelas com skyline procedural, colunas,
-brasões dos cinco papéis, tapeçarias, esculturas, teto, lustre, velas e poeira
-em suspensão. Tudo é geometria ou textura de canvas gerada em runtime; não há
-uma fotografia plana escondida atrás da mesa.
+palaciana curva, piso de mármore, janelas, colunas, brasões dos cinco papéis,
+tapeçarias, esculturas, teto, lustre, velas e poeira em suspensão. As duas
+janelas amostram partes de um único panorama contínuo da cidade em cada tema,
+evitando luas ou skylines duplicados. Arquitetura e mobiliário continuam sendo
+geometria e materiais próprios da cena.
 
 A iconografia segue os personagens de La Corte. Em especial, o Capitão é um
 oficial militar da corte, representado por insígnia e linguagem de comando —
@@ -58,15 +59,45 @@ de troca nem callbacks capazes de alterar a partida.
 Essa projeção é testada em `test/tabletop-view.test.js`. A regra continua sendo:
 o palco representa um resultado; nunca decide um resultado.
 
-## Como abrir
+## Jogo e laboratório
 
 ```bash
 npm run dev
 ```
 
-Abra `http://localhost:5173/3d`. O laboratório também está ligado no cabeçalho
-da tela inicial. Os sete atos podem ser escolhidos manualmente, a sequência pode
-ser pausada e as câmeras podem ser sobrescritas.
+`http://localhost:5173/3d` é a experiência jogável WIP. Ela monta uma partida
+real contra bots ou apresenta a sala multiplayer atual, reutilizando os mesmos
+comandos HTML e o mesmo `dispatchGame()` da mesa 2D. O compositor WebGL é
+carregado somente depois dessa entrada explícita e sua instância é preservada
+entre renders.
+
+`http://localhost:5173/3d/lab` é o laboratório técnico. Ele mantém uma cena
+estática para testar ambiente e câmeras sem bots avançando a partida. Benchmark,
+qualidade e seleção manual dos atos ficam restritos a essa rota.
+
+O laboratório só aparece após o navegador consumir `?labKey=...`, comparando-o
+com `VITE_CORTE_3D_LAB_KEY` e persistindo a permissão em
+`la-corte-3d-lab-access`. A URL é limpa logo após a validação. Sem permissão,
+uma tentativa de abrir `/3d/lab` retorna para `/3d`.
+
+### Interface jogável
+
+A HUD do jogo é própria para o 3D e usa ilhas compactas em vez do cabeçalho da
+mesa 2D. Ela inclui:
+
+- narrativa do ato e progresso das respostas coletivas;
+- ações e decisões HTML completas, inclusive contexto e relógio;
+- painel recolhível da Corte com moedas, influências ativas e reveladas;
+- foco de câmera em qualquer nome sem alterar a geografia global dos assentos;
+- visão Jogador automática quando chega a vez local;
+- chat multiplayer, sons, vozes, tema e confirmação explícita de saída;
+- emojis e arremessos efêmeros, com tomate, luva, rosa e objetos próprios da
+  corte, sem entrar no estado autoritativo da partida.
+
+Modais, chat e confirmação de saída recolhem a barra de ações. O painel da
+Corte e as reações são mutuamente exclusivos, mas continuam consultas rápidas.
+Desktop mostra os arremessos em grade; portrait usa uma faixa horizontal acima
+das ações.
 
 ### Tema compartilhado
 
@@ -95,7 +126,7 @@ em `localStorage` sob `la-corte-3d-benchmarks` e o último também é publicado 
 Para automação no navegador, abra:
 
 ```text
-/3d?benchmark=1&duration=8000
+/3d/lab?benchmark=1&duration=8000
 ```
 
 O parâmetro `duration` aceita de 2 a 60 segundos. A aba precisa permanecer
@@ -112,7 +143,7 @@ cena, as luzes e os materiais permanecem idênticos para permitir comparação:
 - `performance`: `pixelScale 4`, DPR de saída 1.
 
 A preferência fica em `la-corte-3d-quality`. Para fixar uma run automatizada,
-use, por exemplo, `/3d?quality=performance&benchmark=1&duration=8000`.
+use, por exemplo, `/3d/lab?quality=performance&benchmark=1&duration=8000`.
 Os dois perfis inferiores são diagnósticos: não devem substituir o Cinemático
 quando cartas, nomes ou estados deixarem de ser inequívocos.
 

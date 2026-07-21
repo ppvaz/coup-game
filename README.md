@@ -21,10 +21,13 @@ La Corte é uma experiência premium de blefe e influência inspirada nas mecân
 - Chat cifrado da mesa com provocações rápidas, histórico, contador e proteção contra spam.
 - Tema escuro e tema claro “pergaminho imperial”, persistidos no navegador.
 - Interface responsiva e assets originais: cenário noturno/diurno, cinco personagens e favicon.
+- Apresentação 3D jogável e opcional, carregada somente ao entrar explicitamente
+  na experiência, com a mesma partida autoritativa e as mesmas decisões da
+  interface 2D.
 
 ## Executar localmente
 
-Pré-requisito: Node.js 18 ou superior.
+Pré-requisito: Node.js 20.19 ou superior, ou Node.js 22.12 ou superior.
 
 ```bash
 npm install
@@ -33,14 +36,31 @@ npm run dev
 
 Abra [http://localhost:5173](http://localhost:5173), ou use o endereço exibido pelo Vite no terminal.
 
-### Laboratório de mesa 3D
+### La Corte 3D
 
-Abra [http://localhost:5173/3d](http://localhost:5173/3d) para explorar o
-protótipo de salão 3D. Ele encena os principais momentos de Coup sobre um motor
-gráfico desacoplado das regras, com ambientes diurno e noturno ligados à mesma
-preferência de tema da mesa 2D. O salão e as efígies 3D dos papéis derivam a
-paleta, os materiais e as silhuetas das artes 2D originais. A arquitetura e a barreira de sigilo estão em
-[`docs/tabletop-engine.md`](docs/tabletop-engine.md).
+Abra [http://localhost:5173/3d](http://localhost:5173/3d) para jogar a versão
+WIP da mesa 3D. O salão usa o mesmo motor de regras e a mesma partida da mesa
+2D; o WebGL apenas projeta e encena o estado já decidido. A HUD oferece ações,
+decisões, crônica, painel da Corte, chat multiplayer e reações efêmeras sem
+revelar influências privadas dos adversários.
+
+Os assets e módulos 3D são importados apenas depois de uma navegação explícita
+para `/3d`; visitar a home ou jogar em 2D não inicializa o salão. Depois de
+carregada, a cena é preservada entre atualizações da partida. Dia e noite usam
+a mesma preferência da interface 2D.
+
+O laboratório técnico fica em `/3d/lab` e não avança uma partida. Para liberar
+seu botão, configure `VITE_CORTE_3D_LAB_KEY` e visite uma vez:
+
+```text
+http://localhost:5173/?labKey=SUA_CHAVE
+```
+
+A chave da URL é consumida, removida do endereço e a permissão fica registrada
+no `localStorage` do navegador. Em desenvolvimento, quando a variável não está
+definida, a chave padrão é `corte-lab`. Benchmark, perfis gráficos e câmeras
+manuais existem somente no laboratório. A arquitetura e a barreira de sigilo
+estão em [`docs/tabletop-engine.md`](docs/tabletop-engine.md).
 
 Para jogar em outro dispositivo na mesma rede, execute `npm run dev:lan`, descubra o IP da máquina anfitriã e compartilhe, por exemplo:
 
@@ -88,22 +108,23 @@ npm test
 npm run check
 ```
 
-Os testes cobrem o motor genérico de Coup, códigos de sala, presença, retomada da cadeira, eleição e migração de host, reconstrução da partida, chat e criptografia das visões privadas.
+Os testes cobrem o motor genérico de Coup, códigos de sala, presença, retomada
+da cadeira, eleição e migração de host, reconstrução da partida, chat,
+criptografia das visões privadas, projeção segura da mesa 3D, acesso ao
+laboratório, benchmark e reações.
 
 ## Estrutura
 
 ```text
-app.js             Interface e integração da mesa
-src/lib/supabase.js Cliente Supabase Realtime e configuração de conexão
-src/lib/secure-channel.js Criptografia das visões privadas no Broadcast
-src/lib/sounds.js Sons sintetizados e preferência de mute
-src/game/coup.js   Máquina de estados genérica das regras
-src/game/handover.js Reconstrução segura na troca de anfitrião
-src/rooms/chat.js Normalização, histórico e proteção contra spam
-src/rooms/room.js  Estado genérico de sala, assentos e host
-src/rooms/session.js Retomada da cadeira após recarregar a aba
-assets/            Cenários, personagens e favicon originais
-test/              Testes do motor e das salas
+app.js                         Orquestração da aplicação, partidas e transportes
+src/game/                      Regras, bots e reconstrução autoritativa
+src/rooms/                     Sala, presença, sessão, chat e continuidade
+src/lib/secure-channel.js      Criptografia das visões privadas no Broadcast
+src/lib/tabletop/              Projeção, compositor e ferramental específicos do 3D
+src/ui/                        Views HTML compartilhadas e interface da mesa 3D
+packages/tabletop-stage/       Motor WebGL comum, sem regras ou tema de Coup
+assets/                        Cenários, personagens, ações, vozes e favicon
+test/                          Testes de regras, salas, segurança e apresentação
 ```
 
 ## Publicação na Vercel
