@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TabletopStage, canvasTexture, disposeObject3D, textTexture } from '@la-corte/tabletop-stage';
+import { cameraDecisionKey, directCamera, duelCameraForSeats, throneCameraForSeat } from './camera-director.js';
 import { createCoupEnvironment } from './coup-environment.js';
 import { resolveTabletopQuality } from './quality-profiles.js';
 import { TABLETOP_THROWABLES } from './reactions.js';
@@ -305,6 +306,33 @@ function plaqueTexture(name, subtitle, accent = '#d9b56b') {
   );
 }
 
+// Influência revelada é influência morta: o retrato vai para a mesa sem cor,
+// distinguindo à distância o que ainda joga do que já caiu.
+const DEAD_PORTRAIT_TEXTURES = new Map();
+function deadPortraitTexture(role) {
+  if (DEAD_PORTRAIT_TEXTURES.has(role)) return DEAD_PORTRAIT_TEXTURES.get(role);
+  const canvas = document.createElement('canvas');
+  canvas.width = 320;
+  canvas.height = 480;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#141110';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  const image = new Image();
+  image.decoding = 'async';
+  image.onload = () => {
+    context.filter = 'grayscale(1) brightness(0.72) contrast(0.92)';
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    texture.needsUpdate = true;
+  };
+  image.src = ROLE_PORTRAITS[role];
+  DEAD_PORTRAIT_TEXTURES.set(role, texture);
+  return texture;
+}
+
 function influenceTexture(influence) {
   if (!influence.role) {
     return textTexture({
@@ -317,6 +345,7 @@ function influenceTexture(influence) {
       height: 448,
     });
   }
+  if (influence.revealed) return deadPortraitTexture(influence.role);
   const texture = new THREE.TextureLoader().load(ROLE_PORTRAITS[influence.role]);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.minFilter = THREE.LinearFilter;
@@ -734,13 +763,6 @@ function createInfluenceCard(influence) {
   return card;
 }
 
-function cameraForBeat(beat) {
-  if (beat === 'claim' || beat === 'block-window' || beat === 'block-claim') return 'duel';
-  if (beat === 'influence-loss' || beat === 'exchange') return 'evidence';
-  if (beat === 'victory') return 'throne';
-  return 'table';
-}
-
 function povCameraForSeat(seat, seatCount) {
   const radiusX = seatCount <= 3 ? 5.15 : 5.55;
   const radiusZ = seatCount <= 3 ? 4.25 : 4.65;
@@ -851,7 +873,7 @@ export class CoupTableScene {
     this.seats = new Map();
     this.seatSignature = '';
     this.view = null;
-    this.previousBeat = null;
+    this.autoCameraKey = '';
     this.cameraOverridden = false;
     this.cameraName = 'table';
     this.currentPovSeatId = null;
@@ -1220,19 +1242,105 @@ export class CoupTableScene {
     this.seal.material.emissive.setHex(
       ['claim', 'block-claim', 'influence-loss'].includes(view.beat) ? COLORS.danger : COLORS.gold,
     );
-    if (view.beat !== this.previousBeat && !this.cameraOverridden) {
-      this.cameraName = cameraForBeat(view.beat);
-      this.stage.setCameraAct(this.cameraName);
+    if (seatsChanged) this.autoCameraKey = '';
+    if (!this.cameraOverridden) this.applyAutoCamera();
+  }
+
+  // Aplica a decisão do diretor: parametriza o ato pelos assentos envolvidos
+  // e só corta quando a chave (ato + assentos) muda entre snapshots.
+  applyAutoCamera({ immediate = false } = {}) {
+    if (!this.view) return;
+    const decision = directCamera(this.view);
+    const key = cameraDecisionKey(decision);
+    if (key === this.autoCameraKey) return;
+    this.autoCameraKey = key;
+    const seats = this.view.seats;
+    const subjects = decision.seatIds.map((id) => seats.find((seat) => seat.id === id)).filter(Boolean);
+    let act = decision.act;
+    if (act === 'player') {
+      const self = seats.find((seat) => seat.isSelf);
+      if (self) this.stage.defineCameraAct('player', playerCameraForSeat(self, seats.length));
+      else act = 'table';
+    } else if (act === 'duel' && subjects.length) {
+      this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
+    } else if (act === 'evidence' && subjects.length) {
+      this.stage.defineCameraAct('evidence', playerCameraForSeat(subjects[0], seats.length));
+    } else if (act === 'throne' && subjects.length) {
+      this.stage.defineCameraAct('throne', throneCameraForSeat(subjects[0], seats.length));
     }
-    this.previousBeat = view.beat;
+    this.cameraName = act;
+    this.stage.setCameraAct(act, { immediate });
+  }
+
+  // Cinemático de leitura: verdadeiro se o ponteiro (em NDC) tocou a carta de
+  // ação pública sobre a mesa.
+  pickActionCard(pointer) {
+    if (!this.actionCard.visible) return false;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(pointer.x, pointer.y), this.stage.camera);
+    return raycaster.intersectObject(this.actionCard, true).length > 0;
+  }
+
+  // Aproxima a câmera da carta de ação, vinda do ângulo atual — a carta gira
+  // sozinha para encarar a câmera, então qualquer aproximação a deixa legível.
+  focusActionCard() {
+    if (!this.actionCard.visible) return false;
+    const card = this.actionCard.position;
+    const camera = this.stage.camera.position;
+    const toCameraX = camera.x - card.x;
+    const toCameraZ = camera.z - card.z;
+    const length = Math.hypot(toCameraX, toCameraZ) || 1;
+    const target = [card.x, 2.35, card.z];
+    this.stage.defineCameraAct('card', {
+      position: [card.x + (toCameraX / length) * 2.9, 2.6, card.z + (toCameraZ / length) * 2.9],
+      target,
+      fov: 44,
+      portrait: {
+        position: [card.x + (toCameraX / length) * 3.4, 2.65, card.z + (toCameraZ / length) * 3.4],
+        target,
+        fov: 52,
+      },
+    });
+    this.cameraOverridden = true;
+    this.cameraName = 'card';
+    this.stage.setCameraAct('card');
+    return true;
+  }
+
+  // Instrumentação do laboratório: aponta um ato dirigido para assentos
+  // específicos ("duel:0-3", "duel:2", "evidence:1", "throne:4") e congela a
+  // câmera ali para capturas de validação visual.
+  applyLabShot(spec) {
+    const seats = this.view?.seats ?? [];
+    const [act, indexPart] = String(spec ?? '').split(':');
+    const subjects = (indexPart ?? '')
+      .split('-')
+      .map(Number)
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < seats.length)
+      .map((index) => seats[index]);
+    if (!subjects.length) return null;
+    if (act === 'duel') this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
+    else if (act === 'evidence') this.stage.defineCameraAct('evidence', playerCameraForSeat(subjects[0], seats.length));
+    else if (act === 'throne') this.stage.defineCameraAct('throne', throneCameraForSeat(subjects[0], seats.length));
+    else return null;
+    this.cameraOverridden = true;
+    this.cameraName = act;
+    this.stage.setCameraAct(act, { immediate: true });
+    return act;
   }
 
   setCamera(name) {
     if (name === 'pov') return this.setPovSeat(this.currentPovSeatId);
     if (name === 'player') return this.setPlayerCamera();
-    this.cameraOverridden = name !== 'auto';
-    this.cameraName = name === 'auto' ? cameraForBeat(this.view?.beat) : name;
-    this.stage.setCameraAct(this.cameraName);
+    if (name === 'auto') {
+      this.cameraOverridden = false;
+      this.autoCameraKey = '';
+      this.applyAutoCamera();
+      return this.povSelection();
+    }
+    this.cameraOverridden = true;
+    this.cameraName = name;
+    this.stage.setCameraAct(name);
     return this.povSelection();
   }
 

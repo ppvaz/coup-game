@@ -213,13 +213,20 @@ export async function mountTableExperiment({
   const canvas = root.querySelector('#tabletop-canvas');
   const loading = root.querySelector('#tabletop-loading');
   let scene = null;
+  let cardFocusTimer = null;
+  const endCardFocus = () => {
+    clearTimeout(cardFocusTimer);
+    cardFocusTimer = null;
+    if (scene?.cameraName !== 'card') return;
+    scene.setCamera('auto');
+    root.dataset.camera = 'auto';
+  };
   let benchmarkInterval = null;
   let benchmarkKit = null;
   let currentState = initialState;
   let currentContext = context;
   let rosterOpen = !matchMedia('(max-width: 820px)').matches;
   let focusedSeat = null;
-  let playerTurnCamera = false;
   let reactionOpen = false;
   let reactionThrowable = null;
   const processedReactions = new Set();
@@ -489,13 +496,9 @@ export async function mountTableExperiment({
     gameplay.querySelector('#tabletop-again')?.addEventListener('click', restart);
     scene?.sync(projectCoupTableView(game, currentState.myId));
     playPendingReactions();
-    const shouldUsePlayerCamera =
-      game.status === 'playing' && game.phase === 'turn' && game.currentPlayerId === currentState.myId;
-    if (scene && shouldUsePlayerCamera !== playerTurnCamera) {
-      playerTurnCamera = shouldUsePlayerCamera;
-      scene.setCamera(shouldUsePlayerCamera ? 'player' : 'auto');
-      root.dataset.camera = shouldUsePlayerCamera ? 'player' : 'auto';
-    }
+    // O diretor Auto decide o ato dentro da cena; o atributo só espelha a
+    // escolha para a composição CSS quando não há override manual.
+    if (scene && !scene.cameraOverridden) root.dataset.camera = scene.cameraName === 'player' ? 'player' : 'auto';
     scene?.setDecisionClock({
       ...currentContext.clock,
       visible: game.status === 'playing' && game.phase === 'turn',
@@ -573,6 +576,31 @@ export async function mountTableExperiment({
     applyTheme(theme, { persist: false });
     applyQuality(quality, { persist: false });
     paintState();
+    if (testMode) {
+      const labShot = new URLSearchParams(location.search).get('shot');
+      if (labShot && scene.applyLabShot(labShot)) {
+        root.querySelectorAll('[data-tabletop-camera]').forEach((button) => button.classList.remove('active'));
+      }
+    }
+    // Clique/toque na carta de ação abre um cinemático de leitura; o Auto
+    // retoma sozinho depois de alguns segundos ou com um segundo toque.
+    canvas.addEventListener('click', (event) => {
+      if (!scene) return;
+      const rect = canvas.getBoundingClientRect();
+      const pointer = {
+        x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        y: -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      };
+      if (!scene.pickActionCard(pointer)) return;
+      if (scene.cameraName === 'card') {
+        endCardFocus();
+        return;
+      }
+      if (!scene.focusActionCard()) return;
+      root.dataset.camera = 'card';
+      clearTimeout(cardFocusTimer);
+      cardFocusTimer = setTimeout(endCardFocus, 6000);
+    });
     requestAnimationFrame(() => loading?.classList.add('hidden'));
     const benchmarkOptions = benchmarkOptionsFromSearch(location.search);
     if (testMode && benchmarkOptions.autorun) setTimeout(() => runBenchmark(benchmarkOptions.durationMs), 450);
@@ -654,6 +682,7 @@ export async function mountTableExperiment({
     },
     dispose() {
       clearInterval(benchmarkInterval);
+      clearTimeout(cardFocusTimer);
       window.removeEventListener('storage', syncThemeFromStorage);
       scene?.dispose();
       document.body.classList.remove('is-tabletop-lab');
