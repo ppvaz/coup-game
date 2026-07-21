@@ -90,6 +90,21 @@ Os links seguem o padrão:
 http://SEU-IP:5173/sala/SW8X4
 ```
 
+## Modelo de confiança do multiplayer
+
+As salas online são hospedadas pelo navegador do anfitrião: é ele quem guarda o
+estado completo, embaralha o baralho e envia a cada jogador uma visão cifrada
+contendo apenas a própria mão. Duas consequências práticas:
+
+- O anfitrião tem acesso técnico a todas as mãos (DevTools ou armazenamento da
+  sessão), como quem embaralha um baralho físico poderia espiar as cartas.
+- Quem conhece o código da sala consegue entrar; ainda não há autenticação de
+  identidade entre os participantes.
+
+O formato atende partidas casuais entre pessoas que confiam umas nas outras.
+Jogo competitivo com desconhecidos exigiria autenticação das cadeiras e estado
+autoritativo fora do cliente, evoluções previstas no roteiro do projeto.
+
 ## Regras implementadas
 
 O objetivo é ser o último jogador com influência. Cada jogador começa com duas influências e duas moedas; em uma
