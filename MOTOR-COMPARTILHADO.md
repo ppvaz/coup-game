@@ -1,8 +1,8 @@
 # Motor compartilhado × Coup nativo
 
-Mapa de reaproveitamento do código deste repositório para **Sem Perdão** e para os próximos jogos da
-equipe. A pergunta que este documento responde é sempre a mesma: _se amanhã eu abrir um repositório
-novo para outro jogo de mesa, o que eu levo junto e o que fica?_
+Mapa de reaproveitamento do código deste repositório para **Sem Perdão** (`~/Projects/SEM-PERDAO`) e
+para os próximos jogos da equipe. A pergunta que este documento responde é sempre a mesma: _se amanhã
+eu abrir um repositório novo para outro jogo de mesa, o que eu levo junto e o que fica?_
 
 Mantenha o mapa vivo: toda vez que um módulo mudar de lado (ou nascer), atualize a tabela no mesmo
 commit da mudança.
@@ -93,37 +93,78 @@ commit da mudança.
   política vai para o jogo.** O pacote não sabe que existe "quem arremessou"; ele sabe compor uma
   segunda câmera sobre um retângulo da tela.
 
+## O segundo jogo já existe
+
+**Sem Perdão** (`~/Projects/SEM-PERDAO`, `main` e `experimento-3d` no mesmo commit) não é um consumidor
+futuro: é uma segunda implementação, pronta e rodando, do mesmo conjunto de problemas. Um tribunal 3D
+com réus em volta da mesa, sala online com host autoritativo, reações físicas, cortes de câmera e
+áudio próprio.
+
+Isso muda a natureza do trabalho. A pergunta deixa de ser "o que vai dar para reaproveitar um dia" e
+passa a ser "o que já foi escrito duas vezes e agora diverge em dois repositórios".
+
+### O que os dois jogos resolveram do mesmo jeito, sem combinar
+
+| Problema            | La Corte                                                                  | Sem Perdão                                           |
+| ------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Arremesso           | `throwReaction` (coup-table.js)                                           | `arremessarEntre` (retroMesa.ts)                     |
+| Barreira de dados   | `projectCoupTableView` (coup-view.js)                                     | `mesaView.ts`, também puro e testado no Node         |
+| Atos de câmera      | `defineCameraAct` / `setCameraAct`                                        | `Ato`, `CONFIG_ATO`, `setAto`                        |
+| Pós-processo        | Render target + quad CRT + `pixelScale`                                   | Render target + `blitScene` + `pixelSize`            |
+| Perfis de qualidade | `quality-profiles.js`                                                     | `Qualidade3D` (`baixa`/`media`/`alta`)               |
+| Assentos por ângulo | `azimuthRad`, até 6 lugares                                               | `assentosJogadores {nome, az}`, `MESA_MIN/MAX_SEATS` |
+| Sala online         | `src/rooms/` + `realtime.js`                                              | `useMultiplayer.ts` (1679 linhas)                    |
+| Continuidade        | Host autoritativo, vistas redigidas, sucessão de host, retomada de sessão | O mesmo desenho, reescrito em React                  |
+
+O arremesso é o caso mais eloquente: os dois são a mesma Bézier quadrática (início, controle no meio
+com Y elevado, fim), o mesmo teto de 8 objetos no ar, o mesmo vetor de giro e a mesma divisão de
+duração para movimento reduzido. Duas pessoas escrevendo a mesma função duas vezes é coincidência;
+o mesmo teto arbitrário de 8 nos dois lados é a prova de que existe um motor querendo nascer.
+
+### O que não atravessa
+
+**A casca.** Sem Perdão é Next 16 + React 19 + TypeScript + Tailwind; La Corte é Vite + JS puro com
+HTML em string e CSS à mão. `table-experiment.js` é a peça menos portável do repositório, não a mais
+valiosa — é a segunda vez que este documento corrige essa ordem, agora com evidência. O que atravessa
+é o palco e os módulos puros; a moldura é por stack.
+
 ## Fila de extração dentro deste repositório
 
-Ordem por valor, não por facilidade. "Mais pronto" não é "mais valioso": a sala multiplayer é a
-peça mais desacoplada que existe aqui, mas ninguém joga um jogo por causa da sala. O que diferencia
-esta base é a apresentação — e é justamente a parte mais amarrada a Coup.
+Ordem por evidência de duplicação, não por valor percebido nem por facilidade. O que já existe duas
+vezes é o que comprovadamente é motor:
 
-1. **Casca e direção do salão** (`table-experiment.js` + `camera-director.js`) — é a experiência que
-   se quer herdar inteira e o ponto onde os dois lados mais se misturam. O diretor vira motor
-   recebendo um mapa `beat → ato` injetado pelo jogo, no lugar do `switch` com beats de Coup; a
-   casca separa moldura (topbar, roster, doca de reações, PiP, preferências) de narrativa.
-2. **Áudio** (`sounds.js` + `foley.js` + `voice-announcer.js`) — três mecanismos parecidos com três
-   catálogos diferentes; vira um único banco de eventos sonoros com intervalo mínimo e mudo
-   persistido, parametrizado por prefixo de storage.
-3. **Sala multiplayer** (`src/rooms/` + `src/lib/realtime.js` + `src/lib/secure-channel.js`) — quase
-   não tem Coup dentro e sai praticamente por cópia; adiar não custa. Sai movendo a migração de
-   carta de `session.js` para o jogo.
+1. **Palco 3D** (`packages/tabletop-stage/` + atos de câmera + pós-processo + qualidade) — os dois
+   jogos têm a mesma coisa escrita duas vezes. É onde a convergência paga mais rápido e onde já
+   existe um pacote de pé.
+2. **Reações físicas** (arremesso, emojis, foley de impacto) — mesma curva, mesmos limites, catálogos
+   diferentes. A máquina sai inteira; tomate e adaga ficam com cada jogo.
+3. **Sala multiplayer** (`src/rooms/` + `realtime.js` + `secure-channel.js` × `useMultiplayer.ts`) — o
+   desenho é o mesmo, mas um lado é módulo puro e o outro é um hook React de 1679 linhas. Converge
+   depois do palco, porque exige decidir a forma (núcleo puro + adaptador por stack).
+4. **Áudio** — três mecanismos parecidos aqui, mais um pipeline ElevenLabs lá. Convergir só o
+   mecanismo: banco de eventos com intervalo mínimo e mudo persistido por prefixo.
+5. **Casca do salão** — **não** entra na fila enquanto os stacks forem diferentes.
 
 ## Plano de extração para um repositório próprio
 
-O motor sai daqui quando **existir um segundo consumidor de verdade**, não antes. Motor extraído com
-uma evidência só nasce com o formato do primeiro jogo; a segunda evidência é o que separa abstração
-de coincidência. Até lá, o monorepo é o lugar certo — é mais barato mudar um contrato errado dentro
-de um repositório do que entre dois.
+A regra clássica é não extrair antes do segundo consumidor, porque motor tirado de um jogo só nasce
+com o formato daquele jogo. **Essa condição já está satisfeita** — Sem Perdão existe, roda e resolveu
+os mesmos problemas de forma independente. O risco deixou de ser abstrair cedo demais e passou a ser
+a divergência: cada correção de câmera, arremesso ou reconexão feita em um repositório não chega ao
+outro, e a distância entre as duas cópias só cresce.
 
-| Fase                             | Gatilho                                                  | Entregável                                                                                                               | Pronto quando                                                                                        |
-| -------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **0 · Fronteira mecanizada**     | Agora                                                    | Teste que falha se `packages/` importar `src/`, se a apresentação importar `src/game/` ou se o motor citar papel de Coup | A fronteira deixa de depender de disciplina e passa a quebrar o `npm test`                           |
-| **1 · Workspace**                | Depois da fase 0                                         | `workspaces` no `package.json` da raiz, no lugar da dependência `file:`                                                  | `npm test` e `npm run build` passam sem o link manual                                                |
-| **2 · Prova de portabilidade**   | Primeiro slice vertical do segundo jogo                  | O segundo jogo consome o motor por caminho relativo ou submódulo, ainda sem publicar                                     | O segundo jogo roda uma partida ponta a ponta sem editar nenhum arquivo de `packages/`               |
-| **3 · Repositório próprio**      | O segundo jogo rodando e os contratos da fase 2 estáveis | Repo do motor com escopo neutro, semver, CHANGELOG e publicação em registry privado (GitHub Packages)                    | Os dois jogos instalam a mesma versão publicada e o histórico do motor sobrevive (`git filter-repo`) |
-| **4 · La Corte vira consumidor** | Depois da fase 3                                         | Este repositório passa a depender da versão publicada e `packages/` some daqui                                           | Uma correção no motor chega aos dois jogos por bump de versão, sem cópia                             |
+Por isso o plano abaixo tem uma fase a mais que a versão anterior deste documento: antes de publicar
+qualquer coisa, alguém precisa comparar as duas implementações lado a lado e decidir **qual das duas
+versões é a boa** em cada peça. Extrair a de La Corte por ser a "nossa" seria escolher por acidente.
+
+| Fase                                        | Gatilho                                                  | Entregável                                                                                                               | Pronto quando                                                                                        |
+| ------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **0 · Fronteira mecanizada**                | Agora                                                    | Teste que falha se `packages/` importar `src/`, se a apresentação importar `src/game/` ou se o motor citar papel de Coup | A fronteira deixa de depender de disciplina e passa a quebrar o `npm test`                           |
+| **1 · Workspace**                           | Depois da fase 0                                         | `workspaces` no `package.json` da raiz, no lugar da dependência `file:`                                                  | `npm test` e `npm run build` passam sem o link manual                                                |
+| **1.5 · Confronto das duas implementações** | Já disponível                                            | Comparação peça a peça (palco, atos, arremesso, sala) escolhendo a melhor versão de cada uma, com o motivo registrado    | Cada peça da fila tem uma versão eleita e uma lista do que falta nela                                |
+| **2 · Prova de portabilidade**              | Depois da fase 1.5                                       | Sem Perdão consome o motor por caminho relativo ou submódulo, ainda sem publicar                                         | Sem Perdão roda uma partida ponta a ponta sem editar nenhum arquivo de `packages/`                   |
+| **3 · Repositório próprio**                 | O segundo jogo rodando e os contratos da fase 2 estáveis | Repo do motor com escopo neutro, semver, CHANGELOG e publicação em registry privado (GitHub Packages)                    | Os dois jogos instalam a mesma versão publicada e o histórico do motor sobrevive (`git filter-repo`) |
+| **4 · La Corte vira consumidor**            | Depois da fase 3                                         | Este repositório passa a depender da versão publicada e `packages/` some daqui                                           | Uma correção no motor chega aos dois jogos por bump de versão, sem cópia                             |
 
 ### O que nunca vai junto
 
@@ -145,21 +186,30 @@ e caros depois de publicado, porque viram mudança de API entre repositórios:
 - **Catálogos.** Reações, foley e falas: a máquina fica, a lista entra por parâmetro.
 - **Idioma.** Toda string visível do motor precisa vir do jogo. Hoje há texto em português dentro de
   código que se pretende genérico.
+- **Tipos.** O pacote é JS puro sem `.d.ts`; Sem Perdão é TypeScript. Ou o motor passa a ser escrito
+  em TS e publica os tipos gerados, ou mantém tipos escritos à mão — mas um consumidor TS sem tipos
+  transforma todo o motor em `any`, e aí a fronteira não protege mais nada.
+- **Controle de câmera.** La Corte tem arraste e zoom próprios dentro do palco; Sem Perdão usa
+  `OrbitControls` de `three/examples`. Duas respostas para a mesma pergunta: escolher uma na fase 1.5.
 
 ### Riscos assumidos
 
 - **Publicar cedo demais.** Um pacote com dois consumidores transforma toda mudança em release. Fase
   2 existe justamente para provar a portabilidade sem pagar esse pedágio.
-- **Segurar tempo demais.** O inverso também acontece: o motor apodrece dentro do jogo quando toda
-  feature nova acha mais fácil furar a fronteira. A fase 0 é o antídoto e por isso vem primeiro.
+- **Segurar tempo demais.** É o risco real agora: com duas implementações vivas, cada semana sem
+  convergência aumenta o custo da fusão. A fase 0 é o antídoto do lado de cá e por isso vem primeiro.
+- **Eleger a versão errada.** Escolher a implementação de La Corte por ser a de casa. A fase 1.5
+  existe para que a escolha tenha motivo escrito.
 
-### Decisão pendente
+### Decisão resolvida: a geometria generaliza
 
-O palco de hoje assume jogadores em círculo, cadeira por ângulo (`azimuthRad`) e no máximo seis
-lugares — e as câmeras (duelo, trono, POV) derivam dessa geometria. Se o próximo jogo tiver
-tabuleiro, grade, times ou tempo real, boa parte do que esta tabela chama de motor é, na verdade,
-"motor de jogo de cadeiras em círculo". **Definir o formato do próximo jogo é pré-requisito da fase
-2** e pode reclassificar módulos inteiros deste mapa.
+A dúvida anterior era se o palco seria, na verdade, "motor de jogo de cadeiras em círculo". Sem
+Perdão respondeu: também é mesa redonda com assento por ângulo. A diferença é o número de lugares —
+até 6 aqui, de 3 a 8 lá. **Logo, o limite de assentos é parâmetro, não premissa**, e as câmeras
+derivadas da roda (duelo, trono, POV, close de réu) são motor de verdade.
+
+Continua em aberto o que acontece quando aparecer um jogo com tabuleiro, grade ou times. Até lá, o
+motor pode assumir a roda com honestidade, desde que o assuma explicitamente no nome e na API.
 
 ## Manutenção
 
