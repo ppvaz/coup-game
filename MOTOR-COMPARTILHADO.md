@@ -227,8 +227,8 @@ no nome e na API, em vez de fingir neutralidade que não tem.
 
 ## Invariantes que o motor herda do 3D
 
-`CORTE-3D.MD` abre com princípios escritos para Coup. Estes quatro não são de Coup — são contratos
-de qualquer palco que apresente um jogo de informação oculta, e precisam viajar com o motor:
+Quatro regras nasceram como princípios do salão de Coup, mas não são de Coup — são contratos de
+qualquer palco que apresente um jogo de informação oculta, e precisam viajar com o motor:
 
 1. **O palco representa decisões; nunca decide regras.** Já está nas fronteiras acima, mas vale a
    formulação original: é o resumo de uma linha de por que a barreira de projeção existe.
@@ -242,7 +242,7 @@ de qualquer palco que apresente um jogo de informação oculta, e precisam viaja
    reimplementar "o navegador não conseguiu abrir a cena". Hoje La Corte trata o fallback e nenhum
    dos dois trata restauração de contexto — é lacuna de motor, não de jogo.
 
-Duas peças de ferramental do mesmo documento também são de motor, e nenhuma existe do outro lado:
+Duas peças de ferramental do ciclo 3D também são de motor, e nenhuma existe do outro lado:
 
 - **Limites de enquadramento.** Nenhum plano dirigido entra no miolo da mesa (raio ≥ 6) nem sai do
   salão (raio ≤ 11,5). A regra é genérica para mesa redonda; os números são da cena. Vira parâmetro.
@@ -252,10 +252,11 @@ Duas peças de ferramental do mesmo documento também são de motor, e nenhuma e
 
 ## A dívida de segurança viaja junto
 
-Este é o insight mais caro de `AUDITORIA-PENDENCIAS.md`, e ele muda o plano acima.
+Este é o ponto mais caro do plano, e ele vem da auditoria de segurança de 18/07/2026.
 
 A camada que está prestes a virar motor — sala, presença, canal, host autoritativo — é exatamente a
-que tem a pendência P0: o canal Supabase é público e todas as identidades (`playerId`, chave de
+que tem a pendência de prioridade máxima: o canal Supabase é público e todas as identidades
+(`playerId`, chave de
 presença, `connectionId`, chave pública) são declaradas pelo próprio cliente. Quem conhece o código
 da sala pode se passar por outra cadeira e, como o host cifra a visão de um jogador para todas as
 presenças daquele ID, chegar à mão privada dela.
@@ -268,23 +269,14 @@ futuros, e cada consumidor novo encarece a correção. Autenticação de identid
 estrutural dos envelopes (snapshots, visões, handover, presença) não são "melhorias posteriores" do
 motor — são pré-requisito de publicá-lo.
 
-A auditoria também entrega, de graça, duas coisas que o plano precisava:
+A mesma auditoria já entregou, de graça, duas coisas que o plano precisava:
 
 - **A forma da extração.** As fronteiras sugeridas para desmontar `app.js` — `RoomTransport`,
   `OnlineSessionController`, `GameController`, `UIController` — são o desenho do runtime de sala com
-  adaptador por stack. É mais concreto do que "núcleo puro + adaptador" e já está escrito.
+  adaptador por stack. É mais concreto do que "núcleo puro + adaptador".
 - **O portão da fase 3.** Os testes que faltam (duas sessões no mesmo canal, reconexão e troca de
   host ponta a ponta, payloads malformados, tentativa de impersonação, CI rodando tudo) são
   precisamente a suíte que o motor precisa para merecer publicação. Nenhum deles é sobre Coup.
-
-## Documentos relacionados
-
-- `CORTE-3D.MD` — ciclo da experiência 3D de La Corte. O item 10 ("Consolidar o motor comum") foi
-  absorvido por este documento; lá ficou o ponteiro. Um plano com dois donos diverge.
-- `AUDITORIA-PENDENCIAS.md` — pendências de segurança, performance e arquitetura. Continua dono das
-  pendências; aqui ficam só as que a fusão precisa resolver antes de publicar.
-- Ambos são locais e não versionados. Se este mapa vai ser lido por quem for começar o próximo jogo,
-  os três precisam viver no mesmo lugar.
 
 ## Manutenção
 
