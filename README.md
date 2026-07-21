@@ -62,13 +62,19 @@ definida, a chave padrão é `corte-lab`. Benchmark, perfis gráficos e câmeras
 manuais existem somente no laboratório. A arquitetura e a barreira de sigilo
 estão em [`docs/tabletop-engine.md`](docs/tabletop-engine.md).
 
-Para jogar em outro dispositivo na mesma rede, execute `npm run dev:lan`, descubra o IP da máquina anfitriã e compartilhe, por exemplo:
+Para abrir em outro dispositivo na mesma rede, execute `npm run dev:lan`, descubra o IP da máquina anfitriã e compartilhe, por exemplo:
 
 ```text
 http://10.0.0.43:5173
 ```
 
 O firewall do sistema pode pedir autorização para conexões de entrada.
+
+Esse acesso por HTTP serve para a interface e para partidas contra bots. As
+salas multiplayer cifram as visões privadas com `SubtleCrypto`, que os
+navegadores só liberam em contexto seguro — `localhost` ou HTTPS. Para testar
+salas em outro dispositivo, use um túnel HTTPS (por exemplo `ngrok` ou
+`cloudflared`) ou um certificado local confiável apontando para o dev server.
 
 ## Criar ou entrar em uma sala
 
