@@ -1313,6 +1313,11 @@ export class CoupTableScene {
   applyLabShot(spec) {
     const seats = this.view?.seats ?? [];
     const [act, indexPart] = String(spec ?? '').split(':');
+    if (!indexPart) {
+      if (!['table', 'player', 'pov', 'duel', 'evidence', 'overhead', 'throne', 'portal'].includes(act)) return null;
+      this.setCamera(act);
+      return act;
+    }
     const subjects = (indexPart ?? '')
       .split('-')
       .map(Number)
@@ -1327,6 +1332,10 @@ export class CoupTableScene {
       return act;
     }
     if (!subjects.length) return null;
+    if (act === 'pov') {
+      this.setPovSeat(subjects[0].id, { immediate: true });
+      return act;
+    }
     if (act === 'duel') this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
     else if (act === 'evidence') this.stage.defineCameraAct('evidence', playerCameraForSeat(subjects[0], seats.length));
     else if (act === 'throne') this.stage.defineCameraAct('throne', throneCameraForSeat(subjects[0], seats.length));

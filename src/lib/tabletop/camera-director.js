@@ -70,29 +70,31 @@ function sideShot(seat, seatCount, { azimuthOffset, radiusFactor, height, target
   const point = seatPoint(seat, seatCount);
   const az = seat.azimuthRad + azimuthOffset;
   const target = [point.x * 0.85, targetY, point.z * 0.85];
+  // O recuo extra do portrait respeita o teto de raio do salão.
+  const portraitFactor = Math.min(radiusFactor + 0.12, 2.02);
   return {
     position: [Math.sin(az) * x * radiusFactor, height, Math.cos(az) * z * radiusFactor],
     target,
     fov,
     portrait: {
-      position: [Math.sin(az) * x * (radiusFactor + 0.18), height + 0.8, Math.cos(az) * z * (radiusFactor + 0.18)],
+      position: [Math.sin(az) * x * portraitFactor, height + 0.8, Math.cos(az) * z * portraitFactor],
       target,
       fov: portraitFov,
     },
   };
 }
 
-// Confronto com a corte inteira: três quartos frontal — os bonecos olham para
-// o centro, então a câmera precisa cruzar ~110° de azimute para ver o rosto
-// sem passar pelo miolo da mesa.
+// Confronto com a corte inteira: frontal de raio longo — a câmera fica bem
+// atrás da fileira de assentos do lado oposto, quase alinhada ao ator (offset
+// pequeno tira a carta central do eixo), vendo o rosto sem vizinho no quadro.
 const confrontCamera = (seat, seatCount) =>
   sideShot(seat, seatCount, {
-    azimuthOffset: 1.6,
-    radiusFactor: 1.65,
-    height: 3.9,
+    azimuthOffset: 0.6,
+    radiusFactor: 1.9,
+    height: 3.8,
     targetY: 1.6,
-    fov: 41,
-    portraitFov: 54,
+    fov: 40,
+    portraitFov: 52,
   });
 
 export function duelCameraForSeats(subjects, seatCount) {
@@ -135,10 +137,10 @@ export function duelCameraForSeats(subjects, seatCount) {
 // centro fora do eixo da visada.
 export const throneCameraForSeat = (seat, seatCount) =>
   sideShot(seat, seatCount, {
-    azimuthOffset: 1.35,
-    radiusFactor: 1.6,
+    azimuthOffset: 0.5,
+    radiusFactor: 1.95,
     height: 3.2,
     targetY: 1.8,
-    fov: 38,
-    portraitFov: 52,
+    fov: 36,
+    portraitFov: 50,
   });
