@@ -150,6 +150,9 @@ export function createSoundManager(options = {}) {
     setVoicesMuted,
     toggleVoices: () => setVoicesMuted(!voicesMuted),
     isVoicePlaying: () => Boolean(currentVoice || voiceQueue.length),
+    // O foley do salão 3D sintetiza os próprios timbres, mas precisa do mesmo
+    // contexto para que exista uma única cadeia de áudio e um único mudo.
+    audioContext: () => getContext(),
     unlock,
     play,
     playVoices,

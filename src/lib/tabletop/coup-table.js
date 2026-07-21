@@ -8,6 +8,7 @@ import {
   throneCameraForSeat,
 } from './camera-director.js';
 import { createCoupEnvironment } from './coup-environment.js';
+import { createTabletopFoley } from './foley.js';
 import { resolveTabletopQuality } from './quality-profiles.js';
 import { TABLETOP_THROWABLES } from './reactions.js';
 import duquePortrait from '../../../assets/characters/duque.webp';
@@ -899,6 +900,7 @@ export class CoupTableScene {
     this.emojiReactions = [];
     this.flyingReactions = [];
     this.influenceReveals = [];
+    this.foley = options.sounds ? createTabletopFoley({ sounds: options.sounds }) : null;
 
     this.actionCard = new THREE.Group();
     const edge = standardMaterial(COLORS.gold, { metalness: 0.55, roughness: 0.3 });
@@ -1093,6 +1095,9 @@ export class CoupTableScene {
     seat.focus.material.color.setHex(seatView.isTarget ? COLORS.danger : COLORS.gold);
 
     if (seat.coinCount !== seatView.coins) {
+      // -1 é a pilha recém-construída: entrar no salão ou reconstruir assentos
+      // não é movimento de tesouro e não deve soar.
+      const hadCoins = seat.coinCount >= 0;
       disposeObject3D(seat.coinGroup);
       seat.coinGroup = new THREE.Group();
       seat.coinGroup.position.set(-1, 1.34, -1.2);
@@ -1109,6 +1114,7 @@ export class CoupTableScene {
         );
         seat.coinGroup.add(coin);
       }
+      if (hadCoins) this.foley?.play(seatView.coins > seat.coinCount ? 'coins-gain' : 'coins-loss');
       seat.coinCount = seatView.coins;
     }
 
@@ -1131,6 +1137,7 @@ export class CoupTableScene {
         card.rotation.z = influence.revealed ? 0.04 : 0;
         seat.influenceGroup.add(card);
         if (newlyRevealed) {
+          this.foley?.play('card');
           this.influenceReveals.push({
             seatId: seatView.id,
             card,
@@ -1218,6 +1225,7 @@ export class CoupTableScene {
       duration: this.stage.reducedMotion ? 0.45 : 0.9,
       spin: new THREE.Vector3(6.2, 8.1, 5.4),
     });
+    this.foley?.play('throw');
     return true;
   }
 

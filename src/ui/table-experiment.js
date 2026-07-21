@@ -207,6 +207,7 @@ export async function mountTableExperiment({
   dispatch,
   requestRender,
   restart,
+  sounds,
   toggleSounds,
   toggleVoices,
   sendReaction,
@@ -578,6 +579,7 @@ export async function mountTableExperiment({
       theme,
       quality: quality.id,
       hourglassViewport: root.querySelector('#tabletop-hourglass-viewport'),
+      sounds,
     });
     // As artes de ação carregam sob demanda na primeira alegação; aquecê-las
     // depois da abertura da cena evita pop-in sem tocar o orçamento da home/2D.

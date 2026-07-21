@@ -1160,6 +1160,7 @@ function renderApp() {
         dispatch,
         requestRender: render,
         restart: restartMatch,
+        sounds,
         toggleSounds: toggleGameSounds,
         toggleVoices: toggleGameVoices,
         sendReaction: sendTabletopReaction,
