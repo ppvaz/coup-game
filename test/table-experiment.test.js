@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame } from '../src/game/coup.js';
-import { gameplayHTML, tableExperimentHTML, tabletopRosterHTML } from '../src/ui/table-experiment.js';
+import { createGame, dispatchGame } from '../src/game/coup.js';
+import {
+  gameplayHTML,
+  shouldFocusDecisionHourglass,
+  tableExperimentHTML,
+  tabletopRosterHTML,
+} from '../src/ui/table-experiment.js';
 
 const seats = [
   { id: 'a', name: 'Ana' },
@@ -41,6 +46,19 @@ test('a saída do 3D é um botão da aplicação, não uma navegação', () => {
   assert.match(html, /id="tabletop-exit-leave"/);
   assert.doesNotMatch(html, /<a href="\/">/);
   assert.doesNotMatch(tableExperimentHTML({ testMode: true }), /tabletop-exit-confirm/);
+});
+
+test('a câmera da ampulheta pertence à interface 3D e só ganha foco no próprio turno', () => {
+  const html = tableExperimentHTML();
+  assert.match(html, /id="tabletop-hourglass-camera"/);
+  assert.match(html, /id="tabletop-hourglass-viewport"/);
+
+  const game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  assert.equal(shouldFocusDecisionHourglass(game, 'a'), true);
+  assert.equal(shouldFocusDecisionHourglass(game, 'b'), false);
+
+  const awaitingResponses = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'tax' });
+  assert.equal(shouldFocusDecisionHourglass(awaitingResponses, 'b'), false);
 });
 
 test('o painel da Corte oferece a volta à mesa 2D quando permitido', () => {

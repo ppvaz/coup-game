@@ -139,6 +139,33 @@ function createPostProcess(texture, grain, vignette) {
   return { scene, camera, material, quad };
 }
 
+function createInsetComposite(texture) {
+  const scene = new THREE.Scene();
+  const camera = new THREE.Camera();
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uScene: { value: texture } },
+    vertexShader: CRT_VERTEX,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uScene;
+      varying vec2 vUv;
+
+      void main() {
+        float radius = distance(vUv, vec2(0.5));
+        if (radius >= 0.5) discard;
+        float edge = 1.0 - smoothstep(0.475, 0.5, radius);
+        gl_FragColor = vec4(texture2D(uScene, vUv).rgb, edge);
+      }
+    `,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+  scene.add(quad);
+  return { scene, camera, material, quad };
+}
+
 /**
  * Runtime gráfico compartilhável. Ele conhece câmera, resize, pós-processo,
  * ciclo de animação e descarte — mas não conhece regras, cartas ou fases.
@@ -154,6 +181,10 @@ export class TabletopStage {
     this.root.name = 'tabletop-presentation';
     this.scene.add(this.root);
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 100);
+    this.insetCamera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+    this.insetCameraTarget = new THREE.Vector3();
+    this.insetViewportElement = null;
+    this.insetCameraEnabled = false;
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: false,
@@ -175,6 +206,13 @@ export class TabletopStage {
     });
     this.renderTarget.texture.colorSpace = THREE.SRGBColorSpace;
     this.post = createPostProcess(this.renderTarget.texture, options.grain ?? 0.018, options.vignette ?? 0.82);
+    this.insetRenderTarget = new THREE.WebGLRenderTarget(1, 1, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      depthBuffer: true,
+    });
+    this.insetRenderTarget.texture.colorSpace = THREE.SRGBColorSpace;
+    this.insetComposite = createInsetComposite(this.insetRenderTarget.texture);
     this.timer = new THREE.Timer();
     this.timer.connect(document);
     this.updaters = new Set();
@@ -256,6 +294,18 @@ export class TabletopStage {
       this.maxDevicePixelRatio = Math.max(1, Number(maxDevicePixelRatio) || 1);
     }
     this.resize();
+  }
+
+  setInsetCamera({ position, target, fov = 32, viewportElement = null } = {}) {
+    if (position) this.insetCamera.position.set(...position);
+    if (target) this.insetCameraTarget.set(...target);
+    this.insetCamera.fov = fov;
+    this.insetCamera.lookAt(this.insetCameraTarget);
+    this.insetViewportElement = viewportElement;
+  }
+
+  setInsetCameraEnabled(enabled) {
+    this.insetCameraEnabled = Boolean(enabled);
   }
 
   runPerformanceBenchmark({ label = 'tabletop', warmupMs = 1500, durationMs = 10000, metadata = {} } = {}) {
@@ -385,6 +435,42 @@ export class TabletopStage {
     if (progress === 1) this.cameraTween = null;
   }
 
+  renderInsetCamera() {
+    if (!this.insetCameraEnabled || !this.insetViewportElement?.isConnected) return;
+    const canvasBounds = this.canvas.getBoundingClientRect();
+    const insetBounds = this.insetViewportElement.getBoundingClientRect();
+    const left = Math.max(canvasBounds.left, insetBounds.left);
+    const right = Math.min(canvasBounds.right, insetBounds.right);
+    const top = Math.max(canvasBounds.top, insetBounds.top);
+    const bottom = Math.min(canvasBounds.bottom, insetBounds.bottom);
+    const width = Math.floor(right - left);
+    const height = Math.floor(bottom - top);
+    if (width < 2 || height < 2) return;
+
+    const x = Math.floor(left - canvasBounds.left);
+    const y = Math.floor(canvasBounds.bottom - bottom);
+    this.insetCamera.aspect = width / height;
+    this.insetCamera.updateProjectionMatrix();
+    this.insetCamera.lookAt(this.insetCameraTarget);
+    const pixelRatio = this.renderer.getPixelRatio();
+    this.insetRenderTarget.setSize(
+      Math.max(1, Math.floor(width * pixelRatio)),
+      Math.max(1, Math.floor(height * pixelRatio)),
+    );
+    this.renderer.setRenderTarget(this.insetRenderTarget);
+    this.renderer.render(this.scene, this.insetCamera);
+    this.renderer.setRenderTarget(null);
+    this.renderer.setViewport(x, y, width, height);
+    this.renderer.setScissor(x, y, width, height);
+    this.renderer.setScissorTest(true);
+    const autoClear = this.renderer.autoClear;
+    this.renderer.autoClear = false;
+    this.renderer.render(this.insetComposite.scene, this.insetComposite.camera);
+    this.renderer.autoClear = autoClear;
+    this.renderer.setScissorTest(false);
+    this.renderer.setViewport(0, 0, canvasBounds.width, canvasBounds.height);
+  }
+
   animate(now) {
     if (this.disposed) return;
     const rawFrameMs = this.lastFrameNow == null ? 0 : now - this.lastFrameNow;
@@ -400,6 +486,7 @@ export class TabletopStage {
     this.lastRendererStats = { ...this.renderer.info.render };
     this.renderer.setRenderTarget(null);
     this.renderer.render(this.post.scene, this.post.camera);
+    this.renderInsetCamera();
     this.recordPerformanceFrame(rawFrameMs);
     this.frame = requestAnimationFrame(this.animate);
   }
@@ -418,6 +505,9 @@ export class TabletopStage {
     disposeObject3D(this.root);
     this.post.quad.geometry.dispose();
     this.post.material.dispose();
+    this.insetComposite.quad.geometry.dispose();
+    this.insetComposite.material.dispose();
+    this.insetRenderTarget.dispose();
     this.renderTarget.dispose();
     this.timer.dispose();
     this.renderer.dispose();

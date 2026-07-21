@@ -13,6 +13,9 @@ import { chatPanelHTML, chatToggleHTML, escapeHTML } from './screens.js';
 
 const player = (game, id) => game.players.find((candidate) => candidate.id === id);
 
+export const shouldFocusDecisionHourglass = (game, myId) =>
+  game?.status === 'playing' && game.phase === 'turn' && awaitedPlayerId(game) === myId;
+
 const rosterBookIcon = (open) =>
   open
     ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5v14M3 4.5h5.5A3.5 3.5 0 0 1 12 8v12.5a3.5 3.5 0 0 0-3.5-3.5H3V4.5Zm18 0h-5.5A3.5 3.5 0 0 0 12 8v12.5a3.5 3.5 0 0 1 3.5-3.5H21V4.5Z"/></svg>'
@@ -127,6 +130,10 @@ export function tableExperimentHTML({ testMode = false } = {}) {
   const mode = testMode ? 'lab' : 'game';
   return `<main class="tabletop-experiment" data-camera="auto" data-interface="${mode}">
     <canvas id="tabletop-canvas" aria-label="Mesa 3D jogável da La Corte"></canvas>
+    <aside class="tabletop-hourglass-camera" id="tabletop-hourglass-camera" aria-hidden="true" aria-label="Tempo restante para a sua decisão">
+      <div class="tabletop-hourglass-viewport" id="tabletop-hourglass-viewport" aria-hidden="true"></div>
+      <div class="tabletop-hourglass-caption"><span>SUA VEZ · TEMPO RESTANTE</span><strong><span data-tabletop-hourglass-seconds>—</span><small>s</small></strong></div>
+    </aside>
     <div class="tabletop-loading" id="tabletop-loading"><i></i><span>Convocando a corte…</span></div>
     <nav class="tabletop-topbar">
       ${testMode ? '<a class="tabletop-brand" href="/3d" aria-label="Voltar ao jogo 3D">LA <span>CORTE</span><small>LABORATÓRIO 3D</small></a>' : ''}
@@ -237,6 +244,18 @@ export async function mountTableExperiment({
       ? 'light'
       : 'dark';
   let quality = initialTabletopQuality({ search: location.search, storage: localStorage });
+
+  const paintHourglassCamera = (visible, decisionClock = {}) => {
+    const camera = root.querySelector('#tabletop-hourglass-camera');
+    if (!camera) return;
+    const remaining = Math.max(0, (Number(decisionClock.deadline) || 0) - Date.now());
+    const seconds = Math.ceil(remaining / 1000);
+    camera.classList.toggle('visible', visible);
+    camera.classList.toggle('urgent', visible && seconds <= 5);
+    camera.setAttribute('aria-hidden', String(!visible));
+    const count = camera.querySelector('[data-tabletop-hourglass-seconds]');
+    if (count) count.textContent = visible ? String(seconds) : '—';
+  };
 
   const chatState = () => {
     if (!testMode) return currentState;
@@ -460,6 +479,7 @@ export async function mountTableExperiment({
     if (testMode) {
       root.dataset.phase = 'lab';
       root.dataset.decision = 'other';
+      paintHourglassCamera(false);
       gameplay.replaceChildren();
       scene?.sync(frozenLabView(game));
       playPendingReactions();
@@ -470,6 +490,7 @@ export async function mountTableExperiment({
 
     const story = narrative(game);
     const awaited = awaitedPlayerId(game);
+    const ownTurn = shouldFocusDecisionHourglass(game, currentState.myId);
     const decisionPlayer = player(game, awaited);
     root.dataset.phase = game.phase;
     root.querySelector('#tabletop-kicker').textContent =
@@ -506,7 +527,9 @@ export async function mountTableExperiment({
     scene?.setDecisionClock({
       ...currentContext.clock,
       visible: game.status === 'playing' && game.phase === 'turn',
+      focused: ownTurn,
     });
+    paintHourglassCamera(ownTurn && Boolean(currentContext.clock?.deadline), currentContext.clock);
     paintPovControl(scene?.povSelection());
   };
 
@@ -551,7 +574,11 @@ export async function mountTableExperiment({
   paintState();
   try {
     const { ACTION_ART, CoupTableScene } = await import('../lib/tabletop/coup-table.js');
-    scene = new CoupTableScene(canvas, { theme, quality: quality.id });
+    scene = new CoupTableScene(canvas, {
+      theme,
+      quality: quality.id,
+      hourglassViewport: root.querySelector('#tabletop-hourglass-viewport'),
+    });
     // As artes de ação carregam sob demanda na primeira alegação; aquecê-las
     // depois da abertura da cena evita pop-in sem tocar o orçamento da home/2D.
     const warmActionArt = () => {

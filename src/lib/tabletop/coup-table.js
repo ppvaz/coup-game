@@ -887,7 +887,7 @@ export class CoupTableScene {
     this.cameraName = 'table';
     this.currentPovSeatId = null;
     this.currentFocusSeatId = null;
-    this.decisionClock = { deadline: 0, total: 0, visible: false };
+    this.decisionClock = { deadline: 0, total: 0, visible: false, focused: false };
     this.actionTexture = null;
     this.actionCaptionTexture = null;
     this.actionSignature = '';
@@ -956,6 +956,12 @@ export class CoupTableScene {
     this.stage.add(this.seal);
     this.hourglass = createDecisionHourglass();
     this.stage.add(this.hourglass.group);
+    this.stage.setInsetCamera({
+      position: [1.45, 2.12, 2.5],
+      target: [0, 1.83, 0],
+      fov: 27,
+      viewportElement: options.hourglassViewport,
+    });
     this.victoryLight = new THREE.SpotLight(0xffd78f, 0, 15, 0.38, 0.55, 1.4);
     this.victoryLight.position.set(0, 8, 4.2);
     this.victoryLight.target.position.set(0, 1.5, 0);
@@ -1436,12 +1442,16 @@ export class CoupTableScene {
     return this.povSelection();
   }
 
-  setDecisionClock({ deadline = 0, total = 0, visible = false } = {}) {
+  setDecisionClock({ deadline = 0, total = 0, visible = false, focused = false } = {}) {
     this.decisionClock = {
       deadline: Math.max(0, Number(deadline) || 0),
       total: Math.max(0, Number(total) || 0),
       visible: Boolean(visible),
+      focused: Boolean(focused),
     };
+    this.stage.setInsetCameraEnabled(
+      this.decisionClock.visible && this.decisionClock.focused && this.decisionClock.total > 0,
+    );
   }
 
   runPerformanceBenchmark({ warmupMs, durationMs, label = 'coup-standard' } = {}) {
