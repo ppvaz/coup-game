@@ -148,6 +148,9 @@ assets/                        Cenários, personagens, ações, vozes e favicon
 test/                          Testes de regras, salas, segurança e apresentação
 ```
 
+O que dentro dessa estrutura é motor reaproveitável por outros jogos da equipe e o que é Coup nativo
+está mapeado em [MOTOR-COMPARTILHADO.md](MOTOR-COMPARTILHADO.md).
+
 ## Publicação na Vercel
 
 O projeto usa Vite e pode ser publicado diretamente na Vercel. Adicione estas variáveis de ambiente no projeto, para os ambientes **Production**, **Preview** e **Development**:
