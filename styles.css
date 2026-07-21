@@ -1552,7 +1552,7 @@ body:has(.chat-panel.open) .tabletop-reactions,
   text-decoration: none;
   text-transform: uppercase;
 }
-.tabletop-exit-confirm a {
+.tabletop-exit-confirm .exit-leave {
   border-color: rgba(182, 58, 60, 0.52);
   color: #e3c3bb;
   background: rgba(123, 38, 40, 0.16);
@@ -1765,6 +1765,7 @@ body:has(.chat-panel.open) .tabletop-reactions,
   background: rgba(217, 181, 107, 0.45);
 }
 .tabletop-roster-settings .tabletop-theme,
+.tabletop-roster-settings .tabletop-2d,
 .tabletop-roster-settings .audio-toggle,
 .tabletop-lab-link {
   width: 32px;
@@ -1784,6 +1785,7 @@ body:has(.chat-panel.open) .tabletop-reactions,
   padding: 0;
 }
 .tabletop-roster-settings .tabletop-theme:hover,
+.tabletop-roster-settings .tabletop-2d:hover,
 .tabletop-roster-settings .audio-toggle:hover,
 .tabletop-lab-link:hover {
   border-color: rgba(237, 200, 113, 0.58);
@@ -1791,6 +1793,7 @@ body:has(.chat-panel.open) .tabletop-reactions,
   background: rgba(217, 181, 107, 0.1);
 }
 .tabletop-roster-settings .tabletop-theme small,
+.tabletop-roster-settings .tabletop-2d small,
 .tabletop-roster-settings .audio-toggle small,
 .tabletop-lab-link small {
   display: none;

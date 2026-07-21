@@ -79,7 +79,7 @@ function narrative(game) {
   };
 }
 
-function tabletopRosterHTML(state, context) {
+export function tabletopRosterHTML(state, context) {
   const decisionPlayerId = awaitedPlayerId(state.game);
   return `<aside class="tabletop-roster" id="tabletop-roster" aria-label="Influências e moedas da corte"><span class="tabletop-roster-title">A CORTE</span>${state.game.players
     .map((seat) => {
@@ -94,16 +94,20 @@ function tabletopRosterHTML(state, context) {
     })
     .join(
       '',
-    )}<small class="tabletop-roster-hint">CLIQUE EM UM NOME PARA FOCAR</small><section class="tabletop-roster-settings" aria-label="Preferências da experiência"><button class="tabletop-theme" id="tabletop-theme" type="button" title="Alternar ambiente"><span>☀</span><small>Modo diurno</small></button>${audioTogglesHTML(context)}${context.labAccess ? '<a class="tabletop-lab-link" href="/3d/lab" aria-label="Abrir laboratório 3D" title="Abrir laboratório 3D"><span>◇</span><small>Abrir laboratório 3D</small></a>' : ''}</section></aside>`;
+    )}<small class="tabletop-roster-hint">CLIQUE EM UM NOME PARA FOCAR</small><section class="tabletop-roster-settings" aria-label="Preferências da experiência">${context.canSwitchTo2D ? '<button class="tabletop-2d" id="tabletop-2d" type="button" title="Voltar à mesa 2D" aria-label="Voltar à mesa 2D, mantendo a partida"><span>▦</span><small>Mesa 2D</small></button>' : ''}<button class="tabletop-theme" id="tabletop-theme" type="button" title="Alternar ambiente"><span>☀</span><small>Modo diurno</small></button>${audioTogglesHTML(context)}${context.labAccess ? '<a class="tabletop-lab-link" href="/3d/lab" aria-label="Abrir laboratório 3D" title="Abrir laboratório 3D"><span>◇</span><small>Abrir laboratório 3D</small></a>' : ''}</section></aside>`;
 }
 
-function gameplayHTML(state, context) {
+export function gameplayHTML(state, context) {
   const game = state.game;
   const roster = tabletopRosterHTML(state, context);
   if (game.status !== 'finished') return roster + handHTML(state, context.portraits) + modalHTML(state, context);
   const winner = player(game, game.winnerId);
   const defeated = game.finishReason === 'humans_eliminated';
-  return `${roster}<section class="tabletop-result"><span>FIM DA PARTIDA</span><strong>${defeated ? 'Você caiu da corte' : `${escapeHTML(winner?.name ?? '?')} venceu`}</strong><button class="primary" id="tabletop-again">Jogar novamente</button></section>`;
+  const again =
+    !state.online || state.isHost
+      ? '<button class="primary" id="tabletop-again">Jogar novamente</button>'
+      : '<p class="tabletop-result-waiting">Aguardando o anfitrião abrir outra mesa…</p>';
+  return `${roster}<section class="tabletop-result"><span>FIM DA PARTIDA</span><strong>${defeated ? 'Você caiu da corte' : `${escapeHTML(winner?.name ?? '?')} venceu`}</strong>${again}</section>`;
 }
 
 function reactionDockHTML(state, { open, throwable }) {
@@ -136,7 +140,7 @@ export function tableExperimentHTML({ testMode = false } = {}) {
         ${testMode ? '<a class="tabletop-exit" href="/3d" aria-label="Voltar ao jogo 3D"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao jogo 3D</span></a>' : '<button class="tabletop-exit" id="tabletop-exit-request" type="button" aria-expanded="false" aria-controls="tabletop-exit-confirm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao salão</span></button>'}
       </div>
     </nav>
-    ${testMode ? '' : '<aside class="tabletop-exit-confirm" id="tabletop-exit-confirm" hidden><span>ABANDONAR A PARTIDA?</span><p>O progresso desta mesa será encerrado.</p><div><button type="button" id="tabletop-exit-cancel">Continuar jogando</button><a href="/">Sair da partida</a></div></aside>'}
+    ${testMode ? '' : '<aside class="tabletop-exit-confirm" id="tabletop-exit-confirm" hidden><span>ABANDONAR A PARTIDA?</span><p>O progresso desta mesa será encerrado.</p><div><button type="button" id="tabletop-exit-cancel">Continuar jogando</button><button type="button" class="exit-leave" id="tabletop-exit-leave">Sair da partida</button></div></aside>'}
     <section class="tabletop-story" aria-live="polite" aria-atomic="true">
       <span id="tabletop-kicker">TURNO · ATO 01</span>
       <h1 id="tabletop-title">A corte está reunida</h1>
@@ -200,6 +204,8 @@ export async function mountTableExperiment({
   toggleVoices,
   sendReaction,
   bindChat,
+  switchTo2D,
+  exitTable,
   testMode,
 }) {
   document.body.classList.add('is-tabletop-lab');
@@ -309,6 +315,7 @@ export async function mountTableExperiment({
   };
 
   const bindRosterSettings = (scope) => {
+    scope.querySelector('#tabletop-2d')?.addEventListener('click', () => switchTo2D?.());
     scope.querySelector('#tabletop-theme')?.addEventListener('click', () => {
       applyTheme(theme === 'light' ? 'dark' : 'light');
     });
@@ -597,6 +604,7 @@ export async function mountTableExperiment({
     exitRequest.setAttribute('aria-expanded', String(opening));
   });
   root.querySelector('#tabletop-exit-cancel')?.addEventListener('click', closeExitConfirm);
+  root.querySelector('#tabletop-exit-leave')?.addEventListener('click', () => exitTable?.());
   root.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeExitConfirm();
   });

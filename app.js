@@ -100,6 +100,8 @@ const resumeSnapshot = isTabletopExperiment ? null : loadOnlineSession(sessionSt
 
 let state = {
   screen: 'lobby',
+  // Apresentação da partida: o estado e as regras não mudam entre 2D e 3D.
+  presentation: isTabletopExperiment ? '3d' : '2d',
   mode: inviteCode.length === 5 ? 'join' : 'bots',
   joinCode: inviteCode,
   name: '',
@@ -154,6 +156,9 @@ let reconnectingSince = 0;
 let lastTabletopReactionAt = 0;
 let tableExperimentController = null;
 let tableExperimentMount = null;
+// A sessão de validação de /3d senta seis cadeiras; a revanche precisa saber
+// qual mesa local recriar quando a partida foi aberta pelo fluxo comum.
+let localGameKind = 'standard';
 if (resumeSnapshot?.game) {
   clock = {
     key: 'restored',
@@ -170,6 +175,7 @@ const gameViewContext = () => ({
   soundsMuted: sounds.isMuted(),
   voicesMuted: sounds.isVoicesMuted(),
   labAccess: labAccess.allowed,
+  canSwitchTo2D: !isTabletopLab,
 });
 const chatGuard = createChatGuard();
 const unlockSounds = () => sounds.unlock().catch(() => {});
@@ -512,6 +518,7 @@ function scheduleBots() {
 }
 
 function startLocal() {
+  localGameKind = 'standard';
   warnedClockKey = '';
   const previousWinnerId = state.game?.winnerId;
   const seats = [
@@ -529,6 +536,7 @@ function startLocal() {
 }
 
 function resetTabletopLocalGame() {
+  localGameKind = 'tabletop';
   clearTimeout(botTimer);
   warnedClockKey = '';
   const previousWinnerId = state.game?.winnerId;
@@ -1053,6 +1061,7 @@ async function connectRoom(kind) {
 }
 
 function leaveTable() {
+  state.presentation = '2d';
   clearTimeout(botTimer);
   clearHostElection();
   clearTimeout(handoverTimer);
@@ -1107,40 +1116,68 @@ function render() {
   }
 }
 
+function switchTo2D() {
+  state.presentation = '2d';
+  render();
+}
+
+function restartMatch() {
+  if (state.online) {
+    if (state.isHost) startOnline();
+    return;
+  }
+  if (localGameKind === 'tabletop') startTabletopLocal();
+  else startLocal();
+}
+
+function disposeTabletopPresentation() {
+  if (!tableExperimentMount) return;
+  const controller = tableExperimentController;
+  tableExperimentMount = null;
+  tableExperimentController = null;
+  controller?.dispose();
+}
+
 function renderApp() {
   const root = $('#app');
   const restoreChatFocus = document.activeElement?.id === 'chat-input';
-  if (isTabletopExperiment) {
-    if (!state.game) {
-      if (isTabletopLab) resetTabletopLabScene();
-      else resetTabletopLocalGame();
-    }
+  if (isTabletopLab && !state.game) resetTabletopLabScene();
+  if (isTabletopLab || (state.screen === 'game' && state.presentation === '3d' && state.game)) {
     if (tableExperimentController) {
       tableExperimentController.update(state, gameViewContext());
       return;
     }
     if (!tableExperimentMount) {
       root.innerHTML = tableExperimentHTML({ testMode: isTabletopLab });
-      tableExperimentMount = mountTableExperiment({
+      const mount = mountTableExperiment({
         initialState: state,
         context: gameViewContext(),
         dispatch,
         requestRender: render,
-        restart: startTabletopLocal,
+        restart: restartMatch,
         toggleSounds: toggleGameSounds,
         toggleVoices: toggleGameVoices,
         sendReaction: sendTabletopReaction,
         bindChat,
+        switchTo2D,
+        exitTable: leaveTable,
         testMode: isTabletopLab,
       }).then((controller) => {
+        // O jogador pode ter voltado ao 2D antes de a cena terminar de abrir.
+        if (tableExperimentMount !== mount) {
+          controller.dispose();
+          return controller;
+        }
         tableExperimentController = controller;
         controller.update(state, gameViewContext());
         if (!isTabletopLab) scheduleBots();
         return controller;
       });
+      tableExperimentMount = mount;
     }
     return;
   }
+  disposeTabletopPresentation();
   if (state.screen === 'lobby') {
     root.innerHTML =
       lobbyHTML(state) +
@@ -1237,7 +1274,11 @@ function bindGame() {
   $('#leave').onclick = leaveTable;
   $('#sound-toggle')?.addEventListener('click', toggleGameSounds);
   $('#voice-toggle')?.addEventListener('click', toggleGameVoices);
-  $('#again')?.addEventListener('click', () => (state.online ? startOnline() : startLocal()));
+  $('#enter-3d')?.addEventListener('click', () => {
+    state.presentation = '3d';
+    render();
+  });
+  $('#again')?.addEventListener('click', restartMatch);
   bindGameDecisionControls(document, { state, dispatch, render });
 }
 
@@ -1295,5 +1336,6 @@ function bindChat(restoreFocus = false) {
   });
 }
 
-render();
+if (isTabletopExperiment && !isTabletopLab) startTabletopLocal();
+else render();
 if (resumeSnapshot && !isTabletopExperiment) connectRoom('resume');

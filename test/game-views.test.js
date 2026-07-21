@@ -172,3 +172,10 @@ test('crônica descreve eventos e escapa nomes hostis', () => {
     'Bia contestou &lt;img src=x&gt;: era um blefe.',
   );
 });
+
+test('a gamebar oferece a mesa 3D sem encerrar a partida', () => {
+  const game = createGame(seats, { random: () => 0.42 });
+  const html = gameHTML(stateFor(game), context);
+  assert.match(html, /id="enter-3d"/);
+  assert.match(html, /Mesa <\/span>3D/);
+});

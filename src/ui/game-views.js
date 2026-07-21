@@ -355,7 +355,7 @@ export function gameHTML(state, context) {
     !state.online || state.isHost
       ? `<button class="primary" id="again" style="width:240px;margin-top:24px" ${state.online && readyPlayers < 2 ? 'disabled' : ''}>${state.online && readyPlayers < 2 ? 'Aguardando jogadores' : state.online ? `Jogar novamente · ${readyPlayers}` : 'Jogar novamente'}</button>`
       : '<p class="waiting">Aguardando o anfitrião abrir outra mesa…</p>';
-  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div>${waitingNotice}<div class="gamebar-actions">${chatToggleHTML(state)}${audioTogglesHTML(context)}<button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
+  return `<main class="game"><nav class="gamebar"><div class="brand">LA <span>CORTE</span></div>${waitingNotice}<div class="gamebar-actions">${chatToggleHTML(state)}${audioTogglesHTML(context)}<button class="ghost" id="enter-3d" title="Apresentar esta partida na mesa 3D, sem perder o progresso"><span class="enter-3d-long">Mesa </span>3D</button><button class="ghost" id="leave">Sair da mesa</button></div></nav><section class="board"><div class="opponents">${game.players
     .filter((player) => player.id !== state.myId)
     .map((player) => playerHTML(state, player, context.portraits))
     .join(

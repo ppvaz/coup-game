@@ -1703,6 +1703,9 @@ html[data-theme='light'] .chat-taunts button {
   .sound-toggle small {
     display: none;
   }
+  .enter-3d-long {
+    display: none;
+  }
   .ghost {
     padding: 9px 10px;
   }

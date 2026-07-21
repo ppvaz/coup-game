@@ -1,0 +1,62 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createGame } from '../src/game/coup.js';
+import { gameplayHTML, tableExperimentHTML, tabletopRosterHTML } from '../src/ui/table-experiment.js';
+
+const seats = [
+  { id: 'a', name: 'Ana' },
+  { id: 'b', name: 'Bia' },
+  { id: 'c', name: 'Caio' },
+];
+const portraits = {
+  Duque: 'u/duque',
+  Assassina: 'u/assassina',
+  Capitão: 'u/capitao',
+  Embaixadora: 'u/embaixadora',
+  Condessa: 'u/condessa',
+};
+const context = {
+  portraits,
+  clock: { key: '', deadline: 0, total: 1 },
+  soundsMuted: false,
+  voicesMuted: true,
+  labAccess: false,
+  canSwitchTo2D: true,
+};
+const stateFor = (game, extra = {}) => ({
+  game,
+  myId: 'a',
+  online: false,
+  isHost: false,
+  room: null,
+  targetAction: null,
+  exchangePicks: [],
+  chatOpen: false,
+  chatUnread: 0,
+  ...extra,
+});
+
+test('a saída do 3D é um botão da aplicação, não uma navegação', () => {
+  const html = tableExperimentHTML();
+  assert.match(html, /id="tabletop-exit-leave"/);
+  assert.doesNotMatch(html, /<a href="\/">/);
+  assert.doesNotMatch(tableExperimentHTML({ testMode: true }), /tabletop-exit-confirm/);
+});
+
+test('o painel da Corte oferece a volta à mesa 2D quando permitido', () => {
+  const game = createGame(seats, { random: () => 0.42 });
+  const allowed = tabletopRosterHTML(stateFor(game), context);
+  assert.match(allowed, /id="tabletop-2d"/);
+  const lab = tabletopRosterHTML(stateFor(game), { ...context, canSwitchTo2D: false });
+  assert.doesNotMatch(lab, /id="tabletop-2d"/);
+});
+
+test('a revanche 3D é do anfitrião; convidados aguardam', () => {
+  const game = createGame(seats, { random: () => 0.42 });
+  const finished = { ...game, status: 'finished', winnerId: 'b' };
+  assert.match(gameplayHTML(stateFor(finished), context), /id="tabletop-again"/);
+  assert.match(gameplayHTML(stateFor(finished, { online: true, isHost: true }), context), /id="tabletop-again"/);
+  const guest = gameplayHTML(stateFor(finished, { online: true, isHost: false }), context);
+  assert.doesNotMatch(guest, /id="tabletop-again"/);
+  assert.match(guest, /Aguardando o anfitrião/);
+});
