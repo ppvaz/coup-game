@@ -169,16 +169,28 @@ if (resumeSnapshot?.game) {
 
 const themeToggle = $('#theme-toggle');
 const sounds = createSoundManager();
+// Para ligar a trilha: ponha o arquivo em assets/music/ e troque este null por
+// `import trilha from './assets/music/<arquivo>.ogg'`. Sem trilha instalada o
+// controle de música nem chega a ser renderizado.
+const SOUNDTRACK = null;
 const gameViewContext = () => ({
   portraits: PORTRAITS,
   clock,
   soundsMuted: sounds.isMuted(),
   voicesMuted: sounds.isVoicesMuted(),
+  musicAvailable: Boolean(SOUNDTRACK),
+  musicMuted: sounds.isMusicMuted(),
   labAccess: labAccess.allowed,
   canSwitchTo2D: !isTabletopLab,
 });
 const chatGuard = createChatGuard();
-const unlockSounds = () => sounds.unlock().catch(() => {});
+const startMusic = () => sounds.playMusic(SOUNDTRACK);
+// O navegador só libera áudio depois de um gesto, então a trilha começa junto
+// com o desbloqueio do contexto, e não na carga da página.
+const unlockSounds = () => {
+  startMusic();
+  return sounds.unlock().catch(() => {});
+};
 document.addEventListener('pointerdown', unlockSounds, { once: true });
 document.addEventListener('keydown', unlockSounds, { once: true });
 function paintThemeToggle() {
@@ -1158,6 +1170,7 @@ function renderApp() {
         sounds,
         toggleSounds: toggleGameSounds,
         toggleVoices: toggleGameVoices,
+        toggleMusic: toggleGameMusic,
         sendReaction: sendTabletopReaction,
         bindChat,
         switchTo2D,
@@ -1267,10 +1280,17 @@ function toggleGameVoices() {
   render();
 }
 
+function toggleGameMusic() {
+  const muted = sounds.toggleMusic();
+  if (!muted) startMusic();
+  render();
+}
+
 function bindGame() {
   $('#leave').onclick = leaveTable;
   $('#sound-toggle')?.addEventListener('click', toggleGameSounds);
   $('#voice-toggle')?.addEventListener('click', toggleGameVoices);
+  $('#music-toggle')?.addEventListener('click', toggleGameMusic);
   $('#enter-3d')?.addEventListener('click', () => {
     state.presentation = '3d';
     render();

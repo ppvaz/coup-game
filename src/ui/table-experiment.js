@@ -207,6 +207,7 @@ export async function mountTableExperiment({
   sounds,
   toggleSounds,
   toggleVoices,
+  toggleMusic,
   sendReaction,
   bindChat,
   switchTo2D,
@@ -333,6 +334,7 @@ export async function mountTableExperiment({
     });
     scope.querySelector('#sound-toggle')?.addEventListener('click', toggleSounds);
     scope.querySelector('#voice-toggle')?.addEventListener('click', toggleVoices);
+    scope.querySelector('#music-toggle')?.addEventListener('click', toggleMusic);
   };
 
   const applyQuality = (nextQuality, { persist = true } = {}) => {

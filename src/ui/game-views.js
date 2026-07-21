@@ -322,20 +322,42 @@ export function bindGameDecisionControls(root, { state, dispatch, render }) {
   });
 }
 
-function soundToggleHTML(context) {
-  const muted = context.soundsMuted;
-  const label = muted ? 'Ativar efeitos sonoros' : 'Silenciar efeitos sonoros';
-  return `<button class="audio-toggle sound-toggle" id="sound-toggle" type="button" aria-pressed="${muted}" aria-label="${label}" title="${label}"><span class="audio-icon sound-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path class="sound-speaker" d="M4 9h4l5-4v14l-5-4H4Z"/><path class="sound-waves" d="M16 9.2a4 4 0 0 1 0 5.6M18.5 6.8a7.3 7.3 0 0 1 0 10.4"/></svg></span><small>${muted ? 'Sons desligados' : 'Sons ligados'}</small></button>`;
+const AUDIO_CHANNELS = {
+  sound: {
+    on: 'Silenciar efeitos sonoros',
+    off: 'Ativar efeitos sonoros',
+    onText: 'Sons ligados',
+    offText: 'Sons desligados',
+    icon: '<svg viewBox="0 0 24 24"><path class="sound-speaker" d="M4 9h4l5-4v14l-5-4H4Z"/><path class="sound-waves" d="M16 9.2a4 4 0 0 1 0 5.6M18.5 6.8a7.3 7.3 0 0 1 0 10.4"/></svg>',
+  },
+  voice: {
+    on: 'Silenciar vozes',
+    off: 'Ativar vozes',
+    onText: 'Vozes ligadas',
+    offText: 'Vozes desligadas',
+    icon: '<svg viewBox="0 0 24 24"><circle cx="8" cy="7" r="3"/><path d="M3.5 18c.5-3.3 2.2-5 4.5-5s4 1.7 4.5 5M15 8.5a3.8 3.8 0 0 1 0 5M18 6.5a6.7 6.7 0 0 1 0 9"/></svg>',
+  },
+  music: {
+    on: 'Silenciar música',
+    off: 'Ativar música',
+    onText: 'Música ligada',
+    offText: 'Música desligada',
+    icon: '<svg viewBox="0 0 24 24"><path d="M9 17V5.5l10-2V15"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/></svg>',
+  },
+};
+
+function audioToggleHTML(kind, muted) {
+  const channel = AUDIO_CHANNELS[kind];
+  const label = muted ? channel.off : channel.on;
+  return `<button class="audio-toggle ${kind}-toggle" id="${kind}-toggle" type="button" aria-pressed="${muted}" aria-label="${label}" title="${label}"><span class="audio-icon ${kind}-icon ${muted ? 'muted' : ''}" aria-hidden="true">${channel.icon}</span><small>${muted ? channel.offText : channel.onText}</small></button>`;
 }
 
-function voiceToggleHTML(context) {
-  const muted = context.voicesMuted;
-  const label = muted ? 'Ativar vozes' : 'Silenciar vozes';
-  return `<button class="audio-toggle voice-toggle" id="voice-toggle" type="button" aria-pressed="${muted}" aria-label="${label}" title="${label}"><span class="audio-icon voice-icon ${muted ? 'muted' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="7" r="3"/><path d="M3.5 18c.5-3.3 2.2-5 4.5-5s4 1.7 4.5 5M15 8.5a3.8 3.8 0 0 1 0 5M18 6.5a6.7 6.7 0 0 1 0 9"/></svg></span><small>${muted ? 'Vozes desligadas' : 'Vozes ligadas'}</small></button>`;
-}
-
-export const audioTogglesHTML = (context) =>
-  `<div class="audio-toggles" role="group" aria-label="Controles de áudio">${soundToggleHTML(context)}${voiceToggleHTML(context)}</div>`;
+export const audioTogglesHTML = (context) => {
+  const toggles = [audioToggleHTML('sound', context.soundsMuted), audioToggleHTML('voice', context.voicesMuted)];
+  // Sem trilha instalada o controle não existe, em vez de ligar o silêncio.
+  if (context.musicAvailable) toggles.push(audioToggleHTML('music', context.musicMuted));
+  return `<div class="audio-toggles" role="group" aria-label="Controles de áudio">${toggles.join('')}</div>`;
+};
 
 export function gameHTML(state, context) {
   const game = state.game;

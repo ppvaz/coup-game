@@ -50,6 +50,7 @@ class FakeAudio {
   }
 
   play() {
+    this.paused = false;
     return Promise.resolve();
   }
 
@@ -116,6 +117,55 @@ test('persiste efeitos e vozes separadamente', async () => {
   assert.equal(sounds.toggle(), false);
   assert.equal(await sounds.play('action'), true);
   assert.equal(FakeAudioContext.oscillators.length, 1);
+});
+
+test('a trilha entra em loop, num volume abaixo das falas, e não reinicia a cada render', () => {
+  FakeAudio.instances = [];
+  const sounds = createSoundManager({ Audio: FakeAudio, AudioContext: null, storage: makeStorage() });
+
+  assert.equal(sounds.isMusicMuted(), false);
+  assert.equal(sounds.playMusic('corte.ogg'), true);
+  assert.equal(FakeAudio.instances.length, 1);
+  assert.equal(FakeAudio.instances[0].loop, true);
+  assert.ok(FakeAudio.instances[0].volume < 0.9);
+
+  assert.equal(sounds.playMusic('corte.ogg'), false);
+  assert.equal(FakeAudio.instances.length, 1);
+});
+
+test('silenciar a trilha pausa sem perder a posição e religar retoma a mesma faixa', () => {
+  FakeAudio.instances = [];
+  const storage = makeStorage();
+  const sounds = createSoundManager({ Audio: FakeAudio, AudioContext: null, storage });
+
+  sounds.playMusic('corte.ogg');
+  assert.equal(sounds.toggleMusic(), true);
+  assert.equal(storage.getItem('la-corte-music-muted'), 'true');
+  assert.equal(FakeAudio.instances[0].paused, true);
+
+  assert.equal(sounds.toggleMusic(), false);
+  assert.equal(FakeAudio.instances[0].paused, false);
+  // Retomar não pode criar um segundo elemento tocando por cima do primeiro.
+  assert.equal(sounds.playMusic('corte.ogg'), false);
+  assert.equal(FakeAudio.instances.length, 1);
+});
+
+test('trilha silenciada não cria áudio e é independente de efeitos e vozes', async () => {
+  FakeAudio.instances = [];
+  FakeAudioContext.oscillators = [];
+  const sounds = createSoundManager({
+    Audio: FakeAudio,
+    AudioContext: FakeAudioContext,
+    storage: makeStorage({ 'la-corte-music-muted': 'true', 'la-corte-voices-muted': 'false' }),
+  });
+
+  assert.equal(sounds.isMusicMuted(), true);
+  assert.equal(sounds.playMusic('corte.ogg'), false);
+  assert.equal(FakeAudio.instances.length, 0);
+
+  assert.equal(await sounds.play('turn'), true);
+  assert.equal(sounds.playVoices('voice.mp3'), true);
+  assert.equal(sounds.isMusicMuted(), true);
 });
 
 test('inicia com vozes desligadas e respeita uma escolha salva', () => {

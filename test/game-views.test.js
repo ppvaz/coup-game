@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, dispatchGame } from '../src/game/coup.js';
-import { describeLog, gameHTML, handHTML, modalHTML, playerHTML, timerHTML } from '../src/ui/game-views.js';
+import {
+  audioTogglesHTML,
+  describeLog,
+  gameHTML,
+  handHTML,
+  modalHTML,
+  playerHTML,
+  timerHTML,
+} from '../src/ui/game-views.js';
 
 const seats = [
   { id: 'a', name: 'Ana' },
@@ -178,4 +186,28 @@ test('a gamebar oferece a mesa 3D sem encerrar a partida', () => {
   const html = gameHTML(stateFor(game), context);
   assert.match(html, /id="enter-3d"/);
   assert.match(html, /Mesa <\/span>3D/);
+});
+
+test('o controle de música só aparece quando existe uma trilha instalada', () => {
+  const withoutTrack = audioTogglesHTML({ soundsMuted: false, voicesMuted: true });
+  assert.ok(!withoutTrack.includes('music-toggle'));
+  assert.ok(withoutTrack.includes('sound-toggle'));
+  assert.ok(withoutTrack.includes('voice-toggle'));
+
+  const withTrack = audioTogglesHTML({
+    soundsMuted: false,
+    voicesMuted: true,
+    musicAvailable: true,
+    musicMuted: false,
+  });
+  assert.ok(withTrack.includes('id="music-toggle"'));
+  assert.ok(withTrack.includes('Música ligada'));
+  assert.ok(withTrack.includes('aria-label="Silenciar música"'));
+});
+
+test('o controle de música reflete a preferência salva', () => {
+  const muted = audioTogglesHTML({ soundsMuted: false, voicesMuted: true, musicAvailable: true, musicMuted: true });
+  assert.ok(muted.includes('Música desligada'));
+  assert.ok(muted.includes('aria-label="Ativar música"'));
+  assert.ok(muted.includes('audio-icon music-icon muted'));
 });

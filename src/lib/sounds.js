@@ -1,5 +1,9 @@
 const MUTE_KEY = 'la-corte-muted';
 const VOICES_MUTE_KEY = 'la-corte-voices-muted';
+const MUSIC_MUTE_KEY = 'la-corte-music-muted';
+
+// A trilha fica bem abaixo das falas (0.9) para nunca cobrir uma contestação.
+const MUSIC_VOLUME = 0.12;
 
 const PATTERNS = {
   turn: [
@@ -40,9 +44,12 @@ export function createSoundManager(options = {}) {
   let context = null;
   let muted = readMuted(storage, MUTE_KEY);
   let voicesMuted = readMuted(storage, VOICES_MUTE_KEY, true);
+  let musicMuted = readMuted(storage, MUSIC_MUTE_KEY);
   let currentVoice = null;
   let voiceQueue = [];
   let voiceRun = 0;
+  let music = null;
+  let musicSource = null;
 
   const getContext = () => {
     if (!context && AudioContext) context = new AudioContext();
@@ -115,6 +122,45 @@ export function createSoundManager(options = {}) {
     return true;
   };
 
+  const stopMusic = () => {
+    music?.pause();
+    music = null;
+    musicSource = null;
+  };
+
+  const setMusicMuted = (value) => {
+    musicMuted = Boolean(value);
+    // Pausar em vez de descartar preserva a posição da trilha ao religar.
+    if (musicMuted) music?.pause();
+    else if (music) Promise.resolve(music.play()).catch(() => {});
+    try {
+      storage?.setItem(MUSIC_MUTE_KEY, String(musicMuted));
+    } catch {
+      // A preferência fica válida nesta página mesmo sem storage.
+    }
+    return musicMuted;
+  };
+
+  const playMusic = (source) => {
+    if (musicMuted || !AudioPlayer || !source) return false;
+    // Cada render chama isto; repetir a mesma faixa não pode reiniciá-la.
+    if (music && musicSource === source) return false;
+    stopMusic();
+    let track;
+    try {
+      track = new AudioPlayer(source);
+    } catch {
+      return false;
+    }
+    music = track;
+    musicSource = source;
+    track.loop = true;
+    track.preload = 'auto';
+    track.volume = MUSIC_VOLUME;
+    Promise.resolve(track.play()).catch(() => {});
+    return true;
+  };
+
   const play = async (name) => {
     if (muted || !PATTERNS[name]) return false;
     let available = false;
@@ -150,6 +196,10 @@ export function createSoundManager(options = {}) {
     setVoicesMuted,
     toggleVoices: () => setVoicesMuted(!voicesMuted),
     isVoicePlaying: () => Boolean(currentVoice || voiceQueue.length),
+    isMusicMuted: () => musicMuted,
+    setMusicMuted,
+    toggleMusic: () => setMusicMuted(!musicMuted),
+    playMusic,
     // O foley do salão 3D sintetiza os próprios timbres, mas precisa do mesmo
     // contexto para que exista uma única cadeia de áudio e um único mudo.
     audioContext: () => getContext(),
