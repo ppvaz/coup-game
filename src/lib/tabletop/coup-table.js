@@ -234,10 +234,12 @@ function createThrowable(type) {
   return group;
 }
 
-// Ao lado da pilha de moedas do assento (local -1, 1.34, -1.2), na altura do
-// ombro e um passo à frente dela: na câmera do Jogador, que olha por cima das
-// costas, a redoma alinhada com a pilha ficava exatamente sobre as moedas.
-const DECISION_BUBBLE_ANCHOR = new THREE.Vector3(-1, 2.06, -1.52);
+// No ombro esquerdo, acima e atrás da pilha de moedas (local -1, 1.34, -1.2).
+// O assento olha para fora da mesa: local +z aponta para o centro, e a estação
+// do jogador — moedas, cartas, placa — fica entre o corpo e a câmera. Uma
+// redoma na mesma profundidade da pilha, ou mais para fora, cai bem em cima
+// dela; recuada para +z ela sobe no quadro e deixa as moedas livres na frente.
+const DECISION_BUBBLE_ANCHOR = new THREE.Vector3(-1.05, 2.34, -0.42);
 
 function createDecisionHourglass() {
   const group = new THREE.Group();
