@@ -93,17 +93,20 @@ commit da mudança.
   política vai para o jogo.** O pacote não sabe que existe "quem arremessou"; ele sabe compor uma
   segunda câmera sobre um retângulo da tela.
 
-## O segundo jogo já existe
+## Genealogia: dois irmãos, não um pai e um filho
 
-**Sem Perdão** (`~/Projects/SEM-PERDAO`, `main` e `experimento-3d` no mesmo commit) não é um consumidor
-futuro: é uma segunda implementação, pronta e rodando, do mesmo conjunto de problemas. Um tribunal 3D
-com réus em volta da mesa, sala online com host autoritativo, reações físicas, cortes de câmera e
-áudio próprio.
+O objetivo não é extrair um motor de La Corte e entregá-lo a outros jogos. É **fundir duas
+implementações irmãs em um motor genérico que acelere os próximos jogos** — e o motor, nesse
+arranjo, é o produto; os jogos são a prova dele.
 
-Isso muda a natureza do trabalho. A pergunta deixa de ser "o que vai dar para reaproveitar um dia" e
-passa a ser "o que já foi escrito duas vezes e agora diverge em dois repositórios".
+| Quando     | O quê                                                                                                                                  |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 17/07/2026 | Sem Perdão nasce e, no mesmo dia, ganha a mesa 3D retrô pixelada em Three.js na rota `/3d`                                             |
+| 20/07/2026 | La Corte parte dessa base para levantar o próprio ambiente 3D                                                                          |
+| 20–21/07   | Os dois evoluem em separado: PiP, diretor de câmera e ampulheta de um lado; provas, veredito, martelada e pipeline ElevenLabs do outro |
+| Agora      | Intenção de combinar os dois num motor genérico                                                                                        |
 
-### O que os dois jogos resolveram do mesmo jeito, sem combinar
+### Onde as duas bases se encostam
 
 | Problema            | La Corte                                                                  | Sem Perdão                                           |
 | ------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -116,10 +119,15 @@ passa a ser "o que já foi escrito duas vezes e agora diverge em dois repositór
 | Sala online         | `src/rooms/` + `realtime.js`                                              | `useMultiplayer.ts` (1679 linhas)                    |
 | Continuidade        | Host autoritativo, vistas redigidas, sucessão de host, retomada de sessão | O mesmo desenho, reescrito em React                  |
 
-O arremesso é o caso mais eloquente: os dois são a mesma Bézier quadrática (início, controle no meio
-com Y elevado, fim), o mesmo teto de 8 objetos no ar, o mesmo vetor de giro e a mesma divisão de
-duração para movimento reduzido. Duas pessoas escrevendo a mesma função duas vezes é coincidência;
-o mesmo teto arbitrário de 8 nos dois lados é a prova de que existe um motor querendo nascer.
+**Cuidado ao ler esta tabela.** Não é convergência independente — é herança. Os dois arremessos são
+a mesma Bézier com o mesmo teto de oito objetos no ar porque um veio do outro, não porque duas
+cabeças chegaram lá sozinhas. Semelhança por descendência não prova que o código seja genérico;
+prova apenas que ele foi portado.
+
+O que a tabela realmente diz é outra coisa, e é melhor: **a bifurcação tem poucos dias.** As duas
+bases ainda falam a mesma língua, e a fusão nunca mais vai ser tão barata quanto agora. A evidência
+de genericidade de verdade virá de fora — do terceiro jogo, que não vai herdar nada e vai ter que
+consumir a API como ela estiver.
 
 ### O que não atravessa
 
@@ -128,10 +136,10 @@ HTML em string e CSS à mão. `table-experiment.js` é a peça menos portável d
 valiosa — é a segunda vez que este documento corrige essa ordem, agora com evidência. O que atravessa
 é o palco e os módulos puros; a moldura é por stack.
 
-## Fila de extração dentro deste repositório
+## Fila de fusão
 
-Ordem por evidência de duplicação, não por valor percebido nem por facilidade. O que já existe duas
-vezes é o que comprovadamente é motor:
+Ordem por proximidade das duas bases: começa pelo que ainda é quase o mesmo código, antes que a
+bifurcação abra mais.
 
 1. **Palco 3D** (`packages/tabletop-stage/` + atos de câmera + pós-processo + qualidade) — os dois
    jogos têm a mesma coisa escrita duas vezes. É onde a convergência paga mais rápido e onde já
@@ -145,26 +153,27 @@ vezes é o que comprovadamente é motor:
    mecanismo: banco de eventos com intervalo mínimo e mudo persistido por prefixo.
 5. **Casca do salão** — **não** entra na fila enquanto os stacks forem diferentes.
 
-## Plano de extração para um repositório próprio
+## Plano de fusão em um repositório próprio
 
-A regra clássica é não extrair antes do segundo consumidor, porque motor tirado de um jogo só nasce
-com o formato daquele jogo. **Essa condição já está satisfeita** — Sem Perdão existe, roda e resolveu
-os mesmos problemas de forma independente. O risco deixou de ser abstrair cedo demais e passou a ser
-a divergência: cada correção de câmera, arremesso ou reconexão feita em um repositório não chega ao
-outro, e a distância entre as duas cópias só cresce.
+A regra clássica manda não extrair antes do segundo consumidor, porque motor tirado de um jogo só
+nasce com o formato daquele jogo. Aqui o caso é outro: não há um jogo doando o motor, há **dois
+irmãos recém-bifurcados** para reunir. O risco não é abstrair cedo demais — é deixar a bifurcação
+envelhecer, porque cada correção de câmera, arremesso ou reconexão feita de um lado não chega ao
+outro.
 
-Por isso o plano abaixo tem uma fase a mais que a versão anterior deste documento: antes de publicar
-qualquer coisa, alguém precisa comparar as duas implementações lado a lado e decidir **qual das duas
-versões é a boa** em cada peça. Extrair a de La Corte por ser a "nossa" seria escolher por acidente.
+Por isso o plano tem uma fase que uma extração comum não teria: antes de publicar qualquer coisa,
+comparar as duas implementações lado a lado e decidir **qual das duas versões é a boa** em cada peça.
+Eleger a de La Corte por ser a de casa seria escolher por acidente — a linhagem começou do outro
+lado, e em várias peças a versão mais madura provavelmente é a de lá.
 
-| Fase                                        | Gatilho                                                  | Entregável                                                                                                               | Pronto quando                                                                                        |
-| ------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **0 · Fronteira mecanizada**                | Agora                                                    | Teste que falha se `packages/` importar `src/`, se a apresentação importar `src/game/` ou se o motor citar papel de Coup | A fronteira deixa de depender de disciplina e passa a quebrar o `npm test`                           |
-| **1 · Workspace**                           | Depois da fase 0                                         | `workspaces` no `package.json` da raiz, no lugar da dependência `file:`                                                  | `npm test` e `npm run build` passam sem o link manual                                                |
-| **1.5 · Confronto das duas implementações** | Já disponível                                            | Comparação peça a peça (palco, atos, arremesso, sala) escolhendo a melhor versão de cada uma, com o motivo registrado    | Cada peça da fila tem uma versão eleita e uma lista do que falta nela                                |
-| **2 · Prova de portabilidade**              | Depois da fase 1.5                                       | Sem Perdão consome o motor por caminho relativo ou submódulo, ainda sem publicar                                         | Sem Perdão roda uma partida ponta a ponta sem editar nenhum arquivo de `packages/`                   |
-| **3 · Repositório próprio**                 | O segundo jogo rodando e os contratos da fase 2 estáveis | Repo do motor com escopo neutro, semver, CHANGELOG e publicação em registry privado (GitHub Packages)                    | Os dois jogos instalam a mesma versão publicada e o histórico do motor sobrevive (`git filter-repo`) |
-| **4 · La Corte vira consumidor**            | Depois da fase 3                                         | Este repositório passa a depender da versão publicada e `packages/` some daqui                                           | Uma correção no motor chega aos dois jogos por bump de versão, sem cópia                             |
+| Fase                                        | Gatilho                                     | Entregável                                                                                                               | Pronto quando                                                                                        |
+| ------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **0 · Fronteira mecanizada**                | Agora                                       | Teste que falha se `packages/` importar `src/`, se a apresentação importar `src/game/` ou se o motor citar papel de Coup | A fronteira deixa de depender de disciplina e passa a quebrar o `npm test`                           |
+| **1 · Workspace**                           | Depois da fase 0                            | `workspaces` no `package.json` da raiz, no lugar da dependência `file:`                                                  | `npm test` e `npm run build` passam sem o link manual                                                |
+| **1.5 · Confronto das duas implementações** | Já disponível                               | Comparação peça a peça (palco, atos, arremesso, sala) escolhendo a melhor versão de cada uma, com o motivo registrado    | Cada peça da fila tem uma versão eleita e uma lista do que falta nela                                |
+| **2 · Prova de portabilidade**              | Depois da fase 1.5                          | Sem Perdão consome o motor fundido por caminho relativo ou submódulo, ainda sem publicar                                 | Sem Perdão roda uma partida ponta a ponta sem editar nenhum arquivo do motor                         |
+| **3 · Repositório próprio**                 | Os dois jogos rodando sobre o motor fundido | Repo do motor com escopo neutro, semver, CHANGELOG e publicação em registry privado (GitHub Packages)                    | Os dois jogos instalam a mesma versão publicada e o histórico do motor sobrevive (`git filter-repo`) |
+| **4 · La Corte vira consumidor**            | Depois da fase 3                            | Este repositório passa a depender da versão publicada e `packages/` some daqui                                           | Uma correção no motor chega aos dois jogos por bump de versão, sem cópia                             |
 
 ### O que nunca vai junto
 
@@ -196,20 +205,23 @@ e caros depois de publicado, porque viram mudança de API entre repositórios:
 
 - **Publicar cedo demais.** Um pacote com dois consumidores transforma toda mudança em release. Fase
   2 existe justamente para provar a portabilidade sem pagar esse pedágio.
-- **Segurar tempo demais.** É o risco real agora: com duas implementações vivas, cada semana sem
+- **Segurar tempo demais.** É o risco real agora: a bifurcação tem dias, e cada semana sem
   convergência aumenta o custo da fusão. A fase 0 é o antídoto do lado de cá e por isso vem primeiro.
 - **Eleger a versão errada.** Escolher a implementação de La Corte por ser a de casa. A fase 1.5
   existe para que a escolha tenha motivo escrito.
+- **Confundir herança com prova.** Duas bases parecidas por descendência não demonstram que a API
+  serve a um jogo que não descende de nenhuma delas. O motor só está validado no terceiro jogo.
 
-### Decisão resolvida: a geometria generaliza
+### Sobre a geometria: promissor, ainda não provado
 
-A dúvida anterior era se o palco seria, na verdade, "motor de jogo de cadeiras em círculo". Sem
-Perdão respondeu: também é mesa redonda com assento por ângulo. A diferença é o número de lugares —
-até 6 aqui, de 3 a 8 lá. **Logo, o limite de assentos é parâmetro, não premissa**, e as câmeras
-derivadas da roda (duelo, trono, POV, close de réu) são motor de verdade.
+A dúvida era se o palco seria, na verdade, "motor de jogo de cadeiras em círculo". Os dois jogos são
+mesa redonda com assento por ângulo, e a única diferença é o número de lugares — até 6 aqui, de 3 a 8
+lá. Isso é suficiente para tratar **o limite de assentos como parâmetro, não como premissa**.
 
-Continua em aberto o que acontece quando aparecer um jogo com tabuleiro, grade ou times. Até lá, o
-motor pode assumir a roda com honestidade, desde que o assuma explicitamente no nome e na API.
+Não é suficiente, porém, para declarar a roda genérica: as duas bases têm a mesma origem, então
+concordarem sobre geometria era o esperado. Quando aparecer um jogo com tabuleiro, grade ou times,
+esta seção provavelmente muda. Até lá o motor pode assumir a roda — desde que assuma explicitamente,
+no nome e na API, em vez de fingir neutralidade que não tem.
 
 ## Manutenção
 
