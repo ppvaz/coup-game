@@ -569,24 +569,6 @@ html[data-theme='light'] .gamebar {
 html[data-theme='light'] .brand {
   color: #292018;
 }
-html[data-theme='light'] .lab-entry {
-  border-color: rgba(126, 91, 31, 0.42);
-  background: linear-gradient(145deg, rgba(255, 251, 243, 0.94), rgba(226, 211, 184, 0.88));
-  color: #594526;
-  box-shadow:
-    0 8px 24px rgba(77, 55, 26, 0.12),
-    inset 0 1px rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(12px);
-}
-html[data-theme='light'] .lab-entry i {
-  background: #a97d2c;
-  box-shadow: 0 0 8px rgba(169, 125, 44, 0.42);
-}
-html[data-theme='light'] .lab-entry:hover {
-  border-color: #9b742e;
-  background: #fbf6ec;
-  color: #2f251b;
-}
 html[data-theme='light'] .round {
   color: #6f6558;
 }

@@ -49,35 +49,6 @@ button {
 .brand span {
   color: var(--gold);
 }
-.lab-entry {
-  position: fixed;
-  z-index: 3;
-  top: 20px;
-  right: 5vw;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 11px;
-  border: 1px solid rgba(217, 181, 107, 0.28);
-  color: #bdb3a3;
-  background: rgba(8, 7, 6, 0.38);
-  text-decoration: none;
-  text-transform: uppercase;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-}
-.lab-entry i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #d9b56b;
-  box-shadow: 0 0 9px rgba(217, 181, 107, 0.65);
-}
-.lab-entry:hover {
-  color: #eee6d6;
-  border-color: #d9b56b;
-}
 .landing {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;

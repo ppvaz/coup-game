@@ -1185,11 +1185,7 @@ function renderApp() {
   }
   disposeTabletopPresentation();
   if (state.screen === 'lobby') {
-    root.innerHTML =
-      lobbyHTML(state) +
-      '<a class="lab-entry" href="/3d"><i></i> Corte 3D · WIP</a>' +
-      connectionUIHTML(state) +
-      chatPanelHTML(state);
+    root.innerHTML = lobbyHTML(state) + connectionUIHTML(state) + chatPanelHTML(state);
     bindLobby();
     bindChat(restoreChatFocus);
     return;
