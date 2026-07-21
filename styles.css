@@ -30,7 +30,7 @@ button {
   min-height: 100vh;
   background:
     linear-gradient(90deg, rgba(6, 6, 5, 0.91), rgba(6, 6, 5, 0.42) 52%, rgba(6, 6, 5, 0.84)),
-    url('assets/council-chamber.png') center/cover fixed;
+    url('assets/council-chamber.webp') center/cover fixed;
 }
 .topbar {
   height: 74px;
@@ -221,7 +221,7 @@ h1 em {
   min-height: 100vh;
   background:
     radial-gradient(circle at 50% 42%, rgba(36, 25, 17, 0.1), rgba(5, 5, 4, 0.75)),
-    url('assets/council-chamber.png') center/cover fixed;
+    url('assets/council-chamber.webp') center/cover fixed;
 }
 .gamebar {
   height: 64px;

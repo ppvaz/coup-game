@@ -554,12 +554,12 @@ html[data-theme='light'] body {
 html[data-theme='light'] .shell {
   background-image:
     linear-gradient(90deg, rgba(244, 238, 226, 0.84), rgba(244, 238, 226, 0.32) 52%, rgba(235, 226, 210, 0.72)),
-    url('assets/council-chamber-light.png');
+    url('assets/council-chamber-light.webp');
 }
 html[data-theme='light'] .game {
   background-image:
     radial-gradient(circle at 50% 42%, rgba(255, 250, 240, 0.04), rgba(227, 216, 196, 0.25)),
-    url('assets/council-chamber-light.png');
+    url('assets/council-chamber-light.webp');
 }
 html[data-theme='light'] .topbar,
 html[data-theme='light'] .gamebar {

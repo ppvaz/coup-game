@@ -30,13 +30,13 @@ import { canAcceptRoomSnapshot, hasRoomSeat, startJoinAttempt } from './src/room
 import { createSubscriptionHandler } from './src/rooms/connection.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import { mountTableExperiment, tableExperimentHTML } from './src/ui/table-experiment.js';
-import duquePortrait from './assets/characters/duque.png';
-import assassinaPortrait from './assets/characters/assassina.png';
-import capitaoPortrait from './assets/characters/capitao.png';
-import embaixadoraPortrait from './assets/characters/embaixadora.png';
-import condessaPortrait from './assets/characters/condessa.png';
-import councilChamberDark from './assets/council-chamber.png';
-import councilChamberLight from './assets/council-chamber-light.png';
+import duquePortrait from './assets/characters/duque.webp';
+import assassinaPortrait from './assets/characters/assassina.webp';
+import capitaoPortrait from './assets/characters/capitao.webp';
+import embaixadoraPortrait from './assets/characters/embaixadora.webp';
+import condessaPortrait from './assets/characters/condessa.webp';
+import councilChamberDark from './assets/council-chamber.webp';
+import councilChamberLight from './assets/council-chamber-light.webp';
 
 const PORTRAITS = {
   Duque: duquePortrait,

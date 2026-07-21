@@ -3,11 +3,11 @@ import { TabletopStage, canvasTexture, disposeObject3D, textTexture } from '@la-
 import { createCoupEnvironment } from './coup-environment.js';
 import { resolveTabletopQuality } from './quality-profiles.js';
 import { TABLETOP_THROWABLES } from './reactions.js';
-import duquePortrait from '../../../assets/characters/duque.png';
-import assassinaPortrait from '../../../assets/characters/assassina.png';
-import capitaoPortrait from '../../../assets/characters/capitao.png';
-import embaixadoraPortrait from '../../../assets/characters/embaixadora.png';
-import condessaPortrait from '../../../assets/characters/condessa.png';
+import duquePortrait from '../../../assets/characters/duque.webp';
+import assassinaPortrait from '../../../assets/characters/assassina.webp';
+import capitaoPortrait from '../../../assets/characters/capitao.webp';
+import embaixadoraPortrait from '../../../assets/characters/embaixadora.webp';
+import condessaPortrait from '../../../assets/characters/condessa.webp';
 import incomeArt from '../../../assets/actions/income.png';
 import foreignAidArt from '../../../assets/actions/foreign-aid.png';
 import taxArt from '../../../assets/actions/tax.png';
