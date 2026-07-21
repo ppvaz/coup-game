@@ -8,13 +8,13 @@ import assassinaPortrait from '../../../assets/characters/assassina.webp';
 import capitaoPortrait from '../../../assets/characters/capitao.webp';
 import embaixadoraPortrait from '../../../assets/characters/embaixadora.webp';
 import condessaPortrait from '../../../assets/characters/condessa.webp';
-import incomeArt from '../../../assets/actions/income.png';
-import foreignAidArt from '../../../assets/actions/foreign-aid.png';
-import taxArt from '../../../assets/actions/tax.png';
-import stealArt from '../../../assets/actions/steal.png';
-import exchangeArt from '../../../assets/actions/exchange.png';
-import assassinateArt from '../../../assets/actions/assassinate.png';
-import coupArt from '../../../assets/actions/coup.png';
+import incomeArt from '../../../assets/actions/income.webp';
+import foreignAidArt from '../../../assets/actions/foreign-aid.webp';
+import taxArt from '../../../assets/actions/tax.webp';
+import stealArt from '../../../assets/actions/steal.webp';
+import exchangeArt from '../../../assets/actions/exchange.webp';
+import assassinateArt from '../../../assets/actions/assassinate.webp';
+import coupArt from '../../../assets/actions/coup.webp';
 
 const COLORS = {
   ink: 0x080706,
@@ -53,7 +53,7 @@ const ROLE_PORTRAITS = {
   Condessa: condessaPortrait,
 };
 
-const ACTION_ART = {
+export const ACTION_ART = {
   income: incomeArt,
   foreign_aid: foreignAidArt,
   tax: taxArt,

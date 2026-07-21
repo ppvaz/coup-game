@@ -543,8 +543,19 @@ export async function mountTableExperiment({
   paintRosterControl();
   paintState();
   try {
-    const { CoupTableScene } = await import('../lib/tabletop/coup-table.js');
+    const { ACTION_ART, CoupTableScene } = await import('../lib/tabletop/coup-table.js');
     scene = new CoupTableScene(canvas, { theme, quality: quality.id });
+    // As artes de ação carregam sob demanda na primeira alegação; aquecê-las
+    // depois da abertura da cena evita pop-in sem tocar o orçamento da home/2D.
+    const warmActionArt = () => {
+      for (const source of Object.values(ACTION_ART)) {
+        const image = new Image();
+        image.decoding = 'async';
+        image.src = source;
+      }
+    };
+    if ('requestIdleCallback' in window) requestIdleCallback(warmActionArt, { timeout: 4000 });
+    else setTimeout(warmActionArt, 1500);
     benchmarkKit = new TabletopBenchmarkKit({
       scene,
       storage: localStorage,

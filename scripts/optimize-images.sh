@@ -13,6 +13,13 @@ sources=(
   assets/characters/capitao.png
   assets/characters/embaixadora.png
   assets/characters/condessa.png
+  assets/actions/income.png
+  assets/actions/foreign-aid.png
+  assets/actions/tax.png
+  assets/actions/steal.png
+  assets/actions/exchange.png
+  assets/actions/assassinate.png
+  assets/actions/coup.png
 )
 
 for src in "${sources[@]}"; do
