@@ -6,7 +6,8 @@
   "description": "Framework-neutral Three.js runtime for tabletop game scenes",
   "exports": {
     ".": "./index.js",
-    "./performance": "./performance.js"
+    "./performance": "./performance.js",
+    "./projectile-cam": "./projectile-cam.js"
   },
   "peerDependencies": {
     "three": "^0.185.1"

@@ -25,23 +25,24 @@ commit da mudança.
 
 ### Motor — leva inteiro
 
-| Módulo                                   | O que resolve                                                                                              |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `packages/tabletop-stage/index.js`       | Renderer, câmera, atos de câmera, pós-processo CRT, PiP, arraste/zoom, resize, ciclo de animação, descarte |
-| `packages/tabletop-stage/performance.js` | Amostragem de quadros e resumo de FPS                                                                      |
-| `src/lib/tabletop/quality-profiles.js`   | Perfis de qualidade 3D e persistência da escolha                                                           |
-| `src/lib/tabletop/benchmark-kit.js`      | Execução e histórico de benchmark pela URL                                                                 |
-| `src/lib/realtime.js`                    | Tradução de status de canal Supabase em reação do app; presença com ACK                                    |
-| `src/lib/secure-channel.js`              | ECDH P-256 + AES-GCM para visões privadas no Broadcast                                                     |
-| `src/lib/supabase.js`                    | Cliente e validação da URL do projeto                                                                      |
-| `src/rooms/room.js`                      | Código de sala, cadeiras, anfitrião, tolerância de queda                                                   |
-| `src/rooms/connection.js`                | Sequência de assinatura do canal, create/resume/join e reassinatura                                        |
-| `src/rooms/join.js`                      | Pedido de cadeira do convidado com reenvio e desistência                                                   |
-| `src/rooms/chat.js`                      | Normalização, limites e antiflood do chat                                                                  |
-| `src/rooms/game-sync.js`                 | Aceite de snapshot por `gameId` e `version`                                                                |
-| `src/lib/asset-warmup.js`                | Ordem de aquecimento de assets (imediato × ocioso)                                                         |
-| `src/lib/lab-access.js`                  | Liberação de rota interna por chave na URL                                                                 |
-| `src/lib/bot-timing.js`                  | Atraso humano para jogadas automáticas                                                                     |
+| Módulo                                      | O que resolve                                                                                              |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `packages/tabletop-stage/index.js`          | Renderer, câmera, atos de câmera, pós-processo CRT, PiP, arraste/zoom, resize, ciclo de animação, descarte |
+| `packages/tabletop-stage/performance.js`    | Amostragem de quadros e resumo de FPS                                                                      |
+| `packages/tabletop-stage/projectile-cam.js` | Parábola do voo, saída do quadro, pose da câmera de perseguição e ancoragem do PiP na borda                |
+| `src/lib/tabletop/quality-profiles.js`      | Perfis de qualidade 3D e persistência da escolha                                                           |
+| `src/lib/tabletop/benchmark-kit.js`         | Execução e histórico de benchmark pela URL                                                                 |
+| `src/lib/realtime.js`                       | Tradução de status de canal Supabase em reação do app; presença com ACK                                    |
+| `src/lib/secure-channel.js`                 | ECDH P-256 + AES-GCM para visões privadas no Broadcast                                                     |
+| `src/lib/supabase.js`                       | Cliente e validação da URL do projeto                                                                      |
+| `src/rooms/room.js`                         | Código de sala, cadeiras, anfitrião, tolerância de queda                                                   |
+| `src/rooms/connection.js`                   | Sequência de assinatura do canal, create/resume/join e reassinatura                                        |
+| `src/rooms/join.js`                         | Pedido de cadeira do convidado com reenvio e desistência                                                   |
+| `src/rooms/chat.js`                         | Normalização, limites e antiflood do chat                                                                  |
+| `src/rooms/game-sync.js`                    | Aceite de snapshot por `gameId` e `version`                                                                |
+| `src/lib/asset-warmup.js`                   | Ordem de aquecimento de assets (imediato × ocioso)                                                         |
+| `src/lib/lab-access.js`                     | Liberação de rota interna por chave na URL                                                                 |
+| `src/lib/bot-timing.js`                     | Atraso humano para jogadas automáticas                                                                     |
 
 ### Motor com amarra — leva a máquina, deixa o catálogo
 

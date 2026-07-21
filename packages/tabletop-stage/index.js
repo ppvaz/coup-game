@@ -184,6 +184,7 @@ export class TabletopStage {
     this.insetCamera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
     this.insetCameraTarget = new THREE.Vector3();
     this.insetViewportElement = null;
+    this.insetMirror = null;
     this.insetCameraEnabled = false;
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -297,18 +298,26 @@ export class TabletopStage {
   }
 
   /**
-   * Picture-in-picture: uma segunda câmera fixa, composta sobre o retângulo de
-   * um elemento do DOM a cada quadro. Genérica de propósito — aponte para o que
-   * a cena quiser destacar. Sem `viewportElement` o passe não roda e não custa
-   * nada, que é o estado atual: a ampulheta de decisão virou peça 3D e nenhum
-   * app usa o PiP hoje. Mantido para as próximas segundas câmeras.
+   * Picture-in-picture: uma segunda câmera composta sobre o retângulo de um
+   * elemento do DOM a cada quadro. Genérica de propósito — aponte para o que a
+   * cena quiser destacar. Sem `viewportElement` o passe não roda e não custa
+   * nada.
+   *
+   * Cada campo só é aplicado quando vem no argumento: a chamada de amarração
+   * passa elemento e lente uma vez, e o quadro a quadro passa só a pose.
+   *
+   * `mirror` é um `<canvas>` 2D opcional que recebe uma cópia do recorte no
+   * mesmo quadro. O composto nasce dentro do canvas principal, que é a camada
+   * mais baixa da página; quem precisa do PiP *acima* da interface espelha em
+   * um elemento próprio e empilha esse elemento onde quiser.
    */
-  setInsetCamera({ position, target, fov = 32, viewportElement = null } = {}) {
+  setInsetCamera({ position, target, fov, viewportElement, mirror } = {}) {
     if (position) this.insetCamera.position.set(...position);
     if (target) this.insetCameraTarget.set(...target);
-    this.insetCamera.fov = fov;
+    if (fov !== undefined) this.insetCamera.fov = fov;
     this.insetCamera.lookAt(this.insetCameraTarget);
-    this.insetViewportElement = viewportElement;
+    if (viewportElement !== undefined) this.insetViewportElement = viewportElement;
+    if (mirror !== undefined) this.insetMirror = mirror;
   }
 
   setInsetCameraEnabled(enabled) {
@@ -476,6 +485,27 @@ export class TabletopStage {
     this.renderer.autoClear = autoClear;
     this.renderer.setScissorTest(false);
     this.renderer.setViewport(0, 0, canvasBounds.width, canvasBounds.height);
+    this.blitInsetMirror({
+      sourceX: (left - canvasBounds.left) * pixelRatio,
+      sourceY: (top - canvasBounds.top) * pixelRatio,
+      width: width * pixelRatio,
+      height: height * pixelRatio,
+    });
+  }
+
+  // A cópia acontece dentro do mesmo quadro do render, antes de o navegador
+  // limpar o buffer de desenho — é o que dispensa `preserveDrawingBuffer` e o
+  // custo que ele cobra de todo quadro do jogo.
+  blitInsetMirror({ sourceX, sourceY, width, height }) {
+    const mirror = this.insetMirror;
+    if (!mirror?.isConnected) return;
+    const targetWidth = Math.max(1, Math.round(width));
+    const targetHeight = Math.max(1, Math.round(height));
+    if (mirror.width !== targetWidth) mirror.width = targetWidth;
+    if (mirror.height !== targetHeight) mirror.height = targetHeight;
+    const context = mirror.getContext('2d');
+    context.clearRect(0, 0, targetWidth, targetHeight);
+    context.drawImage(this.canvas, sourceX, sourceY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
   }
 
   animate(now) {

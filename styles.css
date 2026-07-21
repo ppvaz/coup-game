@@ -1269,6 +1269,24 @@ body.is-tabletop-lab > .theme-toggle {
   opacity: 0;
   pointer-events: none;
 }
+/* Câmera de arremesso: acompanha o próprio objeto quando ele sai do quadro.
+   Fica acima de toda a interface da mesa — só o overlay de conexão perdida
+   (z-index 40) passa por cima, porque aí não há partida para assistir. */
+.tabletop-throw-cam {
+  position: fixed;
+  z-index: 24;
+  display: block;
+  opacity: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgba(217, 181, 107, 0.55),
+    0 18px 44px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+.tabletop-throw-cam.open {
+  opacity: 1;
+}
 .tabletop-reactions {
   position: absolute;
   z-index: 9;
@@ -2178,6 +2196,11 @@ html[data-theme='light'] .tabletop-lab-link:hover {
   border-color: #805817;
   color: #211810;
   background: rgba(126, 91, 31, 0.14);
+}
+html[data-theme='light'] .tabletop-throw-cam {
+  box-shadow:
+    0 0 0 1px rgba(94, 68, 30, 0.5),
+    0 18px 44px rgba(58, 42, 20, 0.32);
 }
 html[data-theme='light'] .tabletop-hint {
   color: rgba(48, 36, 23, 0.58);

@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { TabletopStage, canvasTexture, disposeObject3D, textTexture } from '@la-corte/tabletop-stage';
 import {
+  PROJECTILE_CAM,
+  bezierDirection,
+  isOutsideFrame,
+  projectileCamAnchor,
+  projectileCamPose,
+} from '@la-corte/tabletop-stage/projectile-cam';
+import {
   cameraDecisionKey,
   directCamera,
   duelCameraForSeats,
@@ -969,6 +976,7 @@ export class CoupTableScene {
     this.elapsed = 0;
     this.emojiReactions = [];
     this.flyingReactions = [];
+    this.throwCam = { element: null, allowed: () => true, onChange: () => {}, open: false };
     this.influenceReveals = [];
     this.foley = options.sounds ? createTabletopFoley({ sounds: options.sounds }) : null;
 
@@ -1269,7 +1277,12 @@ export class CoupTableScene {
     return true;
   }
 
-  throwReaction(sourceId, targetId, type) {
+  /**
+   * `spotlight` marca o arremesso do próprio jogador. Só ele ganha o PiP: a
+   * janela é o retorno da ação de quem jogou, e não um corte imposto a toda a
+   * mesa. Os demais clientes veem o objeto voar e mais nada.
+   */
+  throwReaction(sourceId, targetId, type, { spotlight = false } = {}) {
     const source = this.seats.get(sourceId);
     const target = this.seats.get(targetId);
     if (!source || !target || sourceId === targetId || !THROWABLE_TYPES.has(type)) return false;
@@ -1283,17 +1296,61 @@ export class CoupTableScene {
     const control = start.clone().lerp(end, 0.5).setY(4.15);
     group.position.copy(start);
     this.stage.add(group);
+    if (spotlight) this.closeThrowCam();
     this.flyingReactions.push({
       group,
       start,
       control,
       end,
+      spotlight,
       startedAt: this.elapsed,
       duration: this.stage.reducedMotion ? 0.45 : 0.9,
       spin: new THREE.Vector3(6.2, 8.1, 5.4),
     });
     this.foley?.play('throw');
     return true;
+  }
+
+  /**
+   * Amarra o PiP de arremesso a um `<canvas>` da casca. `allowed` é consultado
+   * a cada quadro do voo: uma decisão que suba no meio do arremesso fecha a
+   * janela, porque prioridade sobre a interface não é prioridade sobre o jogo.
+   */
+  bindThrowCam({ element = null, allowed = () => true, onChange = () => {} } = {}) {
+    this.throwCam = { element, allowed, onChange, open: false };
+    this.stage.setInsetCamera({ fov: PROJECTILE_CAM.fov, viewportElement: element, mirror: element });
+  }
+
+  updateThrowCam(reaction, progress) {
+    const cam = this.throwCam;
+    if (!cam.element) return;
+    if (cam.open && !cam.allowed()) {
+      this.closeThrowCam();
+      return;
+    }
+    const direction = bezierDirection(reaction.start, reaction.control, reaction.end, progress);
+    this.stage.setInsetCamera(projectileCamPose({ position: reaction.group.position, direction }));
+    // Uma vez aberta, a janela acompanha o objeto até o fim mesmo que ele
+    // reentre no quadro principal — reabrir a cada cruzamento de borda daria
+    // um pisca-pisca no lugar de um plano.
+    if (cam.open) return;
+    const ndc = reaction.group.position.clone().project(this.stage.camera);
+    if (!isOutsideFrame(ndc) || !cam.allowed()) return;
+    cam.open = true;
+    this.stage.setInsetCameraEnabled(true);
+    cam.onChange(
+      projectileCamAnchor(ndc, {
+        width: this.stage.canvas.clientWidth,
+        height: this.stage.canvas.clientHeight,
+      }),
+    );
+  }
+
+  closeThrowCam() {
+    if (!this.throwCam.open) return;
+    this.throwCam.open = false;
+    this.stage.setInsetCameraEnabled(false);
+    this.throwCam.onChange(null);
   }
 
   updateWinnerAvatar(view) {
@@ -1654,7 +1711,9 @@ export class CoupTableScene {
       reaction.group.rotation.x = reaction.spin.x * progress;
       reaction.group.rotation.y = reaction.spin.y * progress;
       reaction.group.rotation.z = reaction.spin.z * progress;
+      if (reaction.spotlight) this.updateThrowCam(reaction, progress);
       if (progress >= 1) {
+        if (reaction.spotlight) this.closeThrowCam();
         disposeObject3D(reaction.group);
         this.flyingReactions.splice(index, 1);
       }
@@ -1678,6 +1737,7 @@ export class CoupTableScene {
   }
 
   dispose() {
+    this.closeThrowCam();
     for (const reaction of this.emojiReactions) disposeObject3D(reaction.sprite);
     for (const reaction of this.flyingReactions) disposeObject3D(reaction.group);
     this.emojiReactions = [];

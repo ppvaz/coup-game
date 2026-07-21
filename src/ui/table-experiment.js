@@ -168,6 +168,7 @@ export function tableExperimentHTML({ testMode = false } = {}) {
         : ''
     }
     <div class="tabletop-gameplay" id="tabletop-gameplay"></div>
+    <canvas class="tabletop-throw-cam" id="tabletop-throw-cam" aria-hidden="true"></canvas>
     <div id="tabletop-reaction-layer"></div>
     <div id="tabletop-chat-layer"></div>
     ${
@@ -419,7 +420,9 @@ export async function mountTableExperiment({
       if (processedReactions.has(reaction.id)) continue;
       const played =
         reaction.kind === 'throw'
-          ? scene.throwReaction(reaction.playerId, reaction.targetId, reaction.throwable)
+          ? scene.throwReaction(reaction.playerId, reaction.targetId, reaction.throwable, {
+              spotlight: reaction.playerId === currentState.myId,
+            })
           : scene.showEmojiReaction(reaction.playerId, reaction.emoji);
       if (played) processedReactions.add(reaction.id);
     }
@@ -561,6 +564,23 @@ export async function mountTableExperiment({
       theme,
       quality: quality.id,
       sounds,
+    });
+    const throwCam = root.querySelector('#tabletop-throw-cam');
+    scene.bindThrowCam({
+      element: throwCam,
+      allowed: () => !root.querySelector('.tabletop-gameplay .modal-wrap'),
+      onChange: (placement) => {
+        if (!placement) {
+          throwCam.classList.remove('open');
+          return;
+        }
+        throwCam.style.left = `${placement.left}px`;
+        throwCam.style.top = `${placement.top}px`;
+        throwCam.style.width = `${placement.size}px`;
+        throwCam.style.height = `${placement.size}px`;
+        throwCam.dataset.edge = placement.edge;
+        throwCam.classList.add('open');
+      },
     });
     // As artes de ação carregam sob demanda na primeira alegação; aquecê-las
     // depois da abertura da cena evita pop-in sem tocar o orçamento da home/2D.
