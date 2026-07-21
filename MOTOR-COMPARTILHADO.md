@@ -200,6 +200,36 @@ em runtime, sem recriar o renderer. `setVisualProfile` já é isso; o que falta 
 tema como entrada de primeira classe em vez de detalhe do jogo — inclusive porque um jogo sem tema,
 como Sem Perdão hoje, só precisa passar um perfil fixo.
 
+## Enquadramento por formato de tela
+
+Um ato de câmera não é uma câmera: é uma **família de composições escolhida pelo formato da tela**.
+O mesmo duelo que funciona deitado não funciona em pé — em portrait ele vira over-the-shoulder
+vertical, porque o eixo horizontal simplesmente não cabe no quadro. Isso não é ajuste de lente, é
+outra ideia de plano.
+
+As duas bases responderam em níveis bem diferentes:
+
+|                     | La Corte                                                                     | Sem Perdão                                  |
+| ------------------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
+| Classes de tela     | `viewportMode` portrait × landscape, por proporção (< 0,82)                  | Nenhuma                                     |
+| O que muda          | Posição, alvo e FOV — cada ato pode declarar uma variante `portrait` inteira | Só o FOV: `aspect < 0,9 ? base + 14 : base` |
+| Ao girar o aparelho | Reaplica o ato ativo imediatamente, sem tween                                | Recalcula o FOV                             |
+
+A variante por ato é estritamente mais expressiva, e é a que deve ir para o motor. Mas o FOV
+elástico tem uma virtude que ela não tem: cobre qualquer proporção de forma contínua e não exige
+manutenção. O motor precisa dos dois — variante autoral onde a composição muda de ideia, ajuste
+contínuo como rede de segurança para as proporções que ninguém autorou.
+
+### A lacuna: três formatos validados, duas classes na API
+
+A matriz de capturas percorre **três** formatos — desktop 1440×900, portrait 390×844 e landscape
+390 de altura — mas o palco só distingue **dois**. Celular deitado cai na mesma classe do desktop e
+recebe um enquadramento autorado para 900 px de altura.
+
+O problema não é a proporção, é a altura absoluta: com a mão e os controles ocupando a base, sobra
+pouco quadro útil em 390 px. Uma classe a mais resolve, e a validação desse caso continua pendente
+justamente porque a API não sabe nomeá-lo.
+
 ## Fila de fusão
 
 Ordem por proximidade das duas bases: começa pelo que ainda é quase o mesmo código, antes que a
@@ -267,6 +297,9 @@ e caros depois de publicado, porque viram mudança de API entre repositórios:
   `OrbitControls` de `three/examples`. Duas respostas para a mesma pergunta: escolher uma na fase 1.5.
 - **Identidade e envelopes.** Autenticar a cadeira e validar estruturalmente tudo que chega do canal.
   É a pendência P0 da auditoria e mora justo na camada que vai virar motor.
+- **Classes de tela.** Quantas são e como o jogo declara composição para cada uma. Hoje são duas na
+  API e três na validação; celular deitado não tem nome. Mexer nisso depois de publicado quebra todo
+  ato de câmera já autorado, então é decisão de agora.
 
 ### Riscos assumidos
 
