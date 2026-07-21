@@ -9,6 +9,7 @@ import {
 } from './camera-director.js';
 import { createCoupEnvironment } from './coup-environment.js';
 import { createTabletopFoley } from './foley.js';
+import { HOURGLASS_GLASS_PROFILE, hourglassSand } from './hourglass-sand.js';
 import { resolveTabletopQuality } from './quality-profiles.js';
 import { TABLETOP_THROWABLES } from './reactions.js';
 import duquePortrait from '../../../assets/characters/duque.webp';
@@ -268,21 +269,17 @@ function createDecisionHourglass() {
   posts.castShadow = true;
   group.add(posts);
 
-  const glassProfile = [
-    new THREE.Vector2(0.24, 0.12),
-    new THREE.Vector2(0.25, 0.18),
-    new THREE.Vector2(0.07, 0.49),
-    new THREE.Vector2(0.25, 0.8),
-    new THREE.Vector2(0.24, 0.87),
-  ];
+  // Mesma silhueta que dimensiona a areia: as duas peças não podem divergir.
+  const glassProfile = HOURGLASS_GLASS_PROFILE.map(([radius, height]) => new THREE.Vector2(radius, height));
   group.add(mesh(new THREE.LatheGeometry(glassProfile, 14), glass, { cast: false, receive: false }));
 
-  const topSand = mesh(new THREE.ConeGeometry(0.2, 1, 12), sand, {
+  // Cones unitários: raio e altura vêm inteiros da escala em `update`.
+  const topSand = mesh(new THREE.ConeGeometry(1, 1, 12), sand, {
     position: [0, 0.64, 0],
     rotation: [0, 0, Math.PI],
     cast: false,
   });
-  const bottomSand = mesh(new THREE.ConeGeometry(0.2, 1, 12), sand, {
+  const bottomSand = mesh(new THREE.ConeGeometry(1, 1, 12), sand, {
     position: [0, 0.12, 0],
     cast: false,
   });
@@ -1515,14 +1512,13 @@ export class CoupTableScene {
       : 0;
     this.hourglass.group.visible = this.decisionClock.visible && this.decisionClock.total > 0;
     if (this.hourglass.group.visible) {
-      const topHeight = Math.max(0.001, 0.31 * clockRatio);
-      const bottomHeight = Math.max(0.001, 0.31 * (1 - clockRatio));
-      this.hourglass.topSand.visible = clockRatio > 0.01;
-      this.hourglass.topSand.scale.y = topHeight;
-      this.hourglass.topSand.position.y = 0.49 + topHeight / 2;
-      this.hourglass.bottomSand.visible = clockRatio < 0.99;
-      this.hourglass.bottomSand.scale.y = bottomHeight;
-      this.hourglass.bottomSand.position.y = 0.1 + bottomHeight / 2;
+      const { top, bottom } = hourglassSand(clockRatio);
+      this.hourglass.topSand.visible = top.visible;
+      this.hourglass.topSand.scale.set(top.radius, top.height, top.radius);
+      this.hourglass.topSand.position.y = top.y;
+      this.hourglass.bottomSand.visible = bottom.visible;
+      this.hourglass.bottomSand.scale.set(bottom.radius, bottom.height, bottom.radius);
+      this.hourglass.bottomSand.position.y = bottom.y;
       this.hourglass.stream.visible = clockRemaining > 0 && clockRatio < 0.995;
       const urgent = clockRemaining <= 5_000;
       if (urgent !== this.hourglass.urgent) {
