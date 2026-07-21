@@ -2271,6 +2271,7 @@ html[data-theme='light'] .tabletop-roster-settings-title {
   color: #655744;
 }
 html[data-theme='light'] .tabletop-roster-settings .tabletop-theme,
+html[data-theme='light'] .tabletop-roster-settings .tabletop-2d,
 html[data-theme='light'] .tabletop-roster-settings .audio-toggle,
 html[data-theme='light'] .tabletop-lab-link {
   border-color: rgba(94, 68, 30, 0.34);
@@ -2278,6 +2279,7 @@ html[data-theme='light'] .tabletop-lab-link {
   background: rgba(126, 91, 31, 0.07);
 }
 html[data-theme='light'] .tabletop-roster-settings .tabletop-theme:hover,
+html[data-theme='light'] .tabletop-roster-settings .tabletop-2d:hover,
 html[data-theme='light'] .tabletop-roster-settings .audio-toggle:hover,
 html[data-theme='light'] .tabletop-lab-link:hover {
   border-color: #805817;
