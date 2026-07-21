@@ -437,6 +437,7 @@ export async function mountTableExperiment({
       action: null,
       block: null,
       influenceLoser: null,
+      latestInfluenceLoss: null,
       responsePlayer: null,
       latestEvent: null,
       seats: view.seats.map((seat) => ({

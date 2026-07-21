@@ -6,6 +6,7 @@ import {
   cameraDecisionKey,
   directCamera,
   duelCameraForSeats,
+  influenceRevealCamera,
   throneCameraForSeat,
 } from '../src/lib/tabletop/camera-director.js';
 
@@ -53,6 +54,22 @@ test('perda de influência enquadra a vítima; a própria mão usa Jogador', () 
   assert.equal(coup.phase, 'choose_influence');
   assert.deepEqual(directCamera(projectCoupTableView(coup, 'b')), { act: 'player', seatIds: ['b'] });
   assert.deepEqual(directCamera(projectCoupTableView(coup, 'a')), { act: 'evidence', seatIds: ['b'] });
+});
+
+test('depois da escolha, a câmera de confirmação preserva o foco em quem revelou a carta', () => {
+  const game = newGame();
+  game.players.find((player) => player.id === 'a').coins = 7;
+  const awaitingReveal = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'coup', targetId: 'b' });
+  const card = awaitingReveal.players.find((player) => player.id === 'b').cards[0];
+  const revealed = dispatchGame(awaitingReveal, { type: 'reveal_influence', actorId: 'b', cardId: card.id });
+
+  const selfView = projectCoupTableView(revealed, 'b');
+  assert.equal(selfView.latestInfluenceLoss.role, card.role);
+  assert.deepEqual(influenceRevealCamera(selfView), { act: 'player', seatIds: ['b'] });
+  assert.deepEqual(influenceRevealCamera(projectCoupTableView(revealed, 'c')), {
+    act: 'evidence',
+    seatIds: ['b'],
+  });
 });
 
 test('troca da Embaixadora é privada para o ator e testemunhada pelos rivais', () => {

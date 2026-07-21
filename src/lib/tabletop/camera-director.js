@@ -43,6 +43,13 @@ export function directCamera(view) {
 
 export const cameraDecisionKey = (decision) => `${decision.act}:${decision.seatIds.join('+')}`;
 
+export function influenceRevealCamera(view) {
+  const playerId = view?.latestInfluenceLoss?.player?.id;
+  const seat = view?.seats?.find((candidate) => candidate.id === playerId);
+  if (!seat) return null;
+  return { act: seat.isSelf ? 'player' : 'evidence', seatIds: [seat.id] };
+}
+
 // Mesma elipse de assentos usada pelas câmeras POV/Jogador da cena.
 const seatRadii = (seatCount) => (seatCount <= 3 ? { x: 5.15, z: 4.25 } : { x: 5.55, z: 4.65 });
 

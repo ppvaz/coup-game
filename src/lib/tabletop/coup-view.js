@@ -62,6 +62,7 @@ export function projectCoupTableView(game, myId) {
   });
 
   const latest = game.log?.at(-1) ?? null;
+  const latestInfluenceLoss = game.log?.findLast((event) => event.type === 'influence_lost') ?? null;
   return Object.freeze({
     id: `${game.gameId ?? 'local'}:${game.version ?? 0}`,
     phase,
@@ -81,6 +82,13 @@ export function projectCoupTableView(game, myId) {
       : null,
     block: pending.block ? Object.freeze({ role: pending.block.role, player: playerSummary(blocker) }) : null,
     influenceLoser: playerSummary(loser),
+    latestInfluenceLoss: latestInfluenceLoss
+      ? Object.freeze({
+          player: playerSummary(players.get(latestInfluenceLoss.playerId)),
+          role: latestInfluenceLoss.role ?? null,
+          at: Math.max(0, Number(latestInfluenceLoss.at) || 0),
+        })
+      : null,
     responsePlayer: playerSummary(players.get(game.responseQueue?.[0])),
     latestEvent: latest
       ? Object.freeze({

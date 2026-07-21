@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { TabletopStage, canvasTexture, disposeObject3D, textTexture } from '@la-corte/tabletop-stage';
-import { cameraDecisionKey, directCamera, duelCameraForSeats, throneCameraForSeat } from './camera-director.js';
+import {
+  cameraDecisionKey,
+  directCamera,
+  duelCameraForSeats,
+  influenceRevealCamera,
+  throneCameraForSeat,
+} from './camera-director.js';
 import { createCoupEnvironment } from './coup-environment.js';
 import { resolveTabletopQuality } from './quality-profiles.js';
 import { TABLETOP_THROWABLES } from './reactions.js';
@@ -65,6 +71,7 @@ export const ACTION_ART = {
 };
 
 const THROWABLE_TYPES = new Set(TABLETOP_THROWABLES.map((item) => item.id));
+const INFLUENCE_REVEAL_HOLD_MS = 1900;
 
 const THEME_PROFILES = {
   dark: {
@@ -874,6 +881,8 @@ export class CoupTableScene {
     this.seatSignature = '';
     this.view = null;
     this.autoCameraKey = '';
+    this.autoCameraHold = null;
+    this.latestInfluenceLossKey = '';
     this.cameraOverridden = false;
     this.cameraName = 'table';
     this.currentPovSeatId = null;
@@ -889,6 +898,7 @@ export class CoupTableScene {
     this.elapsed = 0;
     this.emojiReactions = [];
     this.flyingReactions = [];
+    this.influenceReveals = [];
 
     this.actionCard = new THREE.Group();
     const edge = standardMaterial(COLORS.gold, { metalness: 0.55, roughness: 0.3 });
@@ -963,6 +973,7 @@ export class CoupTableScene {
     this.seatLayer = this.stage.add(new THREE.Group());
     this.seatLayer.name = 'coup-seats';
     this.seats.clear();
+    this.influenceReveals = [];
     const count = view.seats.length;
     for (const seatView of view.seats) {
       const angle = seatView.azimuthRad;
@@ -999,6 +1010,7 @@ export class CoupTableScene {
         coinGroup,
         influenceGroup,
         influenceSignature: '',
+        influenceStates: [],
         coinCount: -1,
         baseY: noble.group.position.y,
         seed: seatView.index * 1.71,
@@ -1096,18 +1108,34 @@ export class CoupTableScene {
 
     const influenceSignature = seatView.influences.map((card) => `${card.role}:${card.revealed}`).join('|');
     if (influenceSignature !== seat.influenceSignature) {
+      const previousInfluences = seat.influenceStates;
+      const hadInfluences = seat.influenceSignature !== '';
+      this.influenceReveals = this.influenceReveals.filter((reveal) => reveal.seatId !== seatView.id);
       disposeObject3D(seat.influenceGroup);
       seat.influenceGroup = new THREE.Group();
       seat.influenceGroup.position.set(1.25, 1.28, -1.14);
       seat.group.add(seat.influenceGroup);
       seatView.influences.forEach((influence, index) => {
         const card = createInfluenceCard(influence);
-        card.position.set(index * 0.7, influence.revealed ? 0.055 : 0, index * 0.08);
+        const baseY = influence.revealed ? 0.055 : 0;
+        const newlyRevealed = hadInfluences && !previousInfluences[index]?.revealed && influence.revealed;
+        card.position.set(index * 0.7, baseY, index * 0.08);
+        card.rotation.x = newlyRevealed ? Math.PI * 0.96 : 0;
         card.rotation.y = Math.PI + (index ? -0.12 : 0.1);
         card.rotation.z = influence.revealed ? 0.04 : 0;
         seat.influenceGroup.add(card);
+        if (newlyRevealed) {
+          this.influenceReveals.push({
+            seatId: seatView.id,
+            card,
+            baseY,
+            startedAt: this.elapsed,
+            duration: 0.9,
+          });
+        }
       });
       seat.influenceSignature = influenceSignature;
+      seat.influenceStates = seatView.influences.map((influence) => ({ revealed: influence.revealed }));
     }
   }
 
@@ -1237,6 +1265,13 @@ export class CoupTableScene {
   }
 
   sync(view) {
+    const hadView = Boolean(this.view);
+    const influenceLoss = view.latestInfluenceLoss;
+    const influenceLossKey = influenceLoss
+      ? `${influenceLoss.player?.id ?? ''}:${influenceLoss.role ?? ''}:${influenceLoss.at}`
+      : '';
+    const newInfluenceLoss = Boolean(influenceLossKey && influenceLossKey !== this.latestInfluenceLossKey);
+    if (influenceLossKey) this.latestInfluenceLossKey = influenceLossKey;
     const signature = view.seats.map((seat) => seat.id).join('|');
     const seatsChanged = signature !== this.seatSignature;
     if (seatsChanged) {
@@ -1264,7 +1299,27 @@ export class CoupTableScene {
       ['claim', 'block-claim', 'influence-loss'].includes(view.beat) ? COLORS.danger : COLORS.gold,
     );
     if (seatsChanged) this.autoCameraKey = '';
-    if (!this.cameraOverridden) this.applyAutoCamera();
+    if (!this.cameraOverridden) {
+      if (hadView && newInfluenceLoss) this.holdInfluenceReveal();
+      if (!this.autoCameraHold) this.applyAutoCamera();
+    }
+  }
+
+  holdInfluenceReveal() {
+    const decision = influenceRevealCamera(this.view);
+    if (!decision) return false;
+    const seats = this.view.seats;
+    const subject = seats.find((seat) => seat.id === decision.seatIds[0]);
+    if (!subject) return false;
+    this.stage.defineCameraAct(decision.act, playerCameraForSeat(subject, seats.length));
+    this.cameraName = decision.act;
+    this.autoCameraKey = cameraDecisionKey(decision);
+    this.autoCameraHold = {
+      decision,
+      until: performance.now() + INFLUENCE_REVEAL_HOLD_MS,
+    };
+    this.stage.setCameraAct(decision.act);
+    return true;
   }
 
   // Aplica a decisão do diretor: parametriza o ato pelos assentos envolvidos
@@ -1372,7 +1427,7 @@ export class CoupTableScene {
     if (name === 'auto') {
       this.cameraOverridden = false;
       this.autoCameraKey = '';
-      this.applyAutoCamera();
+      if (!this.autoCameraHold) this.applyAutoCamera();
       return this.povSelection();
     }
     this.cameraOverridden = true;
@@ -1428,6 +1483,13 @@ export class CoupTableScene {
   update(elapsed, reducedMotion, delta) {
     this.elapsed = elapsed;
     this.environment.update(elapsed, reducedMotion);
+    if (this.autoCameraHold && performance.now() >= this.autoCameraHold.until) {
+      this.autoCameraHold = null;
+      if (!this.cameraOverridden) {
+        this.autoCameraKey = '';
+        this.applyAutoCamera();
+      }
+    }
     this.seal.rotation.z = elapsed * 0.14;
     const clockRemaining = Math.max(0, this.decisionClock.deadline - Date.now());
     const clockRatio = this.decisionClock.total
@@ -1451,6 +1513,21 @@ export class CoupTableScene {
         this.hourglass.sand.emissive.setHex(color);
         this.hourglass.sand.emissiveIntensity = urgent ? 0.42 : 0.12;
         this.hourglass.urgent = urgent;
+      }
+    }
+    for (let index = this.influenceReveals.length - 1; index >= 0; index -= 1) {
+      const reveal = this.influenceReveals[index];
+      const progress = reducedMotion ? 1 : THREE.MathUtils.clamp((elapsed - reveal.startedAt) / reveal.duration, 0, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      reveal.card.rotation.x = (1 - eased) * Math.PI * 0.96;
+      reveal.card.position.y = reveal.baseY + Math.sin(progress * Math.PI) * 0.32;
+      const scale = 1 + Math.sin(progress * Math.PI) * 0.08;
+      reveal.card.scale.setScalar(scale);
+      if (progress === 1) {
+        reveal.card.rotation.x = 0;
+        reveal.card.position.y = reveal.baseY;
+        reveal.card.scale.setScalar(1);
+        this.influenceReveals.splice(index, 1);
       }
     }
     this.layoutCenterpiece();
