@@ -224,10 +224,14 @@ function createThrowable(type) {
   return group;
 }
 
+// Ao lado da pilha de moedas do assento (local -1, 1.34, -1.2), na altura do
+// ombro e um passo à frente dela: na câmera do Jogador, que olha por cima das
+// costas, a redoma alinhada com a pilha ficava exatamente sobre as moedas.
+const DECISION_BUBBLE_ANCHOR = new THREE.Vector3(-1, 2.06, -1.52);
+
 function createDecisionHourglass() {
   const group = new THREE.Group();
   group.name = 'decision-hourglass';
-  group.position.set(0, 1.34, 0);
   group.visible = false;
 
   const frame = standardMaterial(COLORS.bronze, {
@@ -273,7 +277,7 @@ function createDecisionHourglass() {
   const glassProfile = HOURGLASS_GLASS_PROFILE.map(([radius, height]) => new THREE.Vector2(radius, height));
   group.add(mesh(new THREE.LatheGeometry(glassProfile, 14), glass, { cast: false, receive: false }));
 
-  // Cones unitários: raio e altura vêm inteiros da escala em `update`.
+  // Cones unitários: raio e altura vêm inteiros da escala em `applyDecisionClock`.
   const topSand = mesh(new THREE.ConeGeometry(1, 1, 12), sand, {
     position: [0, 0.64, 0],
     rotation: [0, 0, Math.PI],
@@ -289,6 +293,63 @@ function createDecisionHourglass() {
   });
   group.add(topSand, bottomSand, stream);
   return { group, sand, topSand, bottomSand, stream, urgent: false };
+}
+
+// A redoma pessoal: a mesma ampulheta da mesa, reduzida sob vidro, que paira
+// sobre as moedas de quem está no relógio. Só o dono da decisão a enxerga — a
+// peça central já marca o tempo para o resto da corte.
+function createDecisionBubble() {
+  const group = new THREE.Group();
+  group.name = 'decision-bubble';
+  group.visible = false;
+
+  const hourglass = createDecisionHourglass();
+  hourglass.group.visible = true;
+  hourglass.group.scale.setScalar(0.52);
+  hourglass.group.position.y = -0.255;
+  group.add(hourglass.group);
+
+  group.add(
+    mesh(
+      new THREE.SphereGeometry(0.36, 20, 14),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xe9dfcf,
+        transparent: true,
+        opacity: 0.16,
+        roughness: 0.06,
+        metalness: 0,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+      { cast: false, receive: false },
+    ),
+  );
+  group.add(
+    mesh(
+      new THREE.TorusGeometry(0.36, 0.022, 8, 28),
+      standardMaterial(COLORS.bronze, { metalness: 0.72, roughness: 0.3 }),
+      { rotation: [-Math.PI / 2, 0, 0], cast: false },
+    ),
+  );
+  return { group, hourglass };
+}
+
+function applyDecisionClock(hourglass, ratio, remaining) {
+  const { top, bottom } = hourglassSand(ratio);
+  hourglass.topSand.visible = top.visible;
+  hourglass.topSand.scale.set(top.radius, top.height, top.radius);
+  hourglass.topSand.position.y = top.y;
+  hourglass.bottomSand.visible = bottom.visible;
+  hourglass.bottomSand.scale.set(bottom.radius, bottom.height, bottom.radius);
+  hourglass.bottomSand.position.y = bottom.y;
+  hourglass.stream.visible = remaining > 0 && ratio < 0.995;
+  const urgent = remaining <= 5_000;
+  if (urgent === hourglass.urgent) return;
+  const color = urgent ? COLORS.danger : COLORS.gold;
+  hourglass.sand.color.setHex(color);
+  hourglass.sand.emissive.setHex(color);
+  hourglass.sand.emissiveIntensity = urgent ? 0.42 : 0.12;
+  hourglass.urgent = urgent;
 }
 
 function plaqueTexture(name, subtitle, accent = '#d9b56b') {
@@ -954,13 +1015,10 @@ export class CoupTableScene {
     );
     this.stage.add(this.seal);
     this.hourglass = createDecisionHourglass();
+    this.hourglass.group.position.set(0, 1.34, 0);
     this.stage.add(this.hourglass.group);
-    this.stage.setInsetCamera({
-      position: [1.45, 2.12, 2.5],
-      target: [0, 1.83, 0],
-      fov: 27,
-      viewportElement: options.hourglassViewport,
-    });
+    this.decisionBubble = createDecisionBubble();
+    this.stage.add(this.decisionBubble.group);
     this.victoryLight = new THREE.SpotLight(0xffd78f, 0, 15, 0.38, 0.55, 1.4);
     this.victoryLight.position.set(0, 8, 4.2);
     this.victoryLight.target.position.set(0, 1.5, 0);
@@ -1454,9 +1512,6 @@ export class CoupTableScene {
       visible: Boolean(visible),
       focused: Boolean(focused),
     };
-    this.stage.setInsetCameraEnabled(
-      this.decisionClock.visible && this.decisionClock.focused && this.decisionClock.total > 0,
-    );
   }
 
   runPerformanceBenchmark({ warmupMs, durationMs, label = 'coup-standard' } = {}) {
@@ -1495,6 +1550,18 @@ export class CoupTableScene {
     this.victoryLight.color.setHex(nextTheme === 'light' ? 0xffe6ae : 0xffd78f);
   }
 
+  updateDecisionBubble(elapsed, reducedMotion, ratio, remaining) {
+    const bubble = this.decisionBubble.group;
+    const selfView = this.decisionClock.focused ? this.view?.seats.find((seat) => seat.isSelf) : null;
+    const selfSeat = selfView ? this.seats.get(selfView.id) : null;
+    bubble.visible = Boolean(selfSeat) && this.decisionClock.visible && this.decisionClock.total > 0;
+    if (!bubble.visible) return;
+    bubble.position.copy(DECISION_BUBBLE_ANCHOR);
+    selfSeat.group.localToWorld(bubble.position);
+    if (!reducedMotion) bubble.position.y += Math.sin(elapsed * 1.6) * 0.03;
+    applyDecisionClock(this.decisionBubble.hourglass, ratio, remaining);
+  }
+
   update(elapsed, reducedMotion, delta) {
     this.elapsed = elapsed;
     this.environment.update(elapsed, reducedMotion);
@@ -1511,24 +1578,8 @@ export class CoupTableScene {
       ? THREE.MathUtils.clamp(clockRemaining / this.decisionClock.total, 0, 1)
       : 0;
     this.hourglass.group.visible = this.decisionClock.visible && this.decisionClock.total > 0;
-    if (this.hourglass.group.visible) {
-      const { top, bottom } = hourglassSand(clockRatio);
-      this.hourglass.topSand.visible = top.visible;
-      this.hourglass.topSand.scale.set(top.radius, top.height, top.radius);
-      this.hourglass.topSand.position.y = top.y;
-      this.hourglass.bottomSand.visible = bottom.visible;
-      this.hourglass.bottomSand.scale.set(bottom.radius, bottom.height, bottom.radius);
-      this.hourglass.bottomSand.position.y = bottom.y;
-      this.hourglass.stream.visible = clockRemaining > 0 && clockRatio < 0.995;
-      const urgent = clockRemaining <= 5_000;
-      if (urgent !== this.hourglass.urgent) {
-        const color = urgent ? COLORS.danger : COLORS.gold;
-        this.hourglass.sand.color.setHex(color);
-        this.hourglass.sand.emissive.setHex(color);
-        this.hourglass.sand.emissiveIntensity = urgent ? 0.42 : 0.12;
-        this.hourglass.urgent = urgent;
-      }
-    }
+    if (this.hourglass.group.visible) applyDecisionClock(this.hourglass, clockRatio, clockRemaining);
+    this.updateDecisionBubble(elapsed, reducedMotion, clockRatio, clockRemaining);
     for (let index = this.influenceReveals.length - 1; index >= 0; index -= 1) {
       const reveal = this.influenceReveals[index];
       const progress = reducedMotion ? 1 : THREE.MathUtils.clamp((elapsed - reveal.startedAt) / reveal.duration, 0, 1);

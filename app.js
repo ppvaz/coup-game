@@ -475,11 +475,6 @@ function tickClock() {
     element.querySelector('i').style.width = `${(remaining / clock.total) * 100}%`;
     element.querySelector('span').textContent = `${seconds}s`;
   });
-  document.querySelectorAll('.tabletop-hourglass-camera.visible').forEach((element) => {
-    element.classList.toggle('urgent', seconds <= 5);
-    const count = element.querySelector('[data-tabletop-hourglass-seconds]');
-    if (count) count.textContent = String(seconds);
-  });
   if (seconds <= 5 && warnedClockKey !== clock.key && awaitedPlayerId(state.game) === state.myId) {
     warnedClockKey = clock.key;
     sounds.play('warning');

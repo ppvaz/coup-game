@@ -48,10 +48,10 @@ test('a saída do 3D é um botão da aplicação, não uma navegação', () => {
   assert.doesNotMatch(tableExperimentHTML({ testMode: true }), /tabletop-exit-confirm/);
 });
 
-test('a câmera da ampulheta pertence à interface 3D e só ganha foco no próprio turno', () => {
-  const html = tableExperimentHTML();
-  assert.match(html, /id="tabletop-hourglass-camera"/);
-  assert.match(html, /id="tabletop-hourglass-viewport"/);
+test('a ampulheta pessoal não tem painel em HTML e só é focada no próprio turno', () => {
+  // A redoma vive na cena 3D, sobre as moedas de quem decide: nada de sobrepor
+  // um retângulo fixo à tela.
+  assert.doesNotMatch(tableExperimentHTML(), /hourglass/);
 
   const game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
   assert.equal(shouldFocusDecisionHourglass(game, 'a'), true);

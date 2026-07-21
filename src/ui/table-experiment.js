@@ -130,10 +130,6 @@ export function tableExperimentHTML({ testMode = false } = {}) {
   const mode = testMode ? 'lab' : 'game';
   return `<main class="tabletop-experiment" data-camera="auto" data-interface="${mode}">
     <canvas id="tabletop-canvas" aria-label="Mesa 3D jogável da La Corte"></canvas>
-    <aside class="tabletop-hourglass-camera" id="tabletop-hourglass-camera" aria-hidden="true" aria-label="Tempo restante para a sua decisão">
-      <div class="tabletop-hourglass-viewport" id="tabletop-hourglass-viewport" aria-hidden="true"></div>
-      <div class="tabletop-hourglass-caption"><span>SUA VEZ · TEMPO RESTANTE</span><strong><span data-tabletop-hourglass-seconds>—</span><small>s</small></strong></div>
-    </aside>
     <div class="tabletop-loading" id="tabletop-loading"><i></i><span>Convocando a corte…</span></div>
     <nav class="tabletop-topbar">
       ${testMode ? '<a class="tabletop-brand" href="/3d" aria-label="Voltar ao jogo 3D">LA <span>CORTE</span><small>LABORATÓRIO 3D</small></a>' : ''}
@@ -245,18 +241,6 @@ export async function mountTableExperiment({
       ? 'light'
       : 'dark';
   let quality = initialTabletopQuality({ search: location.search, storage: localStorage });
-
-  const paintHourglassCamera = (visible, decisionClock = {}) => {
-    const camera = root.querySelector('#tabletop-hourglass-camera');
-    if (!camera) return;
-    const remaining = Math.max(0, (Number(decisionClock.deadline) || 0) - Date.now());
-    const seconds = Math.ceil(remaining / 1000);
-    camera.classList.toggle('visible', visible);
-    camera.classList.toggle('urgent', visible && seconds <= 5);
-    camera.setAttribute('aria-hidden', String(!visible));
-    const count = camera.querySelector('[data-tabletop-hourglass-seconds]');
-    if (count) count.textContent = visible ? String(seconds) : '—';
-  };
 
   const chatState = () => {
     if (!testMode) return currentState;
@@ -480,7 +464,6 @@ export async function mountTableExperiment({
     if (testMode) {
       root.dataset.phase = 'lab';
       root.dataset.decision = 'other';
-      paintHourglassCamera(false);
       gameplay.replaceChildren();
       scene?.sync(frozenLabView(game));
       playPendingReactions();
@@ -530,7 +513,6 @@ export async function mountTableExperiment({
       visible: game.status === 'playing' && game.phase === 'turn',
       focused: ownTurn,
     });
-    paintHourglassCamera(ownTurn && Boolean(currentContext.clock?.deadline), currentContext.clock);
     paintPovControl(scene?.povSelection());
   };
 
@@ -578,7 +560,6 @@ export async function mountTableExperiment({
     scene = new CoupTableScene(canvas, {
       theme,
       quality: quality.id,
-      hourglassViewport: root.querySelector('#tabletop-hourglass-viewport'),
       sounds,
     });
     // As artes de ação carregam sob demanda na primeira alegação; aquecê-las

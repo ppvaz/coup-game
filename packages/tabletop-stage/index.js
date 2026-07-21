@@ -296,6 +296,13 @@ export class TabletopStage {
     this.resize();
   }
 
+  /**
+   * Picture-in-picture: uma segunda câmera fixa, composta sobre o retângulo de
+   * um elemento do DOM a cada quadro. Genérica de propósito — aponte para o que
+   * a cena quiser destacar. Sem `viewportElement` o passe não roda e não custa
+   * nada, que é o estado atual: a ampulheta de decisão virou peça 3D e nenhum
+   * app usa o PiP hoje. Mantido para as próximas segundas câmeras.
+   */
   setInsetCamera({ position, target, fov = 32, viewportElement = null } = {}) {
     if (position) this.insetCamera.position.set(...position);
     if (target) this.insetCameraTarget.set(...target);
