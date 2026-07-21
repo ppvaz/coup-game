@@ -1307,9 +1307,9 @@ export class CoupTableScene {
     return true;
   }
 
-  // Instrumentação do laboratório: aponta um ato dirigido para assentos
-  // específicos ("duel:0-3", "duel:2", "evidence:1", "throne:4") e congela a
-  // câmera ali para capturas de validação visual.
+  // Instrumentação do laboratório: congela qualquer ato para capturas de
+  // validação visual — dirigidos ("duel:0-3", "duel:2", "evidence:1",
+  // "throne:4", "pov:2") ou fixos ("table", "player", "overhead", "portal").
   applyLabShot(spec) {
     const seats = this.view?.seats ?? [];
     const [act, indexPart] = String(spec ?? '').split(':');
@@ -1318,6 +1318,14 @@ export class CoupTableScene {
       .map(Number)
       .filter((index) => Number.isInteger(index) && index >= 0 && index < seats.length)
       .map((index) => seats[index]);
+    if (act === 'player') return this.setPlayerCamera({ immediate: true }) ? 'player' : null;
+    if (act === 'pov') return this.setPovSeat(subjects[0]?.id, { immediate: true }) ? 'pov' : null;
+    if (['table', 'overhead', 'portal'].includes(act)) {
+      this.cameraOverridden = true;
+      this.cameraName = act;
+      this.stage.setCameraAct(act, { immediate: true });
+      return act;
+    }
     if (!subjects.length) return null;
     if (act === 'duel') this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
     else if (act === 'evidence') this.stage.defineCameraAct('evidence', playerCameraForSeat(subjects[0], seats.length));

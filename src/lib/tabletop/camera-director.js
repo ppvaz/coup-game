@@ -53,6 +53,14 @@ const seatPoint = (seat, seatCount) => {
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+// Empurra a posição radialmente para fora do miolo da mesa quando preciso.
+const ensureRadius = ([x, y, z], min) => {
+  const radius = Math.hypot(x, z);
+  if (radius >= min) return [x, y, z];
+  const scale = min / (radius || 1);
+  return [x * scale, y, z * scale];
+};
+
 // Nenhum plano dirigido se aproxima do centro da mesa (raio < 6): a carta de
 // ação e a efígie vivem ali, e cruzar o miolo cortaria esses elementos.
 // Plano lateral elevado sobre a elipse dos assentos: enquadra o assento em
@@ -106,17 +114,19 @@ export function duelCameraForSeats(subjects, seatCount) {
   const position = [mid.x + side.x * distance * sign, height, mid.z + side.z * distance * sign];
   const target = [mid.x * 0.92, 1.45, mid.z * 0.92];
   const fov = clamp(Math.round((2 * Math.atan2(separation / 2 + 1.3, distance) * 180) / Math.PI), 42, 62);
-  // O recuo extra do portrait respeita o teto de raio do salão.
-  const baseRadius = Math.hypot(position[0], position[2]);
-  const portraitDistance = distance + clamp(11.4 - baseRadius, 0, 1.2);
+  // Portrait não comporta o eixo horizontal do duelo: vira over-the-shoulder
+  // vertical — câmera atrás e acima do primeiro envolvido, rival ao fundo no
+  // terço superior — sem deixar a lente entrar no miolo da mesa.
+  const axis = { x: (second.x - first.x) / separation, z: (second.z - first.z) / separation };
+  const overShoulder = ensureRadius([first.x - axis.x * 3.6, 4.3, first.z - axis.z * 3.6], 6.2);
   return {
     position,
     target,
     fov,
     portrait: {
-      position: [mid.x + side.x * portraitDistance * sign, height + 0.7, mid.z + side.z * portraitDistance * sign],
-      target,
-      fov: clamp(fov + 8, 50, 66),
+      position: overShoulder,
+      target: [second.x * 0.9, 1.5, second.z * 0.9],
+      fov: 54,
     },
   };
 }

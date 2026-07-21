@@ -14,7 +14,8 @@
     "test": "node --test",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "check": "eslint . && prettier --check ."
+    "check": "eslint . && prettier --check .",
+    "capture:3d": "node scripts/capture-shots.mjs"
   },
   "dependencies": {
     "@la-corte/tabletop-stage": "file:packages/tabletop-stage",
@@ -26,6 +27,7 @@
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.7.0",
+    "playwright-core": "^1.61.1",
     "prettier": "^3.9.5",
     "vite": "^8.1.5"
   }

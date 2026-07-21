@@ -28,3 +28,6 @@ coverage/
 # Local temporary files
 tmp/
 .cache/
+
+# Capturas de referência da mesa 3D
+captures/
