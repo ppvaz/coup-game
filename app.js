@@ -7,6 +7,7 @@ import { createSoundManager } from './src/lib/sounds.js';
 import { consumeLabAccess } from './src/lib/lab-access.js';
 import { botDelayMs } from './src/lib/bot-timing.js';
 import { decisionClockKey } from './src/lib/decision-clock.js';
+import { warmupPlan } from './src/lib/asset-warmup.js';
 import { appendTabletopReaction } from './src/lib/tabletop/reactions.js';
 import { voiceFilesForTransition } from './src/lib/voice-announcer.js';
 import { CHAT_MAX_LENGTH, appendChatMessage, createChatGuard, normalizeChatText } from './src/rooms/chat.js';
@@ -50,13 +51,22 @@ const VOICE_ASSETS = import.meta.glob('./assets/voices/**/*.mp3', {
   import: 'default',
 });
 const voiceAssetURLs = (files) => files.map((file) => VOICE_ASSETS[`./assets/voices/${file}`]).filter(Boolean);
-const PRIORITY_ASSETS = [councilChamberDark, councilChamberLight, ...Object.values(PORTRAITS)];
-for (const source of PRIORITY_ASSETS) {
+const preloadImage = (source, priority) => {
   const image = new Image();
-  image.fetchPriority = 'high';
+  image.fetchPriority = priority;
   image.decoding = 'async';
   image.src = source;
-}
+};
+const warmup = warmupPlan({
+  theme: document.documentElement.dataset.theme,
+  chambers: { dark: councilChamberDark, light: councilChamberLight },
+  portraits: PORTRAITS,
+});
+for (const source of warmup.immediate) preloadImage(source, 'high');
+// timeout garante retratos aquecidos bem antes de a primeira partida começar.
+const warmIdleAssets = () => warmup.idle.forEach((source) => preloadImage(source, 'low'));
+if ('requestIdleCallback' in window) requestIdleCallback(warmIdleAssets, { timeout: 4000 });
+else setTimeout(warmIdleAssets, 1500);
 
 const NAMES = ['Lorenzo', 'Beatrice', 'Vittorio'];
 // Relógio por fase, em segundos: estourou, a autoridade joga o padrão conservador.
