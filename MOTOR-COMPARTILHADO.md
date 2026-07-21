@@ -46,18 +46,19 @@ commit da mudança.
 
 ### Motor com amarra — leva a máquina, deixa o catálogo
 
-| Módulo                                | Máquina (motor)                                                                                        | Amarra a Coup                                                       |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| `src/lib/tabletop/camera-director.js` | Beat da partida → ato de câmera; chave de corte que evita recortes repetidos; geometria de duelo/trono | O vocabulário de beats (`claim`, `block-window`, `influence-loss`…) |
-| `src/lib/tabletop/foley.js`           | Síntese no `AudioContext` da mesa, intervalo mínimo por evento                                         | Nomes dos eventos (moeda, carta revelada, arremesso)                |
-| `src/lib/tabletop/reactions.js`       | Normalização, deduplicação e janela dos últimos N                                                      | Catálogo de arremessáveis (adaga da Assassina, moeda do Duque…)     |
-| `src/lib/tabletop/hourglass-sand.js`  | Perfil e volume de areia dentro de um vidro de revolução                                               | Nasceu do relógio de decisão, mas serve a qualquer timer diegético  |
-| `src/lib/sounds.js`                   | Síntese de padrões curtos + mudo persistido                                                            | Chaves `la-corte-*` no `localStorage` e os nomes dos eventos        |
-| `src/lib/voice-announcer.js`          | Banco de falas por evento com sorteio sem repetição                                                    | O banco em si é 100% de Coup                                        |
-| `src/lib/decision-clock.js`           | Relógio de decisão derivado do estado, sem timer próprio                                               | Lê `turn`, `phase` e `log` no formato de Coup                       |
-| `src/rooms/session.js`                | Retomada de sessão com validade                                                                        | Migração de carta `Embaixador` → `Embaixadora`                      |
-| `src/game/handover.js`                | Sucessão do anfitrião a partir de visões redigidas                                                     | Reconstrói cartas e baralho de Coup                                 |
-| `src/ui/table-experiment.js`          | Casca do salão: topbar, roster, doca de reações, chat, preferências, PiP                               | Narrativa, ampulheta e controles de decisão                         |
+| Módulo                                | Máquina (motor)                                                                                        | Amarra a Coup                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `src/lib/tabletop/camera-director.js` | Beat da partida → ato de câmera; chave de corte que evita recortes repetidos; geometria de duelo/trono | O vocabulário de beats (`claim`, `block-window`, `influence-loss`…)        |
+| `src/lib/tabletop/foley.js`           | Síntese no `AudioContext` da mesa, intervalo mínimo por evento                                         | Nomes dos eventos (moeda, carta revelada, arremesso)                       |
+| `src/lib/tabletop/reactions.js`       | Normalização, deduplicação e janela dos últimos N                                                      | Catálogo de arremessáveis (adaga da Assassina, moeda do Duque…)            |
+| `src/lib/tabletop/hourglass-sand.js`  | Perfil e volume de areia dentro de um vidro de revolução                                               | Nasceu do relógio de decisão, mas serve a qualquer timer diegético         |
+| `src/lib/sounds.js`                   | Síntese de padrões curtos + mudo persistido                                                            | Chaves `la-corte-*` no `localStorage` e os nomes dos eventos               |
+| `src/lib/voice-announcer.js`          | Banco de falas por evento com sorteio sem repetição                                                    | O banco em si é 100% de Coup                                               |
+| `src/lib/decision-clock.js`           | Relógio de decisão derivado do estado, sem timer próprio                                               | Lê `turn`, `phase` e `log` no formato de Coup                              |
+| `src/rooms/session.js`                | Retomada de sessão com validade                                                                        | Migração de carta `Embaixador` → `Embaixadora`                             |
+| `src/game/handover.js`                | Sucessão do anfitrião a partir de visões redigidas                                                     | Reconstrói cartas e baralho de Coup                                        |
+| `src/ui/table-experiment.js`          | Casca do salão: topbar, roster, doca de reações, chat, preferências, PiP                               | Narrativa, ampulheta e controles de decisão                                |
+| `scripts/capture-shots.mjs`           | Arnês de captura headless: dev server, matriz planos × viewports × temas, PNGs de referência           | A rota de laboratório e o vocabulário de planos (`duel:0-3`, `evidence:1`) |
 
 ### Coup nativo — fica
 
@@ -136,14 +137,78 @@ HTML em string e CSS à mão. `table-experiment.js` é a peça menos portável d
 valiosa — é a segunda vez que este documento corrige essa ordem, agora com evidência. O que atravessa
 é o palco e os módulos puros; a moldura é por stack.
 
+## Instrumentação: o ativo que só existe de um lado
+
+Medir quadro não é assunto de jogo — é do motor. Esta é a camada mais claramente genérica que
+existe aqui e a única sem contraparte nenhuma do outro lado: Sem Perdão tem Playwright para as
+regras, e nada que meça render.
+
+- **Resumo de quadros** (`summarizeFrameTimes`, puro, sem Three e sem navegador): FPS médio, tempo
+  médio e mediano, p95, p99, proporção de quadros acima de 20 ms e contagem dos acima de 50 ms. Sem
+  percentis, "está fluido" é opinião.
+- **Ciclo de benchmark** (`FrameBenchmark`): aquecimento, amostragem, uma run por vez, progresso
+  consultável e resultado por promessa.
+- **Reprodutibilidade** (`benchmark-kit.js`): disparo e duração pela URL, histórico persistido com
+  teto de vinte entradas. Um número que não se reproduz não serve de baseline.
+- **Rótulo do resultado**: o motor mede, o jogo carimba. Tema, perfil de qualidade, ato de câmera,
+  assento em POV e beat entram como metadados — é o formato certo, porque a única palavra de Coup na
+  medição é o rótulo que Coup injeta.
+- **Matriz de capturas** (`scripts/capture-shots.mjs`): sobe o dev server, percorre 11 planos × 3
+  viewports × 2 temas na rota de laboratório e grava PNGs, headless, com o Chrome do `playwright-core`
+  e sem baixar navegador. Filtra por `--shots`, `--themes` e `--viewports`.
+
+Isso importa para a fusão por dois motivos. Primeiro, **é o instrumento que torna a fusão
+verificável**: sem baseline de FPS e sem capturas de referência, "fundimos sem regressão" é
+afirmação de fé — e o item 1 da fila mexe justamente no que desenha cada quadro. Segundo, é o
+argumento mais direto para o motor existir: um jogo novo herda medição no primeiro dia em vez de
+descobrir a queda de quadro na véspera de mostrar para a equipe.
+
+A amarra a resolver: o roteiro de capturas conhece a rota de laboratório e o vocabulário de planos
+de Coup (`duel:0-3`, `evidence:1`, `throne:4`). O arnês é motor; a lista de planos é catálogo do
+jogo. E ainda faltam baselines por dispositivo — desktop, Android e iOS medidos e guardados.
+
+## Apresentação trocável: 2D e 3D sobre o mesmo motor
+
+Os dois jogos têm duas apresentações para o mesmo estado autoritativo, e chegaram a arranjos
+diferentes:
+
+|                | La Corte                                                                | Sem Perdão                               |
+| -------------- | ----------------------------------------------------------------------- | ---------------------------------------- |
+| 2D             | Mesa completa, alternável a qualquer momento                            | `GameBoard.tsx`, só quando o WebGL falha |
+| Troca          | `state.presentation`, na mesma URL, preservando sala, crônica e relógio | Sem troca: é fallback de erro            |
+| Carga do WebGL | Import dinâmico no primeiro clique; ao voltar, a cena é descartada      | Ao entrar na mesa                        |
+
+O arranjo de La Corte é o mais forte e vira contrato de motor: **apresentação é casca trocável sobre
+um estado só**. Dele saem três exigências que o motor precisa garantir — e que um jogo não deveria
+ter que reinventar:
+
+1. Trocar de apresentação não toca o estado: sala, histórico e relógios sobrevivem à troca.
+2. O 3D entra por import dinâmico e sai por descarte real, para não cobrar bundle nem memória de quem
+   nunca abriu a cena (aqui o palco é um chunk separado de ~650 kB).
+3. O caminho 2D é a mesma coisa que o fallback de WebGL indisponível — quem já tem troca ganha
+   fallback de graça, e não duas soluções para o mesmo problema.
+
+## Tema claro e escuro atravessa casca e cena
+
+Uma preferência só governa o CSS da interface **e** a iluminação do 3D: em La Corte, `data-theme` no
+documento e dia/noite no salão são a mesma decisão, com panorama, paleta e luz trocando junto — e a
+cena descarta e reconstrói o ambiente ao mudar. Sem Perdão não tem tema; o tribunal tem um clima só.
+
+Para o motor isso vira um contrato pequeno e chato de descobrir tarde: **o palco recebe o tema, nunca
+o escolhe**, e todo perfil visual (fundo, névoa, exposição, grão, vinheta) precisa ser parametrizável
+em runtime, sem recriar o renderer. `setVisualProfile` já é isso; o que falta é o motor assumir o
+tema como entrada de primeira classe em vez de detalhe do jogo — inclusive porque um jogo sem tema,
+como Sem Perdão hoje, só precisa passar um perfil fixo.
+
 ## Fila de fusão
 
 Ordem por proximidade das duas bases: começa pelo que ainda é quase o mesmo código, antes que a
 bifurcação abra mais.
 
-1. **Palco 3D** (`packages/tabletop-stage/` + atos de câmera + pós-processo + qualidade) — os dois
-   jogos têm a mesma coisa escrita duas vezes. É onde a convergência paga mais rápido e onde já
-   existe um pacote de pé.
+1. **Palco 3D e sua instrumentação** (`packages/tabletop-stage/` + atos de câmera + pós-processo +
+   qualidade + benchmark + matriz de capturas) — os dois jogos têm a mesma coisa escrita duas vezes,
+   menos a medição, que só existe aqui. Ela vai junto e vai primeiro: é o que prova que os passos
+   seguintes não regrediram.
 2. **Reações físicas** (arremesso, emojis, foley de impacto) — mesma curva, mesmos limites, catálogos
    diferentes. A máquina sai inteira; tomate e adaga ficam com cada jogo.
 3. **Sala multiplayer** (`src/rooms/` + `realtime.js` + `secure-channel.js` × `useMultiplayer.ts`) — o
@@ -246,9 +311,8 @@ Duas peças de ferramental do ciclo 3D também são de motor, e nenhuma existe d
 
 - **Limites de enquadramento.** Nenhum plano dirigido entra no miolo da mesa (raio ≥ 6) nem sai do
   salão (raio ≤ 11,5). A regra é genérica para mesa redonda; os números são da cena. Vira parâmetro.
-- **Matriz de capturas** (`npm run capture:3d`): 11 planos × orientações × dia/noite, headless. É o
-  jeito de provar que uma mudança de câmera não quebrou o enquadramento — e serve a qualquer jogo
-  sobre o palco.
+- **Modo determinístico.** O palco precisa aceitar ser congelado e enquadrado por comando, sem bots
+  nem partida avançando. É o que torna captura de referência possível — ver a seção seguinte.
 
 ## A dívida de segurança viaja junto
 
