@@ -166,14 +166,14 @@ comparar as duas implementações lado a lado e decidir **qual das duas versões
 Eleger a de La Corte por ser a de casa seria escolher por acidente — a linhagem começou do outro
 lado, e em várias peças a versão mais madura provavelmente é a de lá.
 
-| Fase                                        | Gatilho                                     | Entregável                                                                                                               | Pronto quando                                                                                        |
-| ------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **0 · Fronteira mecanizada**                | Agora                                       | Teste que falha se `packages/` importar `src/`, se a apresentação importar `src/game/` ou se o motor citar papel de Coup | A fronteira deixa de depender de disciplina e passa a quebrar o `npm test`                           |
-| **1 · Workspace**                           | Depois da fase 0                            | `workspaces` no `package.json` da raiz, no lugar da dependência `file:`                                                  | `npm test` e `npm run build` passam sem o link manual                                                |
-| **1.5 · Confronto das duas implementações** | Já disponível                               | Comparação peça a peça (palco, atos, arremesso, sala) escolhendo a melhor versão de cada uma, com o motivo registrado    | Cada peça da fila tem uma versão eleita e uma lista do que falta nela                                |
-| **2 · Prova de portabilidade**              | Depois da fase 1.5                          | Sem Perdão consome o motor fundido por caminho relativo ou submódulo, ainda sem publicar                                 | Sem Perdão roda uma partida ponta a ponta sem editar nenhum arquivo do motor                         |
-| **3 · Repositório próprio**                 | Os dois jogos rodando sobre o motor fundido | Repo do motor com escopo neutro, semver, CHANGELOG e publicação em registry privado (GitHub Packages)                    | Os dois jogos instalam a mesma versão publicada e o histórico do motor sobrevive (`git filter-repo`) |
-| **4 · La Corte vira consumidor**            | Depois da fase 3                            | Este repositório passa a depender da versão publicada e `packages/` some daqui                                           | Uma correção no motor chega aos dois jogos por bump de versão, sem cópia                             |
+| Fase                                        | Gatilho                                     | Entregável                                                                                                               | Pronto quando                                                                                                                                                                              |
+| ------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **0 · Fronteira mecanizada**                | Agora                                       | Teste que falha se `packages/` importar `src/`, se a apresentação importar `src/game/` ou se o motor citar papel de Coup | A fronteira deixa de depender de disciplina e passa a quebrar o `npm test`                                                                                                                 |
+| **1 · Workspace**                           | Depois da fase 0                            | `workspaces` no `package.json` da raiz, no lugar da dependência `file:`                                                  | `npm test` e `npm run build` passam sem o link manual                                                                                                                                      |
+| **1.5 · Confronto das duas implementações** | Já disponível                               | Comparação peça a peça (palco, atos, arremesso, sala) escolhendo a melhor versão de cada uma, com o motivo registrado    | Cada peça da fila tem uma versão eleita e uma lista do que falta nela                                                                                                                      |
+| **2 · Prova de portabilidade**              | Depois da fase 1.5                          | Sem Perdão consome o motor fundido por caminho relativo ou submódulo, ainda sem publicar                                 | Sem Perdão roda uma partida ponta a ponta sem editar nenhum arquivo do motor                                                                                                               |
+| **3 · Repositório próprio**                 | Os dois jogos rodando sobre o motor fundido | Repo do motor com escopo neutro, semver, CHANGELOG e publicação em registry privado (GitHub Packages)                    | Os dois jogos instalam a mesma versão publicada, o histórico do motor sobrevive (`git filter-repo`) e a identidade das cadeiras está autenticada (ver "A dívida de segurança viaja junto") |
+| **4 · La Corte vira consumidor**            | Depois da fase 3                            | Este repositório passa a depender da versão publicada e `packages/` some daqui                                           | Uma correção no motor chega aos dois jogos por bump de versão, sem cópia                                                                                                                   |
 
 ### O que nunca vai junto
 
@@ -200,6 +200,8 @@ e caros depois de publicado, porque viram mudança de API entre repositórios:
   transforma todo o motor em `any`, e aí a fronteira não protege mais nada.
 - **Controle de câmera.** La Corte tem arraste e zoom próprios dentro do palco; Sem Perdão usa
   `OrbitControls` de `three/examples`. Duas respostas para a mesma pergunta: escolher uma na fase 1.5.
+- **Identidade e envelopes.** Autenticar a cadeira e validar estruturalmente tudo que chega do canal.
+  É a pendência P0 da auditoria e mora justo na camada que vai virar motor.
 
 ### Riscos assumidos
 
@@ -222,6 +224,67 @@ Não é suficiente, porém, para declarar a roda genérica: as duas bases têm a
 concordarem sobre geometria era o esperado. Quando aparecer um jogo com tabuleiro, grade ou times,
 esta seção provavelmente muda. Até lá o motor pode assumir a roda — desde que assuma explicitamente,
 no nome e na API, em vez de fingir neutralidade que não tem.
+
+## Invariantes que o motor herda do 3D
+
+`CORTE-3D.MD` abre com princípios escritos para Coup. Estes quatro não são de Coup — são contratos
+de qualquer palco que apresente um jogo de informação oculta, e precisam viajar com o motor:
+
+1. **O palco representa decisões; nunca decide regras.** Já está nas fronteiras acima, mas vale a
+   formulação original: é o resumo de uma linha de por que a barreira de projeção existe.
+2. **Nenhum perfil de qualidade pode remover informação de gameplay.** Qualidade mexe em resolução,
+   nunca em conteúdo. Sem isso, "Performance" vira vantagem competitiva ou cegueira — e o motor é
+   quem oferece os perfis, então a regra é dele.
+3. **O cosmético nunca revela estado oculto.** Em La Corte, roupa de cortesão não pode denunciar
+   influência; em Sem Perdão, o mesmo vale para robe, capuz e relíquia com julgamento às cegas. Os
+   dois jogos já têm customização e informação secreta: a regra vale para o motor, não para um deles.
+4. **Fallback e perda de contexto WebGL são responsabilidade do palco.** Um jogo não deveria
+   reimplementar "o navegador não conseguiu abrir a cena". Hoje La Corte trata o fallback e nenhum
+   dos dois trata restauração de contexto — é lacuna de motor, não de jogo.
+
+Duas peças de ferramental do mesmo documento também são de motor, e nenhuma existe do outro lado:
+
+- **Limites de enquadramento.** Nenhum plano dirigido entra no miolo da mesa (raio ≥ 6) nem sai do
+  salão (raio ≤ 11,5). A regra é genérica para mesa redonda; os números são da cena. Vira parâmetro.
+- **Matriz de capturas** (`npm run capture:3d`): 11 planos × orientações × dia/noite, headless. É o
+  jeito de provar que uma mudança de câmera não quebrou o enquadramento — e serve a qualquer jogo
+  sobre o palco.
+
+## A dívida de segurança viaja junto
+
+Este é o insight mais caro de `AUDITORIA-PENDENCIAS.md`, e ele muda o plano acima.
+
+A camada que está prestes a virar motor — sala, presença, canal, host autoritativo — é exatamente a
+que tem a pendência P0: o canal Supabase é público e todas as identidades (`playerId`, chave de
+presença, `connectionId`, chave pública) são declaradas pelo próprio cliente. Quem conhece o código
+da sala pode se passar por outra cadeira e, como o host cifra a visão de um jogador para todas as
+presenças daquele ID, chegar à mão privada dela.
+
+**Sem Perdão tem a mesma arquitetura e o mesmo furo** — o README de lá também avisa que os canais
+públicos não são fronteira anti-cheat.
+
+A consequência para a fusão é direta: extrair a sala como está multiplica a falha por todos os jogos
+futuros, e cada consumidor novo encarece a correção. Autenticação de identidade e validação
+estrutural dos envelopes (snapshots, visões, handover, presença) não são "melhorias posteriores" do
+motor — são pré-requisito de publicá-lo.
+
+A auditoria também entrega, de graça, duas coisas que o plano precisava:
+
+- **A forma da extração.** As fronteiras sugeridas para desmontar `app.js` — `RoomTransport`,
+  `OnlineSessionController`, `GameController`, `UIController` — são o desenho do runtime de sala com
+  adaptador por stack. É mais concreto do que "núcleo puro + adaptador" e já está escrito.
+- **O portão da fase 3.** Os testes que faltam (duas sessões no mesmo canal, reconexão e troca de
+  host ponta a ponta, payloads malformados, tentativa de impersonação, CI rodando tudo) são
+  precisamente a suíte que o motor precisa para merecer publicação. Nenhum deles é sobre Coup.
+
+## Documentos relacionados
+
+- `CORTE-3D.MD` — ciclo da experiência 3D de La Corte. O item 10 ("Consolidar o motor comum") foi
+  absorvido por este documento; lá ficou o ponteiro. Um plano com dois donos diverge.
+- `AUDITORIA-PENDENCIAS.md` — pendências de segurança, performance e arquitetura. Continua dono das
+  pendências; aqui ficam só as que a fusão precisa resolver antes de publicar.
+- Ambos são locais e não versionados. Se este mapa vai ser lido por quem for começar o próximo jogo,
+  os três precisam viver no mesmo lugar.
 
 ## Manutenção
 
