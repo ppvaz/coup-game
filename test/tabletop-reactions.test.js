@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendTabletopReaction, normalizeTabletopReaction } from '../src/lib/tabletop/reactions.js';
+import {
+  TABLETOP_THROWABLES,
+  appendTabletopReaction,
+  normalizeTabletopReaction,
+} from '../src/lib/tabletop/reactions.js';
 
 const players = { playerIds: ['a', 'b', 'c'] };
 
@@ -58,4 +62,18 @@ test('ignora duplicatas e limita o histórico efêmero', () => {
   assert.equal(reactions.length, 24);
   assert.equal(reactions[0].id, 'r6');
   assert.equal(appendTabletopReaction(reactions, reactions.at(-1), players), reactions);
+});
+
+test('a ampulheta é arremessável como os demais adereços da corte', () => {
+  assert.deepEqual(
+    normalizeTabletopReaction(
+      { id: 'r1', kind: 'throw', playerId: 'a', targetId: 'b', throwable: 'hourglass', sentAt: 10 },
+      players,
+    ),
+    { id: 'r1', kind: 'throw', playerId: 'a', targetId: 'b', throwable: 'hourglass', sentAt: 10 },
+  );
+  assert.ok(
+    TABLETOP_THROWABLES.some((item) => item.id === 'hourglass'),
+    'o painel de reações oferece a ampulheta',
+  );
 });

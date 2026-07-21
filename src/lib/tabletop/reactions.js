@@ -7,6 +7,7 @@ export const TABLETOP_THROWABLES = Object.freeze([
   Object.freeze({ id: 'ambassador_card', icon: '✉️', label: 'Carta da Embaixadora' }),
   Object.freeze({ id: 'assassin_dagger', icon: '🗡️', label: 'Adaga da Assassina' }),
   Object.freeze({ id: 'duke_coin', icon: '🪙', label: 'Moeda do Duque' }),
+  Object.freeze({ id: 'hourglass', icon: '⏳', label: 'Ampulheta' }),
 ]);
 
 const THROWABLE_IDS = new Set(TABLETOP_THROWABLES.map((item) => item.id));

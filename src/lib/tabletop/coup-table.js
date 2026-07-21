@@ -220,6 +220,16 @@ function createThrowable(type) {
         cast: false,
       }),
     );
+  } else if (type === 'hourglass') {
+    // "Seu tempo acabou": a mesma peça do relógio de decisão, reduzida ao
+    // tamanho dos outros arremessos e centrada no próprio eixo para girar.
+    const hourglass = createDecisionHourglass();
+    hourglass.group.visible = true;
+    hourglass.group.scale.setScalar(0.46);
+    hourglass.group.position.y = -0.225;
+    // Meia areia, longe do vermelho: é adereço, não relógio.
+    applyDecisionClock(hourglass, 0.5, 30_000);
+    group.add(hourglass.group);
   }
   return group;
 }
