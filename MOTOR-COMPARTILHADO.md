@@ -93,21 +93,73 @@ commit da mudança.
   política vai para o jogo.** O pacote não sabe que existe "quem arremessou"; ele sabe compor uma
   segunda câmera sobre um retângulo da tela.
 
-## Fila de extração para Sem Perdão
+## Fila de extração dentro deste repositório
 
-Ordem por retorno, não por esforço:
+Ordem por valor, não por facilidade. "Mais pronto" não é "mais valioso": a sala multiplayer é a
+peça mais desacoplada que existe aqui, mas ninguém joga um jogo por causa da sala. O que diferencia
+esta base é a apresentação — e é justamente a parte mais amarrada a Coup.
 
-1. **Sala multiplayer** (`src/rooms/` + `src/lib/realtime.js` + `src/lib/secure-channel.js`) — é o
-   bloco mais valioso e o mais perto de sair: praticamente não tem Coup dentro. Vira
-   `@la-corte/room-runtime` movendo a migração de carta de `session.js` para o jogo.
-2. **Diretor de câmera** — vira motor assumindo um mapa `beat → ato` injetado pelo jogo, em vez do
-   `switch` com beats de Coup.
-3. **Áudio** (`sounds.js` + `foley.js` + `voice-announcer.js`) — três mecanismos parecidos com três
-   catálogos diferentes; extrair um único "banco de eventos sonoros" com intervalo mínimo e mudo
-   persistido, parametrizado por chave de storage.
-4. **Casca do salão** (`table-experiment.js`) — hoje é o arquivo que mais mistura os dois lados.
-   Separar a casca (topbar, roster, doca de reações, PiP, preferências) da narrativa de Coup é o que
-   permite Sem Perdão herdar a experiência 3D inteira.
+1. **Casca e direção do salão** (`table-experiment.js` + `camera-director.js`) — é a experiência que
+   se quer herdar inteira e o ponto onde os dois lados mais se misturam. O diretor vira motor
+   recebendo um mapa `beat → ato` injetado pelo jogo, no lugar do `switch` com beats de Coup; a
+   casca separa moldura (topbar, roster, doca de reações, PiP, preferências) de narrativa.
+2. **Áudio** (`sounds.js` + `foley.js` + `voice-announcer.js`) — três mecanismos parecidos com três
+   catálogos diferentes; vira um único banco de eventos sonoros com intervalo mínimo e mudo
+   persistido, parametrizado por prefixo de storage.
+3. **Sala multiplayer** (`src/rooms/` + `src/lib/realtime.js` + `src/lib/secure-channel.js`) — quase
+   não tem Coup dentro e sai praticamente por cópia; adiar não custa. Sai movendo a migração de
+   carta de `session.js` para o jogo.
+
+## Plano de extração para um repositório próprio
+
+O motor sai daqui quando **existir um segundo consumidor de verdade**, não antes. Motor extraído com
+uma evidência só nasce com o formato do primeiro jogo; a segunda evidência é o que separa abstração
+de coincidência. Até lá, o monorepo é o lugar certo — é mais barato mudar um contrato errado dentro
+de um repositório do que entre dois.
+
+| Fase                             | Gatilho                                                  | Entregável                                                                                                               | Pronto quando                                                                                        |
+| -------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **0 · Fronteira mecanizada**     | Agora                                                    | Teste que falha se `packages/` importar `src/`, se a apresentação importar `src/game/` ou se o motor citar papel de Coup | A fronteira deixa de depender de disciplina e passa a quebrar o `npm test`                           |
+| **1 · Workspace**                | Depois da fase 0                                         | `workspaces` no `package.json` da raiz, no lugar da dependência `file:`                                                  | `npm test` e `npm run build` passam sem o link manual                                                |
+| **2 · Prova de portabilidade**   | Primeiro slice vertical do segundo jogo                  | O segundo jogo consome o motor por caminho relativo ou submódulo, ainda sem publicar                                     | O segundo jogo roda uma partida ponta a ponta sem editar nenhum arquivo de `packages/`               |
+| **3 · Repositório próprio**      | O segundo jogo rodando e os contratos da fase 2 estáveis | Repo do motor com escopo neutro, semver, CHANGELOG e publicação em registry privado (GitHub Packages)                    | Os dois jogos instalam a mesma versão publicada e o histórico do motor sobrevive (`git filter-repo`) |
+| **4 · La Corte vira consumidor** | Depois da fase 3                                         | Este repositório passa a depender da versão publicada e `packages/` some daqui                                           | Uma correção no motor chega aos dois jogos por bump de versão, sem cópia                             |
+
+### O que nunca vai junto
+
+Regras, papéis, arte, retratos, vozes, textos e paletas do salão. Se o próximo jogo precisar de algo
+que está em `coup-*.js`, o certo é generalizar o mecanismo e deixar o conteúdo para trás — nunca
+levar o conteúdo "para adaptar depois".
+
+### Contratos a resolver antes da fase 3
+
+Cada um destes é um vazamento de Coup dentro de código que a tabela chama de motor. São baratos hoje
+e caros depois de publicado, porque viram mudança de API entre repositórios:
+
+- **Escopo do pacote.** `@la-corte/*` carrega o nome de um jogo. Renomear para um escopo neutro da
+  equipe custa um _find & replace_ hoje e uma major amanhã.
+- **Prefixo de storage.** `la-corte-3d-quality`, `la-corte-3d-benchmarks` e os mudos de áudio gravam
+  o jogo na chave. O motor precisa receber o prefixo, não escolhê-lo.
+- **Vocabulário de beats.** Enquanto o diretor de câmera tiver `claim` e `influence-loss` no `switch`,
+  ele não é motor — é o diretor de Coup morando na pasta errada.
+- **Catálogos.** Reações, foley e falas: a máquina fica, a lista entra por parâmetro.
+- **Idioma.** Toda string visível do motor precisa vir do jogo. Hoje há texto em português dentro de
+  código que se pretende genérico.
+
+### Riscos assumidos
+
+- **Publicar cedo demais.** Um pacote com dois consumidores transforma toda mudança em release. Fase
+  2 existe justamente para provar a portabilidade sem pagar esse pedágio.
+- **Segurar tempo demais.** O inverso também acontece: o motor apodrece dentro do jogo quando toda
+  feature nova acha mais fácil furar a fronteira. A fase 0 é o antídoto e por isso vem primeiro.
+
+### Decisão pendente
+
+O palco de hoje assume jogadores em círculo, cadeira por ângulo (`azimuthRad`) e no máximo seis
+lugares — e as câmeras (duelo, trono, POV) derivam dessa geometria. Se o próximo jogo tiver
+tabuleiro, grade, times ou tempo real, boa parte do que esta tabela chama de motor é, na verdade,
+"motor de jogo de cadeiras em círculo". **Definir o formato do próximo jogo é pré-requisito da fase
+2** e pode reclassificar módulos inteiros deste mapa.
 
 ## Manutenção
 
