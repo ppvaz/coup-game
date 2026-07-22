@@ -3,7 +3,7 @@ const VOICES_MUTE_KEY = 'la-corte-voices-muted';
 const MUSIC_MUTE_KEY = 'la-corte-music-muted';
 
 // A trilha fica bem abaixo das falas (0.9) para nunca cobrir uma contestação.
-const MUSIC_VOLUME = 0.12;
+const MUSIC_VOLUME = 0.3;
 
 const PATTERNS = {
   turn: [
@@ -144,7 +144,15 @@ export function createSoundManager(options = {}) {
   const playMusic = (source) => {
     if (musicMuted || !AudioPlayer || !source) return false;
     // Cada render chama isto; repetir a mesma faixa não pode reiniciá-la.
-    if (music && musicSource === source) return false;
+    if (music && musicSource === source) {
+      // Uma tentativa feita antes do primeiro gesto pode ter sido bloqueada
+      // pelo navegador. Nesse caso, o próximo gesto retoma a mesma instância.
+      if (music.paused) {
+        Promise.resolve(music.play()).catch(() => {});
+        return true;
+      }
+      return false;
+    }
     stopMusic();
     let track;
     try {
@@ -200,6 +208,7 @@ export function createSoundManager(options = {}) {
     setMusicMuted,
     toggleMusic: () => setMusicMuted(!musicMuted),
     playMusic,
+    stopMusic,
     // O foley do salão 3D sintetiza os próprios timbres, mas precisa do mesmo
     // contexto para que exista uma única cadeia de áudio e um único mudo.
     audioContext: () => getContext(),

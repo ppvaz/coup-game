@@ -211,10 +211,10 @@ if (resumeSnapshot?.game) {
 
 const themeToggle = $('#theme-toggle');
 const sounds = createSoundManager();
-// Para ligar a trilha: ponha o arquivo em assets/music/ e troque este null por
-// `import trilha from './assets/music/<arquivo>.ogg'`. Sem trilha instalada o
-// controle de música nem chega a ser renderizado.
-const SOUNDTRACK = null;
+// A fonte fica configurável para permitir testes com arquivos locais ignorados
+// pelo Git e, futuramente, uma URL publicada sem alterar o motor de áudio.
+// Sem trilha instalada o controle de música nem chega a ser renderizado.
+const SOUNDTRACK = import.meta.env.VITE_CORTE_SOUNDTRACK || null;
 const gameViewContext = () => ({
   portraits: PORTRAITS,
   clock,
@@ -226,12 +226,17 @@ const gameViewContext = () => ({
   canSwitchTo2D: !isTabletopLab,
 });
 const chatGuard = createChatGuard();
-const startMusic = () => sounds.playMusic(SOUNDTRACK);
+const musicShouldPlay = () => isTabletopLab || (state.screen === 'game' && Boolean(state.game));
+const startMusic = () => (musicShouldPlay() ? sounds.playMusic(SOUNDTRACK) : false);
+const syncMusic = () => {
+  if (musicShouldPlay()) startMusic();
+  else sounds.stopMusic();
+};
 // O navegador só libera áudio depois de um gesto, então a trilha começa junto
 // com o desbloqueio do contexto, e não na carga da página.
-const unlockSounds = () => {
-  startMusic();
-  return sounds.unlock().catch(() => {});
+const unlockSounds = async () => {
+  await sounds.unlock().catch(() => {});
+  syncMusic();
 };
 document.addEventListener('pointerdown', unlockSounds, { once: true });
 document.addEventListener('keydown', unlockSounds, { once: true });
@@ -1565,6 +1570,7 @@ function renderApp() {
   const root = $('#app');
   const restoreChatFocus = document.activeElement?.id === 'chat-input';
   if (isTabletopLab && !state.game) resetTabletopLabScene();
+  syncMusic();
   if (isTabletopLab || (state.screen === 'game' && state.presentation === '3d' && state.game)) {
     if (tableExperimentController) {
       tableExperimentController.update(state, gameViewContext());

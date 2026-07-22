@@ -150,6 +150,19 @@ test('silenciar a trilha pausa sem perder a posição e religar retoma a mesma f
   assert.equal(FakeAudio.instances.length, 1);
 });
 
+test('parar a trilha descarta a instância e permite reiniciar na próxima mesa', () => {
+  FakeAudio.instances = [];
+  const sounds = createSoundManager({ Audio: FakeAudio, AudioContext: null, storage: makeStorage() });
+
+  sounds.playMusic('corte.ogg');
+  const first = FakeAudio.instances[0];
+  sounds.stopMusic();
+  assert.equal(first.paused, true);
+
+  assert.equal(sounds.playMusic('corte.ogg'), true);
+  assert.equal(FakeAudio.instances.length, 2);
+});
+
 test('trilha silenciada não cria áudio e é independente de efeitos e vozes', async () => {
   FakeAudio.instances = [];
   FakeAudioContext.oscillators = [];
