@@ -1,14 +1,8 @@
+import { SALON_SEAT_RING, seatRingPoint } from '../../coup-table/seat-ring.js';
+
 function seatFrame(seat, seatCount) {
-  const radiusX = seatCount <= 3 ? 5.15 : 5.55;
-  const radiusZ = seatCount <= 3 ? 4.25 : 4.65;
-  const outwardX = Math.sin(seat.azimuthRad);
-  const outwardZ = Math.cos(seat.azimuthRad);
-  return {
-    seatX: outwardX * radiusX,
-    seatZ: outwardZ * radiusZ,
-    inwardX: -outwardX,
-    inwardZ: -outwardZ,
-  };
+  const { x, z, outwardX, outwardZ } = seatRingPoint(SALON_SEAT_RING, seat, seatCount);
+  return { seatX: x, seatZ: z, inwardX: -outwardX, inwardZ: -outwardZ };
 }
 
 /** Olhos do cortesão: a posição fica fixa e o arrasto muda apenas o olhar. */

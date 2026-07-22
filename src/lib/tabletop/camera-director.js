@@ -2,6 +2,7 @@
 // assentos enquadrados a partir da visão projetada — puro, para os testes de
 // Node — e os helpers de geometria resolvem as coordenadas de atos dirigidos.
 // A cena aplica o corte somente quando `cameraDecisionKey` muda.
+import { SALON_SEAT_RING, seatRingPoint } from './coup-table/seat-ring.js';
 
 export function directCamera(view) {
   const seats = view?.seats ?? [];
@@ -110,14 +111,6 @@ export function influenceRevealCamera(view) {
   return { act: seat.isSelf ? 'player' : 'evidence', seatIds: [seat.id] };
 }
 
-// Mesma elipse de assentos usada pelas câmeras POV/Jogador da cena.
-const seatRadii = (seatCount) => (seatCount <= 3 ? { x: 5.15, z: 4.25 } : { x: 5.55, z: 4.65 });
-
-const seatPoint = (seat, seatCount) => {
-  const { x, z } = seatRadii(seatCount);
-  return { x: Math.sin(seat.azimuthRad) * x, z: Math.cos(seat.azimuthRad) * z };
-};
-
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 // Empurra a posição radialmente para fora do miolo da mesa quando preciso.
@@ -131,10 +124,8 @@ const ensureRadius = ([x, y, z], min, max = Number.POSITIVE_INFINITY) => {
 // Alegações sem alvo pertencem ao centro da mesa. A câmera permanece atrás
 // do ator, mostrando-o como origem, mas mira a carta pública, a efígie e o
 // selo em vez de transformar a declaração num retrato lateral.
-export function claimCameraForSeat(seat, seatCount) {
-  const { x, z } = seatRadii(seatCount);
-  const outwardX = Math.sin(seat.azimuthRad);
-  const outwardZ = Math.cos(seat.azimuthRad);
+export function claimCameraForSeat(seat, seatCount, ring = SALON_SEAT_RING) {
+  const { radiusX: x, radiusZ: z, outwardX, outwardZ } = seatRingPoint(ring, seat, seatCount);
   return {
     position: [outwardX * x * 2.05, 5.25, outwardZ * z * 2.05],
     target: [0, 1.65, 0],
@@ -149,11 +140,11 @@ export function claimCameraForSeat(seat, seatCount) {
 
 // Nenhum plano dirigido se aproxima do centro da mesa (raio < 6): a carta de
 // ação e a efígie vivem ali, e cruzar o miolo cortaria esses elementos.
-// Plano lateral elevado sobre a elipse dos assentos: enquadra o assento em
-// três quartos sem cruzar o centro nem colar nos vizinhos.
-function sideShot(seat, seatCount, { azimuthOffset, radiusFactor, height, targetY, fov, portraitFov }) {
-  const { x, z } = seatRadii(seatCount);
-  const point = seatPoint(seat, seatCount);
+// Plano lateral elevado sobre o anel de assentos: enquadra o assento em três
+// quartos sem cruzar o centro nem colar nos vizinhos.
+function sideShot(seat, seatCount, ring, { azimuthOffset, radiusFactor, height, targetY, fov, portraitFov }) {
+  const point = seatRingPoint(ring, seat, seatCount);
+  const { radiusX: x, radiusZ: z } = point;
   const az = seat.azimuthRad + azimuthOffset;
   const target = [point.x * 0.85, targetY, point.z * 0.85];
   // O recuo extra do portrait respeita o teto de raio do salão.
@@ -173,8 +164,8 @@ function sideShot(seat, seatCount, { azimuthOffset, radiusFactor, height, target
 // Confronto com a corte inteira: frontal de raio longo — a câmera fica bem
 // atrás da fileira de assentos do lado oposto, quase alinhada ao ator (offset
 // pequeno tira a carta central do eixo), vendo o rosto sem vizinho no quadro.
-const confrontCamera = (seat, seatCount) =>
-  sideShot(seat, seatCount, {
+const confrontCamera = (seat, seatCount, ring) =>
+  sideShot(seat, seatCount, ring, {
     azimuthOffset: 0.6,
     radiusFactor: 1.9,
     height: 3.8,
@@ -183,9 +174,9 @@ const confrontCamera = (seat, seatCount) =>
     portraitFov: 52,
   });
 
-export function duelCameraForSeats(subjects, seatCount) {
-  if (subjects.length < 2) return confrontCamera(subjects[0], seatCount);
-  const [first, second] = subjects.map((seat) => seatPoint(seat, seatCount));
+export function duelCameraForSeats(subjects, seatCount, ring = SALON_SEAT_RING) {
+  if (subjects.length < 2) return confrontCamera(subjects[0], seatCount, ring);
+  const [first, second] = subjects.map((seat) => seatRingPoint(ring, seat, seatCount));
   const mid = { x: (first.x + second.x) / 2, z: (first.z + second.z) / 2 };
   const separation = Math.hypot(second.x - first.x, second.z - first.z) || 1;
   const side = { x: -(second.z - first.z) / separation, z: (second.x - first.x) / separation };
@@ -222,16 +213,16 @@ export function duelCameraForSeats(subjects, seatCount) {
 // Resultado financeiro: conserva as duas bancadas no quadro e inclina o
 // portrait para enxergar a trajetória sobre a mesa, sem usar um personagem
 // em primeiro plano como acontece no duelo dramático.
-export function coinTransferCameraForSeats(subjects, seatCount) {
-  if (subjects.length < 2) return claimCameraForSeat(subjects[0], seatCount);
-  const [first, second] = subjects.map((seat) => seatPoint(seat, seatCount));
+export function coinTransferCameraForSeats(subjects, seatCount, ring = SALON_SEAT_RING) {
+  if (subjects.length < 2) return claimCameraForSeat(subjects[0], seatCount, ring);
+  const [first, second] = subjects.map((seat) => seatRingPoint(ring, seat, seatCount));
   const mid = { x: (first.x + second.x) / 2, z: (first.z + second.z) / 2 };
   const separation = Math.hypot(second.x - first.x, second.z - first.z) || 1;
   const axis = { x: (second.x - first.x) / separation, z: (second.z - first.z) / separation };
   // Recuo longo reduz a perspectiva do assento próximo: ele deixa de cobrir
   // a bancada distante, mas ambos continuam alinhados verticalmente.
   const portraitPosition = ensureRadius([first.x - axis.x * 7, 7.3, first.z - axis.z * 7], 7.2, 11.2);
-  const duel = duelCameraForSeats(subjects, seatCount);
+  const duel = duelCameraForSeats(subjects, seatCount, ring);
   const target = [mid.x * 0.9, 1.15, mid.z * 0.9];
   return {
     ...duel,

@@ -27,6 +27,7 @@ import { resolveTabletopQuality } from './quality-profiles.js';
 import { TABLETOP_THROWABLES } from './reactions.js';
 import { actionCaptionTexture, createInfluenceCard, imageTexture, plaqueTexture } from './coup-table/cards.js';
 import { playerCameraForSeat, povCameraForSeat } from './coup-table/seat-cameras.js';
+import { SALON_SEAT_RING, seatRingPoint } from './coup-table/seat-ring.js';
 import { ROLE_VISUALS, createNoble, createRoleFigure } from './coup-table/figures.js';
 import { createEmojiSprite, createThrowable } from './coup-table/reaction-models.js';
 import { COURT_GESTURES, impactGesture } from './coup-table/gestures.js';
@@ -282,12 +283,12 @@ export class CoupTableScene {
     this.interventionFrameKey = '';
     this.interventionFocusCache.length = 0;
     const count = view.seats.length;
+    const { props, facing } = this.seatRing;
     for (const seatView of view.seats) {
       const angle = seatView.azimuthRad;
-      const radiusX = count <= 3 ? 5.15 : 5.55;
-      const radiusZ = count <= 3 ? 4.25 : 4.65;
+      const anchor = seatRingPoint(this.seatRing, seatView, count);
       const noble = createNoble(nobleAppearance(seatView.index));
-      noble.group.position.set(Math.sin(angle) * radiusX, 0, Math.cos(angle) * radiusZ);
+      noble.group.position.set(anchor.x, 0, anchor.z);
       noble.group.rotation.y = angle + Math.PI;
 
       const plaque = mesh(
@@ -297,8 +298,8 @@ export class CoupTableScene {
           transparent: false,
         }),
         {
-          position: [0, 1.265, -1.92],
-          rotation: [-Math.PI / 2, 0, Math.PI],
+          position: props.plaque,
+          rotation: [-Math.PI / 2, 0, facing.plaque],
           cast: false,
         },
       );
@@ -317,10 +318,10 @@ export class CoupTableScene {
       noble.group.add(targetHitbox);
 
       const coinGroup = new THREE.Group();
-      coinGroup.position.set(-1, 1.34, -1.2);
+      coinGroup.position.fromArray(props.coins);
       noble.group.add(coinGroup);
       const influenceGroup = new THREE.Group();
-      influenceGroup.position.set(0.05, 1.28, -1.14);
+      influenceGroup.position.fromArray(props.influences);
       noble.group.add(influenceGroup);
       this.seatLayer.add(noble.group);
       this.seats.set(seatView.id, {
@@ -346,12 +347,17 @@ export class CoupTableScene {
     return seat ? { id: seat.id, name: seat.name } : null;
   }
 
+  /** Moldura da composição: cadeiras, câmeras e peças derivam deste anel. */
+  get seatRing() {
+    return SALON_SEAT_RING;
+  }
+
   povCameraForSeat(seat, seatCount) {
-    return povCameraForSeat(seat, seatCount);
+    return povCameraForSeat(seat, seatCount, this.seatRing);
   }
 
   playerCameraForSeat(seat, seatCount) {
-    return playerCameraForSeat(seat, seatCount);
+    return playerCameraForSeat(seat, seatCount, this.seatRing);
   }
 
   localCameraForSeat(seat, seatCount) {
@@ -423,12 +429,12 @@ export class CoupTableScene {
       const hadCoins = seat.coinCount >= 0;
       disposeObject3D(seat.coinGroup);
       seat.coinGroup = createCoinTreasury(seatView.coins);
-      seat.coinGroup.position.set(-1, 1.34, -1.2);
+      seat.coinGroup.position.fromArray(this.seatRing.props.coins);
       seat.group.add(seat.coinGroup);
       if (seat.treasureLabel) disposeObject3D(seat.treasureLabel);
       seat.treasureLabel = seatView.isSelf ? createTreasureLabel(seatView.coins) : null;
       if (seat.treasureLabel) {
-        seat.treasureLabel.position.set(-0.78, 2.05, -1.12);
+        seat.treasureLabel.position.fromArray(this.seatRing.props.treasure);
         seat.treasureLabel.visible = this.privateCoinsHovered;
         seat.group.add(seat.treasureLabel);
       }
@@ -447,7 +453,7 @@ export class CoupTableScene {
       this.focusableInfluences = this.focusableInfluences.filter((entry) => entry.seatId !== seatView.id);
       disposeObject3D(seat.influenceGroup);
       seat.influenceGroup = new THREE.Group();
-      seat.influenceGroup.position.set(0.05, 1.28, -1.14);
+      seat.influenceGroup.position.fromArray(this.seatRing.props.influences);
       seat.group.add(seat.influenceGroup);
       seatView.influences.forEach((influence, index) => {
         const card = createInfluenceCard(influence);
@@ -455,7 +461,7 @@ export class CoupTableScene {
         const newlyRevealed = hadInfluences && !previousInfluences[index]?.revealed && influence.revealed;
         card.position.set(index * 0.7, baseY, index * 0.08);
         card.rotation.x = newlyRevealed ? Math.PI * 0.96 : 0;
-        card.rotation.y = Math.PI + (index ? -0.12 : 0.1);
+        card.rotation.y = this.seatRing.facing.influences + (index ? -0.12 : 0.1);
         card.rotation.z = influence.revealed ? 0.04 : 0;
         seat.influenceGroup.add(card);
         if (influence.selectable) {
@@ -572,7 +578,7 @@ export class CoupTableScene {
       group.name = 'exchange-options';
       // A troca ocupa a borda privada do jogador: à frente do corpo e alguns
       // centímetros acima das fichas, para o leque não atravessar nenhum dos dois.
-      group.position.set(0, 1.43, -1.12);
+      group.position.fromArray(this.seatRing.props.exchange);
       const count = exchange.options.length;
       exchange.options.forEach((option, index) => {
         const card = createInfluenceCard({
@@ -581,7 +587,7 @@ export class CoupTableScene {
           selectable: true,
         });
         card.position.set((index - (count - 1) / 2) * 0.72, option.selected ? 0.16 : 0, (index % 2) * 0.025);
-        card.rotation.y = Math.PI + (index - (count - 1) / 2) * -0.035;
+        card.rotation.y = this.seatRing.facing.influences + (index - (count - 1) / 2) * -0.035;
         group.add(card);
         this.exchangeCards.push({
           id: option.id,
@@ -937,7 +943,10 @@ export class CoupTableScene {
       .map((id) => this.view.seats.find((seat) => seat.id === id))
       .filter(Boolean);
     if (subjects.length) {
-      this.stage.defineCameraAct('coin-transfer', coinTransferCameraForSeats(subjects, this.view.seats.length));
+      this.stage.defineCameraAct(
+        'coin-transfer',
+        coinTransferCameraForSeats(subjects, this.view.seats.length, this.seatRing),
+      );
       this.cameraName = 'coin-transfer';
       this.stage.setCameraAct('coin-transfer');
     }
@@ -1012,9 +1021,9 @@ export class CoupTableScene {
       if (pose) this.stage.defineCameraAct('intervention', pose);
       else act = 'table';
     } else if (act === 'duel' && subjects.length) {
-      this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
+      this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length, this.seatRing));
     } else if (act === 'claim' && subjects.length) {
-      this.stage.defineCameraAct('claim', claimCameraForSeat(subjects[0], seats.length));
+      this.stage.defineCameraAct('claim', claimCameraForSeat(subjects[0], seats.length, this.seatRing));
     } else if (act === 'targeting-seat' && subjects.length) {
       this.stage.defineCameraAct('targeting-seat', this.playerCameraForSeat(subjects[0], seats.length));
     } else if (act === 'evidence' && subjects.length) {
@@ -1034,7 +1043,9 @@ export class CoupTableScene {
     if (!playerId) return new THREE.Vector3(0, 1.5, 0);
     const seat = this.seats.get(playerId);
     if (!seat) return null;
-    const anchor = new THREE.Vector3(-1, 1.52, -1.2);
+    // As moedas em voo partem de um palmo acima da pilha, não de dentro dela.
+    const [x, y, z] = this.seatRing.props.coins;
+    const anchor = new THREE.Vector3(x, y + 0.18, z);
     seat.group.localToWorld(anchor);
     return anchor;
   }
@@ -1394,7 +1405,7 @@ export class CoupTableScene {
       this.cameraName = 'coin-transfer';
       this.stage.defineCameraAct(
         this.cameraName,
-        coinTransferCameraForSeats(isSteal ? [seats[0], seats[1]] : [seats[0]], seats.length),
+        coinTransferCameraForSeats(isSteal ? [seats[0], seats[1]] : [seats[0]], seats.length, this.seatRing),
       );
       this.stage.setCameraAct(this.cameraName, { immediate: true });
       return this.playCoinMovement(movement, { delay: 0.35 }) ? 'coins' : null;
@@ -1408,8 +1419,9 @@ export class CoupTableScene {
       return act;
     }
     if (!subjects.length) return null;
-    if (act === 'duel') this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
-    else if (act === 'claim') this.stage.defineCameraAct('claim', claimCameraForSeat(subjects[0], seats.length));
+    if (act === 'duel') this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length, this.seatRing));
+    else if (act === 'claim')
+      this.stage.defineCameraAct('claim', claimCameraForSeat(subjects[0], seats.length, this.seatRing));
     else if (act === 'targeting-seat')
       this.stage.defineCameraAct('targeting-seat', this.playerCameraForSeat(subjects[0], seats.length));
     else if (act === 'evidence')
