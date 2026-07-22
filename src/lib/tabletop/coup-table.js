@@ -9,9 +9,11 @@ import {
 } from '@la-corte/tabletop-stage/projectile-cam';
 import {
   cameraDecisionKey,
+  claimCameraForSeat,
   directCamera,
   duelCameraForSeats,
   influenceRevealCamera,
+  targetingCameraAct,
   throneCameraForSeat,
 } from './camera-director.js';
 import { coinStackBounds, coinStackLayout } from './coin-layout.js';
@@ -82,6 +84,7 @@ export const ACTION_ART = {
 
 const THROWABLE_TYPES = new Set(TABLETOP_THROWABLES.map((item) => item.id));
 const INFLUENCE_REVEAL_HOLD_MS = 1900;
+const TARGET_PICK_LAYER = 1;
 
 const THEME_PROFILES = {
   dark: {
@@ -1087,6 +1090,7 @@ export class CoupTableScene {
       fov: 49,
       portrait: { position: [0, 6.85, 11.25], target: [0, 1.35, -0.35], fov: 70 },
     });
+    this.stage.defineCameraAct('targeting', targetingCameraAct());
     this.stage.defineCameraAct('pov', {
       position: [0, 2.8, 7.8],
       target: [0, 1.35, -1.9],
@@ -1163,6 +1167,7 @@ export class CoupTableScene {
     this.hoveredPrivateInfluenceId = null;
     this.focusedInfluenceId = null;
     this.privateCoinsHovered = false;
+    this.hoveredTargetSeatId = null;
     this.exchangeGroup = null;
     this.exchangeCards = [];
     this.exchangeSignature = '';
@@ -1256,6 +1261,7 @@ export class CoupTableScene {
     this.hoveredPrivateInfluenceId = null;
     this.focusedInfluenceId = null;
     this.privateCoinsHovered = false;
+    this.hoveredTargetSeatId = null;
     const count = view.seats.length;
     for (const seatView of view.seats) {
       const angle = seatView.azimuthRad;
@@ -1279,6 +1285,18 @@ export class CoupTableScene {
       );
       noble.group.add(plaque);
 
+      // Uma cadeira inteira funciona como alvo. A caixa invisível inclui o
+      // cortesão e a bancada para que touch não dependa de acertar uma placa
+      // ou carta pequena.
+      const targetHitbox = mesh(
+        new THREE.BoxGeometry(2.7, 3.15, 2.75),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        { position: [0, 1.72, -0.72], cast: false, receive: false },
+      );
+      targetHitbox.name = `target-seat-${seatView.id}`;
+      targetHitbox.layers.set(TARGET_PICK_LAYER);
+      noble.group.add(targetHitbox);
+
       const coinGroup = new THREE.Group();
       coinGroup.position.set(-1, 1.34, -1.2);
       noble.group.add(coinGroup);
@@ -1289,6 +1307,7 @@ export class CoupTableScene {
       this.seats.set(seatView.id, {
         ...noble,
         plaque,
+        targetHitbox,
         coinGroup,
         treasureLabel: null,
         influenceGroup,
@@ -1357,20 +1376,12 @@ export class CoupTableScene {
   updateSeat(seatView) {
     const seat = this.seats.get(seatView.id);
     if (!seat) return;
+    seat.view = seatView;
     seat.group.visible = seatView.connected || !seatView.eliminated;
     seat.group.scale.setScalar(seatView.eliminated ? 0.94 : 1);
     seat.group.rotation.z = seatView.eliminated ? 0.09 : 0;
     seat.body.rotation.x = seatView.eliminated ? -0.2 : 0;
-    const focusOpacity = seatView.isWinner
-      ? 0.72
-      : seatView.isActor || seatView.isCurrent
-        ? 0.48
-        : seatView.isTarget || seatView.isBlocker
-          ? 0.34
-          : 0;
-    seat.focus.visible = focusOpacity > 0;
-    seat.focus.material.opacity = focusOpacity;
-    seat.focus.material.color.setHex(seatView.isTarget ? COLORS.danger : COLORS.gold);
+    this.updateSeatFocus(seatView);
 
     if (seat.coinCount !== seatView.coins) {
       // -1 é a pilha recém-construída: entrar no salão ou reconstruir assentos
@@ -1444,6 +1455,31 @@ export class CoupTableScene {
       seat.influenceSignature = influenceSignature;
       seat.influenceStates = seatView.influences.map((influence) => ({ revealed: influence.revealed }));
     }
+  }
+
+  updateSeatFocus(seatView) {
+    const seat = this.seats.get(seatView.id);
+    if (!seat) return;
+    const targetHovered = seatView.isSelectableTarget && this.hoveredTargetSeatId === seatView.id;
+    const targetSelected = seatView.isSelectableTarget && seatView.isSelectedTarget;
+    const focusOpacity =
+      targetHovered || targetSelected
+        ? 0.82
+        : seatView.isSelectableTarget
+          ? 0.48
+          : seatView.isWinner
+            ? 0.72
+            : seatView.isActor || seatView.isCurrent
+              ? 0.48
+              : seatView.isTarget || seatView.isBlocker
+                ? 0.34
+                : 0;
+    seat.focus.visible = focusOpacity > 0;
+    seat.focus.material.opacity = focusOpacity;
+    seat.focus.material.color.setHex(
+      targetHovered || targetSelected || seatView.isTarget ? COLORS.danger : COLORS.gold,
+    );
+    seat.focus.scale.setScalar(targetHovered ? 1.16 : targetSelected ? 1.1 : 1);
   }
 
   updateActionCard(view) {
@@ -1683,6 +1719,9 @@ export class CoupTableScene {
       this.rebuildSeats(view);
       this.seatSignature = signature;
     }
+    if (!view.seats.some((seat) => seat.id === this.hoveredTargetSeatId && seat.isSelectableTarget)) {
+      this.hoveredTargetSeatId = null;
+    }
     for (const seat of view.seats) this.updateSeat(seat);
     this.updateExchange(view);
     this.updateWinnerAvatar(view);
@@ -1745,6 +1784,10 @@ export class CoupTableScene {
       else act = 'table';
     } else if (act === 'duel' && subjects.length) {
       this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
+    } else if (act === 'claim' && subjects.length) {
+      this.stage.defineCameraAct('claim', claimCameraForSeat(subjects[0], seats.length));
+    } else if (act === 'targeting-seat' && subjects.length) {
+      this.stage.defineCameraAct('targeting-seat', playerCameraForSeat(subjects[0], seats.length));
     } else if (act === 'evidence' && subjects.length) {
       this.stage.defineCameraAct('evidence', playerCameraForSeat(subjects[0], seats.length));
     } else if (act === 'throne' && subjects.length) {
@@ -1756,6 +1799,27 @@ export class CoupTableScene {
 
   hasActionCard() {
     return this.actionCard.visible;
+  }
+
+  setTargetSeatHover(seatId) {
+    const next = this.view?.seats.some((seat) => seat.id === seatId && seat.isSelectableTarget) ? seatId : null;
+    if (next === this.hoveredTargetSeatId) return Boolean(next);
+    this.hoveredTargetSeatId = next;
+    for (const seatView of this.view?.seats ?? []) this.updateSeatFocus(seatView);
+    return Boolean(next);
+  }
+
+  pickTargetSeat(pointer) {
+    if (!this.view?.targeting) return null;
+    const raycaster = new THREE.Raycaster();
+    raycaster.layers.set(TARGET_PICK_LAYER);
+    raycaster.setFromCamera(new THREE.Vector2(pointer.x, pointer.y), this.stage.camera);
+    let closest = null;
+    for (const [id, seat] of this.seats) {
+      const hit = raycaster.intersectObject(seat.targetHitbox, false)[0];
+      if (hit && (!closest || hit.distance < closest.distance)) closest = { id, distance: hit.distance };
+    }
+    return this.view.seats.some((seat) => seat.id === closest?.id && seat.isSelectableTarget) ? closest.id : null;
   }
 
   setActionCardHover(hovered) {
@@ -1910,7 +1974,8 @@ export class CoupTableScene {
 
   // Instrumentação do laboratório: congela qualquer ato para capturas de
   // validação visual — dirigidos ("duel:0-3", "duel:2", "evidence:1",
-  // "throne:4", "pov:2") ou fixos ("table", "player", "overhead", "portal").
+  // "throne:4", "claim:2", "pov:2") ou fixos
+  // ("table", "targeting", "player", "overhead", "portal").
   applyLabShot(spec) {
     const seats = this.view?.seats ?? [];
     const [act, indexPart] = String(spec ?? '').split(':');
@@ -1921,7 +1986,7 @@ export class CoupTableScene {
       .map((index) => seats[index]);
     if (act === 'player') return this.setPlayerCamera({ immediate: true }) ? 'player' : null;
     if (act === 'pov') return this.setPovSeat(subjects[0]?.id, { immediate: true }) ? 'pov' : null;
-    if (['table', 'overhead', 'portal'].includes(act)) {
+    if (['table', 'targeting', 'overhead', 'portal'].includes(act)) {
       this.cameraOverridden = true;
       this.cameraName = act;
       this.stage.setCameraAct(act, { immediate: true });
@@ -1929,6 +1994,9 @@ export class CoupTableScene {
     }
     if (!subjects.length) return null;
     if (act === 'duel') this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
+    else if (act === 'claim') this.stage.defineCameraAct('claim', claimCameraForSeat(subjects[0], seats.length));
+    else if (act === 'targeting-seat')
+      this.stage.defineCameraAct('targeting-seat', playerCameraForSeat(subjects[0], seats.length));
     else if (act === 'evidence') this.stage.defineCameraAct('evidence', playerCameraForSeat(subjects[0], seats.length));
     else if (act === 'throne') this.stage.defineCameraAct('throne', throneCameraForSeat(subjects[0], seats.length));
     else return null;

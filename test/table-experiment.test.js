@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { createGame, dispatchGame } from '../src/game/coup.js';
 import {
   gameplayHTML,
+  nextTabletopTargetId,
   shouldFocusDecisionHourglass,
   tableExperimentHTML,
   tabletopInfluenceCommand,
   tabletopRosterHTML,
+  tabletopTargetCommand,
 } from '../src/ui/table-experiment.js';
 
 const seats = [
@@ -97,6 +99,45 @@ test('clique 3D só produz comando para influência local selecionável', () => 
   assert.equal(tabletopInfluenceCommand(game, 'b', rivalCard.id), null);
   ownCard.revealed = true;
   assert.equal(tabletopInfluenceCommand(game, 'a', ownCard.id), null);
+});
+
+test('seleção de alvo usa assentos 3D e conserva a lista como fallback', () => {
+  const game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  game.players.find((player) => player.id === 'c').coins = 0;
+  const state = stateFor(game, { targetAction: 'steal' });
+
+  const stage = gameplayHTML(state, context);
+  assert.match(stage, /tabletop-target-decision/);
+  assert.match(stage, /Toque no assento de um rival/);
+  assert.match(stage, /id="tabletop-target-fallback-open"/);
+  assert.doesNotMatch(stage, /data-target=/);
+
+  const multiTargetGame = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  const confirmation = gameplayHTML(stateFor(multiTargetGame, { targetAction: 'steal' }), context, {
+    selectedTargetId: 'b',
+  });
+  assert.match(confirmation, /Confirmar alvo/);
+  assert.match(confirmation, /Roubar de Bia\?/);
+  assert.match(confirmation, /id="tabletop-target-confirm"/);
+  assert.match(confirmation, /id="tabletop-target-next"/);
+
+  const fallback = gameplayHTML(state, context, { targetFallbackOpen: true });
+  assert.match(fallback, /data-target="b"/);
+  assert.match(fallback, /data-target="c" disabled/);
+
+  assert.deepEqual(tabletopTargetCommand(game, 'a', 'steal', 'b'), {
+    type: 'declare_action',
+    actorId: 'a',
+    action: 'steal',
+    targetId: 'b',
+  });
+  assert.equal(tabletopTargetCommand(game, 'a', 'steal', 'c'), null);
+  assert.equal(tabletopTargetCommand(game, 'b', 'steal', 'a'), null);
+  assert.equal(nextTabletopTargetId(game, 'a', 'steal', null), 'b');
+  assert.equal(nextTabletopTargetId(game, 'a', 'steal', 'b'), 'b');
+  game.players.find((player) => player.id === 'c').coins = 1;
+  assert.equal(nextTabletopTargetId(game, 'a', 'steal', 'b'), 'c');
+  assert.equal(nextTabletopTargetId(game, 'a', 'steal', 'c'), 'b');
 });
 
 test('a Embaixadora usa bancada 3D com confirmação e lista acessível como fallback', () => {

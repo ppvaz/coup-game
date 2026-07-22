@@ -1,5 +1,5 @@
 import { awaitedPlayerId } from '../game/ai.js';
-import { responseProgress } from '../game/coup.js';
+import { ACTIONS, responseProgress, validActionTargets } from '../game/coup.js';
 import { projectCoupTableView } from '../lib/tabletop/coup-view.js';
 import {
   TABLETOP_BENCHMARK_DEFAULTS,
@@ -29,6 +29,18 @@ export function tabletopInfluenceCommand(game, myId, cardId) {
     return null;
   const influence = player(game, myId)?.cards.find((card) => card.id === cardId && !card.revealed);
   return influence ? { type: 'reveal_influence', actorId: myId, cardId: influence.id } : null;
+}
+
+export function tabletopTargetCommand(game, myId, actionId, targetId) {
+  const target = validActionTargets(game, myId, actionId).find((candidate) => candidate.id === targetId);
+  return target ? { type: 'declare_action', actorId: myId, action: actionId, targetId: target.id } : null;
+}
+
+export function nextTabletopTargetId(game, myId, actionId, currentTargetId) {
+  const targets = validActionTargets(game, myId, actionId);
+  if (!targets.length) return null;
+  const currentIndex = targets.findIndex((candidate) => candidate.id === currentTargetId);
+  return targets[(currentIndex + 1) % targets.length].id;
 }
 
 const rosterBookIcon = (open) =>
@@ -139,10 +151,35 @@ function tabletopBenchDecisionHTML(state, context, { fallbackOpen = false } = {}
   return `<aside class="tabletop-bench-decision" aria-label="${eyebrow}"><div><span>${eyebrow}</span><strong>${title}</strong>${status}</div>${timerHTML(game, context.clock)}<div class="tabletop-bench-decision-actions">${confirm}<button type="button" class="ghost" id="tabletop-bench-fallback-open">Escolher por lista</button></div></aside>`;
 }
 
-export function gameplayHTML(state, context, { benchFallbackOpen = false } = {}) {
+const targetConfirmationCopy = (actionId, name) => {
+  if (actionId === 'steal') return `Roubar de ${name}?`;
+  if (actionId === 'assassinate') return `Assassinar ${name}?`;
+  return `Aplicar Golpe em ${name}?`;
+};
+
+function tabletopTargetDecisionHTML(state, context, selectedTargetId = null) {
+  const action = ACTIONS[state.targetAction];
+  const targets = validActionTargets(state.game, state.myId, state.targetAction);
+  if (!action || !targets.length) return '';
+  const selected = targets.find((candidate) => candidate.id === selectedTargetId) ?? null;
+  if (selected) {
+    const next =
+      targets.length > 1 ? '<button type="button" class="ghost" id="tabletop-target-next">Próximo rival</button>' : '';
+    return `<aside class="tabletop-bench-decision tabletop-target-decision" aria-label="Confirmar ${escapeHTML(action.label)} contra ${escapeHTML(selected.name)}"><div><span>Confirmar alvo</span><strong>${escapeHTML(targetConfirmationCopy(state.targetAction, selected.name))}</strong><small>Confira o nome antes de enviar a jogada.</small></div>${timerHTML(state.game, context.clock)}<div class="tabletop-bench-decision-actions"><button type="button" class="primary" id="tabletop-target-confirm">Confirmar</button>${next}<button type="button" class="ghost" id="tabletop-target-cancel">Cancelar</button></div></aside>`;
+  }
+  return `<aside class="tabletop-bench-decision tabletop-target-decision" aria-label="Escolha um alvo para ${escapeHTML(action.label)}"><div><span>Escolha de alvo</span><strong>Toque no assento de um rival para ${escapeHTML(action.label.toLowerCase())}</strong><small>Os assentos iluminados são alvos válidos.</small></div>${timerHTML(state.game, context.clock)}<div class="tabletop-bench-decision-actions"><button type="button" class="ghost" id="tabletop-target-fallback-open">Escolher por lista</button><button type="button" class="ghost" id="tabletop-target-cancel">Cancelar</button></div></aside>`;
+}
+
+export function gameplayHTML(
+  state,
+  context,
+  { benchFallbackOpen = false, targetFallbackOpen = false, selectedTargetId = null } = {},
+) {
   const game = state.game;
   const roster = tabletopRosterHTML(state, context);
   if (game.status !== 'finished') {
+    if (state.targetAction && !targetFallbackOpen)
+      return roster + tabletopTargetDecisionHTML(state, context, selectedTargetId);
     const benchDecision = tabletopBenchDecisionHTML(state, context, { fallbackOpen: benchFallbackOpen });
     if (benchDecision) return roster + benchDecision;
     return roster + handHTML(state, context.portraits) + modalHTML(state, context);
@@ -280,6 +317,10 @@ export async function mountTableExperiment({
   let reactionThrowable = null;
   let benchFallbackOpen = false;
   let benchDecisionKey = '';
+  let targetFallbackOpen = false;
+  let targetDecisionKey = '';
+  let selectedTargetId = null;
+  const portraitViewport = () => window.innerWidth / Math.max(1, window.innerHeight) < 0.82;
   const processedReactions = new Set();
   const requestedTheme = new URLSearchParams(location.search).get('theme');
   let theme = ['light', 'dark'].includes(requestedTheme)
@@ -540,6 +581,20 @@ export async function mountTableExperiment({
             ? 'Sua decisão'
             : `Aguardando ${decisionPlayer?.name ?? 'a corte'}`;
     root.dataset.decision = awaited === currentState.myId || currentState.targetAction ? 'self' : 'other';
+    if (currentState.targetAction && !validActionTargets(game, currentState.myId, currentState.targetAction).length) {
+      currentState.targetAction = null;
+    }
+    const nextTargetDecisionKey = currentState.targetAction
+      ? `${game.gameId ?? 'local'}:${game.turn}:${currentState.targetAction}`
+      : '';
+    if (nextTargetDecisionKey !== targetDecisionKey) {
+      targetDecisionKey = nextTargetDecisionKey;
+      targetFallbackOpen = false;
+      selectedTargetId = null;
+    }
+    if (currentState.targetAction && !selectedTargetId && !targetFallbackOpen && portraitViewport()) {
+      selectedTargetId = nextTabletopTargetId(game, currentState.myId, currentState.targetAction, null);
+    }
     const nextBenchDecisionKey =
       game.status === 'playing' &&
       ((game.phase === 'choose_influence' && game.pending.lossPlayerId === currentState.myId) ||
@@ -550,7 +605,11 @@ export async function mountTableExperiment({
       benchDecisionKey = nextBenchDecisionKey;
       benchFallbackOpen = false;
     }
-    gameplay.innerHTML = gameplayHTML(currentState, currentContext, { benchFallbackOpen });
+    gameplay.innerHTML = gameplayHTML(currentState, currentContext, {
+      benchFallbackOpen,
+      targetFallbackOpen,
+      selectedTargetId,
+    });
     bindGameDecisionControls(gameplay, {
       state: currentState,
       dispatch,
@@ -566,9 +625,52 @@ export async function mountTableExperiment({
       benchFallbackOpen = false;
       paintState();
     });
+    gameplay.querySelector('#tabletop-target-fallback-open')?.addEventListener('click', () => {
+      targetFallbackOpen = true;
+      selectedTargetId = null;
+      paintState();
+    });
+    if (targetFallbackOpen) {
+      gameplay.querySelectorAll('[data-target]').forEach((button) => {
+        button.onclick = () => {
+          selectedTargetId = button.dataset.target;
+          targetFallbackOpen = false;
+          paintState();
+        };
+      });
+    }
+    gameplay.querySelector('#tabletop-target-confirm')?.addEventListener('click', () => {
+      const command = tabletopTargetCommand(
+        currentState.game,
+        currentState.myId,
+        currentState.targetAction,
+        selectedTargetId,
+      );
+      if (command) dispatch(command);
+    });
+    gameplay.querySelector('#tabletop-target-next')?.addEventListener('click', () => {
+      selectedTargetId = nextTabletopTargetId(
+        currentState.game,
+        currentState.myId,
+        currentState.targetAction,
+        selectedTargetId,
+      );
+      paintState();
+    });
+    gameplay.querySelector('#tabletop-target-cancel')?.addEventListener('click', () => {
+      selectedTargetId = null;
+      currentState.targetAction = null;
+      requestRender();
+    });
     paintThemeControl();
     gameplay.querySelector('#tabletop-again')?.addEventListener('click', restart);
-    scene?.sync(projectCoupTableView(game, currentState.myId, { exchangePicks: currentState.exchangePicks }));
+    scene?.sync(
+      projectCoupTableView(game, currentState.myId, {
+        exchangePicks: currentState.exchangePicks,
+        targetAction: currentState.targetAction,
+        selectedTargetId,
+      }),
+    );
     playPendingReactions();
     // A carta focalizada saiu da cena: o Auto retoma imediatamente, sem
     // esperar o temporizador do plano de leitura.
@@ -698,6 +800,18 @@ export async function mountTableExperiment({
         hoverFrame = 0;
         if (!scene) return;
         const pointer = pointerFromEvent(event);
+        if (currentState.targetAction) {
+          const targetId = scene.pickTargetSeat(pointer);
+          scene.setTargetSeatHover(targetId);
+          scene.setExchangeCardHover(null);
+          scene.setInfluenceCardHover(null);
+          scene.setPrivateInfluenceHover(null);
+          scene.setPrivateCoinsHover(false);
+          scene.setActionCardHover(false);
+          canvas.style.cursor = targetId ? 'pointer' : '';
+          return;
+        }
+        scene.setTargetSeatHover(null);
         const exchangeId = scene.pickExchangeCard(pointer);
         const influenceId = !exchangeId ? scene.pickInfluenceCard(pointer) : null;
         const privateInfluenceId = !exchangeId && !influenceId ? scene.pickPrivateInfluence(pointer) : null;
@@ -718,6 +832,7 @@ export async function mountTableExperiment({
       scene?.setPrivateInfluenceHover(null);
       scene?.setPrivateCoinsHover(false);
       scene?.setActionCardHover(false);
+      scene?.setTargetSeatHover(null);
       canvas.style.cursor = '';
     });
     // Clique/toque na carta de ação abre um cinemático de leitura; o Auto
@@ -725,6 +840,15 @@ export async function mountTableExperiment({
     canvas.addEventListener('click', (event) => {
       if (!scene) return;
       const pointer = pointerFromEvent(event);
+      if (currentState.targetAction) {
+        const targetId = scene.pickTargetSeat(pointer);
+        if (targetId) {
+          selectedTargetId = targetId;
+          targetFallbackOpen = false;
+          paintState();
+        }
+        return;
+      }
       const exchangeId = scene.pickExchangeCard(pointer);
       if (exchangeId) {
         currentState.exchangePicks = nextExchangePicks(
@@ -836,7 +960,13 @@ export async function mountTableExperiment({
   const syncThemeFromStorage = (event) => {
     if (event.key === 'la-corte-theme' && event.newValue) applyTheme(event.newValue, { persist: false });
   };
+  const syncTargetFromViewport = () => {
+    if (!currentState.targetAction || selectedTargetId || !portraitViewport()) return;
+    selectedTargetId = nextTabletopTargetId(currentState.game, currentState.myId, currentState.targetAction, null);
+    paintState();
+  };
   window.addEventListener('storage', syncThemeFromStorage);
+  window.addEventListener('resize', syncTargetFromViewport);
 
   return {
     update(nextState, nextContext) {
@@ -848,6 +978,7 @@ export async function mountTableExperiment({
       clearInterval(benchmarkInterval);
       clearTimeout(cardFocusTimer);
       window.removeEventListener('storage', syncThemeFromStorage);
+      window.removeEventListener('resize', syncTargetFromViewport);
       scene?.dispose();
       document.body.classList.remove('is-tabletop-lab');
     },

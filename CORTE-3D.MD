@@ -75,9 +75,16 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 - Perda de influência e troca da Embaixadora são escolhidas diretamente na
   bancada 3D. Uma doca compacta confirma a troca e a lista HTML permanece como
   fallback acessível; os demais modais preservam a composição compacta.
-- A barra de ações, seleção de alvos, contestações e bloqueios ainda dependem
-  da camada HTML. Esta é a principal lacuna para o objetivo de uma mesa 3D
-  inteiramente diegética.
+- A barra de ações, contestações e bloqueios ainda dependem da camada HTML.
+  Depois de escolher Roubar, Assassinar ou Golpe, a câmera abre a mesa e os
+  assentos válidos recebem destaque e uma área ampla de toque; a lista HTML
+  permanece como fallback acessível. O primeiro toque apenas pré-seleciona: a
+  doca mostra ação e nome do rival, e uma confirmação explícita envia a
+  jogada. Em mobile portrait, um rival é focalizado por vez e “Próximo rival”
+  percorre inclusive leste e oeste sem reduzir todos a miniaturas. Alegações
+  sem alvo usam um plano radial do ator para o centro, preservando carta
+  pública, efígie e itens da mesa. Levar as demais decisões ao palco é a
+  principal lacuna para uma mesa 3D inteiramente diegética.
 - O painel recolhível da Corte mostra moedas, influências ativas, reveladas e
   desconectados; clicar em um nome foca o assento e voltar restaura o Auto.
 - Tema, sons, vozes e acesso ao laboratório vivem no painel da Corte.
@@ -153,6 +160,11 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 - [Concluído] Fazer a visão Jogador aparecer quando a decisão for privada ou local.
 - [Concluído para perda e troca] Manter alternativas HTML acessíveis mesmo
   quando houver seleção por toque ou raycast sobre objetos 3D.
+- [Concluído para alvos] Selecionar o rival tocando em qualquer parte ampla do
+  assento 3D em Roubar, Assassinar e Golpe; alvos inválidos não recebem
+  destaque, a doca exige confirmação com o nome do rival e a lista HTML
+  continua disponível como fallback. Em portrait, a confirmação focaliza um
+  rival por vez e permite avançar circularmente por todos os assentos.
 - Nunca exigir precisão de clique em um objeto pequeno para concluir uma ação.
 
 ### 3. Implementar o diretor automático de câmera
@@ -279,9 +291,9 @@ de La Corte fora do núcleo comum.
 1. Validar visualmente em desktop e mobile o foco da mão privada, o indicador
    de tesouro e as pilhas exatas de moedas; ajustar enquadramento e posição se
    necessário.
-2. Levar seleção de alvos (Roubar, Assassinar e Golpe) para objetos/assentos 3D
-   e, depois, contestações e bloqueios. A lista HTML continua disponível, mas
-   o fluxo principal não deve depender dela.
+2. [Seleção de alvos concluída] Levar contestações e bloqueios para objetos do
+   palco. A camada HTML continua disponível, mas o fluxo principal não deve
+   depender dela.
 3. Animar gasto, recebimento, roubo e transferência de moedas a partir dos
    eventos autoritativos já resolvidos.
 4. Exercitar multiplayer 3D ponta a ponta: troca 2D/3D, chat, reações,

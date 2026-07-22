@@ -66,6 +66,28 @@ test('somente a mão privada fica focalizável pelo jogador', () => {
   assert.ok(rivals.flatMap((seat) => seat.influences).every((card) => card.focusable === false));
 });
 
+test('projetor marca somente os assentos válidos durante a escolha de alvo', () => {
+  const game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  game.players.find((player) => player.id === 'c').coins = 0;
+  const view = projectCoupTableView(game, 'a', { targetAction: 'steal' });
+
+  assert.deepEqual(view.targeting, { id: 'steal', label: 'Roubar', targetIds: ['b'], selectedTargetId: null });
+  assert.deepEqual(
+    view.seats.filter((seat) => seat.isSelectableTarget).map((seat) => seat.id),
+    ['b'],
+  );
+  assert.ok(view.seats.find((seat) => seat.id === 'a').isSelectableTarget === false);
+  assert.equal(projectCoupTableView(game, 'b', { targetAction: 'steal' }).targeting, null);
+
+  const confirmed = projectCoupTableView(game, 'a', { targetAction: 'steal', selectedTargetId: 'b' });
+  assert.equal(confirmed.targeting.selectedTargetId, 'b');
+  assert.equal(confirmed.seats.find((seat) => seat.id === 'b').isSelectedTarget, true);
+  assert.equal(
+    projectCoupTableView(game, 'a', { targetAction: 'steal', selectedTargetId: 'c' }).targeting.selectedTargetId,
+    null,
+  );
+});
+
 test('opções e escolhas da Embaixadora chegam somente ao palco do ator', () => {
   let game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
   game = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'exchange' });

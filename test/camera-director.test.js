@@ -4,6 +4,7 @@ import { createGame, dispatchGame } from '../src/game/coup.js';
 import { projectCoupTableView } from '../src/lib/tabletop/coup-view.js';
 import {
   cameraDecisionKey,
+  claimCameraForSeat,
   directCamera,
   duelCameraForSeats,
   influenceRevealCamera,
@@ -23,9 +24,16 @@ test('turno local vai para a câmera Jogador; turno rival fica na Mesa', () => {
   assert.deepEqual(directCamera(projectCoupTableView(game, 'b')), { act: 'table', seatIds: [] });
 });
 
+test('escolha de alvo começa geral e focaliza o rival pré-selecionado', () => {
+  const view = projectCoupTableView(newGame(), 'a', { targetAction: 'steal' });
+  assert.deepEqual(directCamera(view), { act: 'targeting', seatIds: ['b', 'c'] });
+  const selected = projectCoupTableView(newGame(), 'a', { targetAction: 'steal', selectedTargetId: 'c' });
+  assert.deepEqual(directCamera(selected), { act: 'targeting-seat', seatIds: ['c'] });
+});
+
 test('alegação sem alvo enquadra o ator; com alvo, o duelo entre os dois', () => {
   const tax = dispatchGame(newGame(), { type: 'declare_action', actorId: 'a', action: 'tax' });
-  assert.deepEqual(directCamera(projectCoupTableView(tax, 'b')), { act: 'duel', seatIds: ['a'] });
+  assert.deepEqual(directCamera(projectCoupTableView(tax, 'b')), { act: 'claim', seatIds: ['a'] });
   const steal = dispatchGame(newGame(), { type: 'declare_action', actorId: 'a', action: 'steal', targetId: 'b' });
   assert.deepEqual(directCamera(projectCoupTableView(steal, 'c')), { act: 'duel', seatIds: ['a', 'b'] });
 });
@@ -40,7 +48,7 @@ test('a chave da decisão não muda enquanto as respostas coletivas chegam', () 
 test('janela de bloqueio e contestação do bloqueio dirigem o duelo certo', () => {
   let game = dispatchGame(newGame(), { type: 'declare_action', actorId: 'a', action: 'foreign_aid' });
   assert.equal(game.phase, 'block');
-  assert.deepEqual(directCamera(projectCoupTableView(game, 'c')), { act: 'duel', seatIds: ['a'] });
+  assert.deepEqual(directCamera(projectCoupTableView(game, 'c')), { act: 'claim', seatIds: ['a'] });
   game = dispatchGame(game, { type: 'pass', actorId: 'b' });
   game = dispatchGame(game, { type: 'block', actorId: 'c', role: 'Duque' });
   assert.equal(game.phase, 'challenge_block');
@@ -116,10 +124,14 @@ test('a geometria dirigida evita o centro da mesa e as paredes em mesas de 2 a 6
         assert.ok(shot.portrait.fov <= 66);
       }
       const solo = duelCameraForSeats([first], count);
+      const claim = claimCameraForSeat(first, count);
       const throne = throneCameraForSeat(first, count);
-      assert.ok(finite(solo.position) && finite(throne.position));
+      assert.ok(finite(solo.position) && finite(claim.position) && finite(throne.position));
       withinCourt(solo);
+      withinCourt(claim);
       withinCourt(throne);
+      assert.deepEqual(claim.target, [0, 1.65, 0]);
+      assert.deepEqual(claim.portrait.target, [0, 1.6, 0]);
     }
   }
 });

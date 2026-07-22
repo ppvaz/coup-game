@@ -24,6 +24,21 @@ function shuffle(cards, random = Math.random) {
 export const activePlayers = (state) => state.players.filter(isAlive);
 export const currentPlayer = (state) => state.players.find((player) => player.id === state.currentPlayerId);
 
+// Consulta pura para apresentações que precisam mostrar alvos antes de enviar
+// um comando. `dispatchGame` continua sendo a autoridade final; esta função só
+// evita que a UI destaque cadeiras que a regra já sabe serem inválidas.
+export function validActionTargets(state, actorId, actionId) {
+  if (state?.status !== 'playing' || state.phase !== 'turn' || state.currentPlayerId !== actorId) return [];
+  const action = ACTIONS[actionId];
+  const actor = state.players.find((player) => player.id === actorId);
+  if (!action?.targeted || !actor || !isAlive(actor)) return [];
+  if (actor.coins >= 10 && actionId !== 'coup') return [];
+  if (action.cost && actor.coins < action.cost) return [];
+  return state.players.filter(
+    (candidate) => candidate.id !== actorId && isAlive(candidate) && (actionId !== 'steal' || candidate.coins > 0),
+  );
+}
+
 export function responseProgress(state) {
   if (!['challenge_action', 'block', 'challenge_block'].includes(state.phase)) return null;
 

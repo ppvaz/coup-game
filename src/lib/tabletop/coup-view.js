@@ -1,4 +1,4 @@
-import { ACTIONS, isAlive } from '../../game/coup.js';
+import { ACTIONS, isAlive, validActionTargets } from '../../game/coup.js';
 
 const FULL_TURN = Math.PI * 2;
 
@@ -18,7 +18,11 @@ const playerSummary = (player) => (player ? Object.freeze({ id: player.id, name:
  * Barreira de dados entre Coup e o palco. Aceita até o estado completo do
  * host, mas remove papéis ocultos dos rivais antes de chegar ao WebGL.
  */
-export function projectCoupTableView(game, myId, { exchangePicks = [] } = {}) {
+export function projectCoupTableView(
+  game,
+  myId,
+  { exchangePicks = [], targetAction = null, selectedTargetId = null } = {},
+) {
   if (!game) throw new Error('A mesa 3D precisa de uma partida.');
   // A geografia da sala é pública e compartilhada. O jogador local pode estar
   // em qualquer cadeira; as câmeras procuram `isSelf` sem girar os demais
@@ -35,6 +39,9 @@ export function projectCoupTableView(game, myId, { exchangePicks = [] } = {}) {
   const selfChoosesInfluence = phase === 'choose_influence' && pending.lossPlayerId === myId;
   const selfExchanges = phase === 'exchange' && pending.actorId === myId;
   const selectedExchangeIds = new Set(exchangePicks);
+  const targetableIds = new Set(validActionTargets(game, myId, targetAction).map((player) => player.id));
+  const targetingAction = targetableIds.size ? ACTIONS[targetAction] : null;
+  const selectedTarget = targetableIds.has(selectedTargetId) ? selectedTargetId : null;
 
   const seats = ordered.map((player, index) => {
     const self = player.id === myId;
@@ -49,6 +56,8 @@ export function projectCoupTableView(game, myId, { exchangePicks = [] } = {}) {
       isTarget: player.id === pending.targetId,
       isBlocker: player.id === pending.block?.playerId,
       isWinner: phase === 'finished' && player.id === game.winnerId,
+      isSelectableTarget: targetableIds.has(player.id),
+      isSelectedTarget: player.id === selectedTarget,
       connected: player.connected !== false,
       eliminated: !isAlive(player),
       coins: Math.max(0, Number(player.coins) || 0),
@@ -95,6 +104,14 @@ export function projectCoupTableView(game, myId, { exchangePicks = [] } = {}) {
         })
       : null,
     responsePlayer: playerSummary(players.get(game.responseQueue?.[0])),
+    targeting: targetingAction
+      ? Object.freeze({
+          id: targetAction,
+          label: targetingAction.label,
+          targetIds: Object.freeze([...targetableIds]),
+          selectedTargetId: selectedTarget,
+        })
+      : null,
     latestEvent: latest
       ? Object.freeze({
           type: latest.type,

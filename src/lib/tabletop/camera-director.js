@@ -11,12 +11,18 @@ export function directCamera(view) {
   const target = seats.find((seat) => seat.isTarget) ?? null;
   const blocker = seats.find((seat) => seat.isBlocker) ?? null;
   const table = { act: 'table', seatIds: [] };
+  if (view?.targeting) {
+    const selected = seats.find((seat) => seat.id === view.targeting.selectedTargetId);
+    return selected
+      ? { act: 'targeting-seat', seatIds: [selected.id] }
+      : { act: 'targeting', seatIds: view.targeting.targetIds };
+  }
   switch (view?.beat) {
     case 'claim':
     case 'block-window': {
       if (!actor) return table;
       const rival = target && target.id !== actor.id ? target : null;
-      return { act: 'duel', seatIds: rival ? [actor.id, rival.id] : [actor.id] };
+      return rival ? { act: 'duel', seatIds: [actor.id, rival.id] } : { act: 'claim', seatIds: [actor.id] };
     }
     case 'block-claim': {
       if (!blocker) return table;
@@ -43,6 +49,15 @@ export function directCamera(view) {
 
 export const cameraDecisionKey = (decision) => `${decision.act}:${decision.seatIds.join('+')}`;
 
+export function targetingCameraAct() {
+  return {
+    position: [0, 6.05, 11.85],
+    target: [0, 1.2, -0.15],
+    fov: 54,
+    portrait: { position: [0, 6.85, 11.25], target: [0, 1.35, -0.35], fov: 70 },
+  };
+}
+
 export function influenceRevealCamera(view) {
   const playerId = view?.latestInfluenceLoss?.player?.id;
   const seat = view?.seats?.find((candidate) => candidate.id === playerId);
@@ -67,6 +82,25 @@ const ensureRadius = ([x, y, z], min) => {
   const scale = min / (radius || 1);
   return [x * scale, y, z * scale];
 };
+
+// Alegações sem alvo pertencem ao centro da mesa. A câmera permanece atrás
+// do ator, mostrando-o como origem, mas mira a carta pública, a efígie e o
+// selo em vez de transformar a declaração num retrato lateral.
+export function claimCameraForSeat(seat, seatCount) {
+  const { x, z } = seatRadii(seatCount);
+  const outwardX = Math.sin(seat.azimuthRad);
+  const outwardZ = Math.cos(seat.azimuthRad);
+  return {
+    position: [outwardX * x * 2.05, 5.25, outwardZ * z * 2.05],
+    target: [0, 1.65, 0],
+    fov: 47,
+    portrait: {
+      position: [outwardX * x * 2.07, 6.15, outwardZ * z * 2.07],
+      target: [0, 1.6, 0],
+      fov: 64,
+    },
+  };
+}
 
 // Nenhum plano dirigido se aproxima do centro da mesa (raio < 6): a carta de
 // ação e a efígie vivem ali, e cruzar o miolo cortaria esses elementos.
