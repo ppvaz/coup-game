@@ -256,8 +256,10 @@ bifurcação abra mais.
    qualidade + benchmark + matriz de capturas) — os dois jogos têm a mesma coisa escrita duas vezes,
    menos a medição, que só existe aqui. Ela vai junto e vai primeiro: é o que prova que os passos
    seguintes não regrediram.
-2. **Reações físicas** (arremesso, emojis, foley de impacto) — mesma curva, mesmos limites, catálogos
-   diferentes. A máquina sai inteira; tomate e adaga ficam com cada jogo.
+2. **Reações físicas** (arremesso, emojis, foley de impacto, gesto de quem levou) — mesma curva,
+   mesmos limites, catálogos diferentes. A máquina sai inteira; tomate e adaga ficam com cada jogo.
+   A arbitragem de gestos já saiu, em `packages/tabletop-stage/gesture-track.js`. Falta a parábola do
+   arremesso, hoje escrita duas vezes: `throwReaction` aqui, `arremessarEntre` lá.
 3. **Sala multiplayer** (`src/rooms/` + `realtime.js` + `secure-channel.js` × `useMultiplayer.ts`) — o
    desenho é o mesmo, mas um lado é módulo puro e o outro é um hook React de 1679 linhas. Converge
    depois do palco, porque exige decidir a forma (núcleo puro + adaptador por stack).

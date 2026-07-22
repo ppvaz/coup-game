@@ -76,6 +76,12 @@ export const FOLEY_EVENTS = {
   throw: (context, at) => {
     rustle(context, at, { frequency: 620, sweepTo: 2450, q: 1.6, volume: 0.026, duration: 0.34 });
   },
+  // Baque surdo do adereço chegando no ombro: o arremesso precisa terminar em
+  // algum lugar, senão o objeto some no ar e o gesto do alvo vem sem causa.
+  impact: (context, at) => {
+    rustle(context, at, { frequency: 420, sweepTo: 140, q: 0.8, volume: 0.03, duration: 0.13 });
+    clink(context, at + 0.02, 260, 0.014);
+  },
   declare: (context, at) => {
     rustle(context, at, { frequency: 1280, sweepTo: 620, q: 1.05, volume: 0.028, duration: 0.14 });
     clink(context, at + 0.07, 760, 0.018);

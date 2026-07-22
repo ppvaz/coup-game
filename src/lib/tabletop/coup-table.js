@@ -7,6 +7,7 @@ import {
   projectileCamAnchor,
   projectileCamPose,
 } from '@la-corte/tabletop-stage/projectile-cam';
+import { applyGesturePose, gestureProgress, gesturePose, startGesture } from '@la-corte/tabletop-stage/gesture-track';
 import {
   cameraDecisionKey,
   claimCameraForSeat,
@@ -28,6 +29,7 @@ import { actionCaptionTexture, createInfluenceCard, imageTexture, plaqueTexture 
 import { playerCameraForSeat, povCameraForSeat } from './coup-table/seat-cameras.js';
 import { ROLE_VISUALS, createNoble, createRoleFigure } from './coup-table/figures.js';
 import { createEmojiSprite, createThrowable } from './coup-table/reaction-models.js';
+import { COURT_GESTURES, impactGesture } from './coup-table/gestures.js';
 import { createCoinTreasury, createCourtCoin, createTreasureLabel } from './coup-table/coins.js';
 import {
   DECISION_BUBBLE_ANCHOR,
@@ -669,10 +671,10 @@ export class CoupTableScene {
     return body.localToWorld(new THREE.Vector3(0, y, z));
   }
 
-  setSeatGesture(playerId, kind, duration = 0.9) {
+  setSeatGesture(playerId, kind) {
     const seat = this.seats.get(playerId);
     if (!seat) return false;
-    seat.gesture = { kind, startedAt: this.elapsed, duration };
+    seat.gesture = startGesture(COURT_GESTURES, seat.gesture, kind, this.elapsed);
     return true;
   }
 
@@ -689,11 +691,11 @@ export class CoupTableScene {
         break;
       case 'challenge_resolved':
         this.setSeatGesture(event.challengerId, 'challenge');
-        this.setSeatGesture(event.challengedId, event.truthful ? 'prove' : 'defeat', event.truthful ? 1 : 1.15);
+        this.setSeatGesture(event.challengedId, event.truthful ? 'prove' : 'defeat');
         this.foley?.play('challenge');
         break;
       case 'influence_lost':
-        this.setSeatGesture(event.actorId, 'defeat', 1.15);
+        this.setSeatGesture(event.actorId, 'defeat');
         this.foley?.play('defeat');
         break;
       case 'exchange_resolved':
@@ -701,8 +703,8 @@ export class CoupTableScene {
         this.foley?.play('card');
         break;
       case 'game_finished':
-        this.setSeatGesture(event.winnerId, 'victory', 1.35);
-        this.setSeatGesture(event.loserId, 'defeat', 1.2);
+        this.setSeatGesture(event.winnerId, 'victory');
+        this.setSeatGesture(event.loserId, 'defeat');
         this.foley?.play('victory');
         break;
       default:
@@ -752,6 +754,8 @@ export class CoupTableScene {
       control,
       end,
       spotlight,
+      targetId,
+      throwable: type,
       startedAt: this.elapsed,
       duration: this.stage.reducedMotion ? 0.45 : 0.9,
       spin: new THREE.Vector3(6.2, 8.1, 5.4),
@@ -793,6 +797,16 @@ export class CoupTableScene {
         height: this.stage.canvas.clientHeight,
       }),
     );
+  }
+
+  /**
+   * O adereço chegou: quem levou reage. Sem isso o arremesso é um objeto
+   * atravessando a sala e o alvo fica de mármore — o gesto é o que transforma
+   * o voo em impacto.
+   */
+  landReaction(reaction) {
+    if (!this.setSeatGesture(reaction.targetId, impactGesture(reaction.throwable))) return;
+    this.foley?.play('impact');
   }
 
   closeThrowCam() {
@@ -1644,6 +1658,7 @@ export class CoupTableScene {
       if (reaction.spotlight) this.updateThrowCam(reaction, progress);
       if (progress >= 1) {
         if (reaction.spotlight) this.closeThrowCam();
+        this.landReaction(reaction);
         disposeObject3D(reaction.group);
         this.flyingReactions.splice(index, 1);
       }
@@ -1653,41 +1668,22 @@ export class CoupTableScene {
       if (!state) continue;
       seat.body.visible = !state.isWinner && !(this.cameraName === 'pov' && this.currentPovSeatId === id);
       const emphasis = state.isActor || state.isCurrent || state.isWinner;
-      let bodyY = reducedMotion
+      const bodyY = reducedMotion
         ? 0
         : Math.sin(elapsed * (emphasis ? 2.1 : 1.1) + seat.seed) * (emphasis ? 0.045 : 0.018);
-      let rotationX = state.eliminated ? -0.2 : 0;
-      let rotationZ = reducedMotion ? 0 : Math.sin(elapsed * 0.75 + seat.seed) * 0.012;
-      let scale = 1;
-      const gesture = seat.gesture;
-      if (gesture && !reducedMotion) {
-        const progress = THREE.MathUtils.clamp((elapsed - gesture.startedAt) / gesture.duration, 0, 1);
-        const wave = Math.sin(progress * Math.PI);
-        if (gesture.kind === 'assert') {
-          bodyY += wave * 0.2;
-          rotationX -= wave * 0.12;
-        } else if (gesture.kind === 'block') {
-          bodyY += wave * 0.1;
-          rotationZ += wave * 0.2;
-        } else if (gesture.kind === 'challenge') {
-          bodyY += wave * 0.14;
-          rotationZ += Math.sin(progress * Math.PI * 2) * 0.13;
-        } else if (gesture.kind === 'prove') {
-          bodyY += wave * 0.12;
-          scale += wave * 0.09;
-        } else if (gesture.kind === 'defeat') {
-          rotationX += Math.sin(Math.min(1, progress * 1.25) * (Math.PI / 2)) * 0.27;
-          bodyY -= wave * 0.08;
-        } else if (gesture.kind === 'victory') {
-          bodyY += wave * 0.28;
-          scale += wave * 0.12;
-        }
-        if (progress >= 1) seat.gesture = null;
-      } else if (gesture) seat.gesture = null;
+      const rotationX = state.eliminated ? -0.2 : 0;
+      const rotationZ = reducedMotion ? 0 : Math.sin(elapsed * 0.75 + seat.seed) * 0.012;
+      // Pose de repouso primeiro; o gesto entra somando por cima dela.
       seat.body.position.y = bodyY;
       seat.body.rotation.x = rotationX;
       seat.body.rotation.z = rotationZ;
-      seat.body.scale.setScalar(scale);
+      seat.body.scale.setScalar(1);
+      if (!seat.gesture) continue;
+      if (reducedMotion || gestureProgress(seat.gesture, elapsed) >= 1) {
+        seat.gesture = null;
+        continue;
+      }
+      applyGesturePose(seat.sockets, gesturePose(COURT_GESTURES, seat.gesture, elapsed));
     }
   }
 

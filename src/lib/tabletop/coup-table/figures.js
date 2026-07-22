@@ -80,7 +80,9 @@ export function createNoble({ robe: robeColor = ROBES[0], skin: skinColor = NOBL
   );
   focus.visible = false;
   group.add(focus);
-  return { group, body, focus, robe };
+  // `sockets` é o rig que a figura publica para as trilhas de gesto. O
+  // cortesão é de tronco só: braços e cabeça são geometria fixa do corpo.
+  return { group, body, focus, robe, sockets: Object.freeze({ body }) };
 }
 
 export const ROLE_VISUALS = {
