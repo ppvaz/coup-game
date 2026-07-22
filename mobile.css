@@ -1383,7 +1383,7 @@ html[data-theme='light'] .chat-taunts button {
     max-width: 78vw;
     font-size: clamp(30px, 9vw, 40px);
   }
-  .tabletop-experiment[data-interface='game'] .tabletop-roster {
+  .tabletop-experiment .tabletop-roster {
     top: auto;
     right: 8px;
     bottom: max(122px, calc(env(safe-area-inset-bottom) + 114px));

@@ -262,7 +262,7 @@ export function tableExperimentHTML({ testMode = false } = {}) {
         ${testMode ? '<button class="tabletop-benchmark" id="tabletop-benchmark" type="button"><span>◷</span><small>Medir FPS</small></button>' : ''}
         ${testMode ? '<button class="tabletop-quality" id="tabletop-quality" type="button"><span>◆</span><small>Cinemático</small></button>' : ''}
         ${testMode ? '<button class="tabletop-composition" id="tabletop-composition" type="button"><span>◫</span><small>Clássica</small></button>' : ''}
-        ${testMode ? '' : `<button class="tabletop-roster-toggle" id="tabletop-roster-toggle" type="button" aria-controls="tabletop-roster" aria-expanded="false"><span>${rosterBookIcon(false)}</span><small>A corte</small></button>`}
+        <button class="tabletop-roster-toggle" id="tabletop-roster-toggle" type="button" aria-controls="tabletop-roster" aria-expanded="false"><span>${rosterBookIcon(false)}</span><small>A corte</small></button>
         <span class="tabletop-chat-slot" id="tabletop-chat-slot"></span>
         ${testMode ? '<button class="tabletop-theme" id="tabletop-theme" type="button"><span>☀</span><small>Modo diurno</small></button>' : ''}
         ${testMode ? '<a class="tabletop-exit" href="/3d" aria-label="Voltar ao jogo 3D"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao jogo 3D</span></a>' : '<button class="tabletop-exit" id="tabletop-exit-request" type="button" aria-expanded="false" aria-controls="tabletop-exit-confirm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao salão</span></button>'}
@@ -623,7 +623,12 @@ export async function mountTableExperiment({
     if (testMode) {
       root.dataset.phase = 'lab';
       root.dataset.decision = 'other';
-      gameplay.replaceChildren();
+      // O laboratório não pinta mão, modais nem alvos — a cena está congelada e
+      // não há decisão a tomar. As ilhas da corte, porém, são o mesmo HUD do
+      // jogo: mantê-las aqui é o que permite avaliar a composição 3D com a
+      // interface real por cima, em vez de uma tela limpa que só existe no lab.
+      gameplay.innerHTML = tabletopRosterHTML(currentState, currentContext);
+      bindRosterFocus(gameplay);
       scene?.sync(frozenLabView(game));
       if (labShot) scene?.applyLabShot(labShot);
       playPendingReactions();

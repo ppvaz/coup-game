@@ -98,6 +98,16 @@ test('arremessos da vitória podem mirar cortesãos eliminados', () => {
   assert.deepEqual(tabletopReactionTargets(game, 'a'), []);
 });
 
+test('o laboratório abre as mesmas ilhas da corte que o jogo', () => {
+  // O lab não pinta mão nem modais — a cena está congelada. As ilhas, porém,
+  // precisam existir nos dois modos: é com elas por cima que a composição 3D é
+  // avaliada. Sem o botão, não há como o testador humano abri-las.
+  for (const html of [tableExperimentHTML(), tableExperimentHTML({ testMode: true })]) {
+    assert.match(html, /id="tabletop-roster-toggle"/);
+    assert.match(html, /aria-controls="tabletop-roster"/);
+  }
+});
+
 test('as ilhas da HUD compartilham um único painel expansível', () => {
   assert.equal(toggleTabletopHudPanel(null, 'roster'), 'roster');
   assert.equal(toggleTabletopHudPanel('roster', 'reactions'), 'reactions');

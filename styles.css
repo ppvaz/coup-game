@@ -1712,7 +1712,7 @@ body:has(.chat-panel.open) .tabletop-reactions,
 .tabletop-roster {
   display: none;
 }
-.tabletop-experiment[data-interface='game'] .tabletop-roster {
+.tabletop-experiment .tabletop-roster {
   position: absolute;
   z-index: 4;
   top: auto;
@@ -1733,17 +1733,22 @@ body:has(.chat-panel.open) .tabletop-reactions,
     transform 0.18s ease,
     visibility 0.18s;
 }
-.tabletop-experiment[data-interface='game'][data-roster='closed'] .tabletop-roster {
+.tabletop-experiment[data-roster='closed'] .tabletop-roster {
   opacity: 0;
   transform: translateY(10px);
   visibility: hidden;
   pointer-events: none;
 }
-.tabletop-experiment[data-interface='game'] .tabletop-roster-toggle[aria-expanded='true'] {
+.tabletop-experiment .tabletop-roster-toggle[aria-expanded='true'] {
   border-color: rgba(217, 181, 107, 0.52);
   background: rgba(217, 181, 107, 0.12);
 }
-.tabletop-experiment[data-interface='game'][data-seat-focus='active'] .tabletop-roster-toggle {
+/* No laboratório o tema, o áudio e o link do lab já vivem na barra superior:
+   repetir a gaveta de preferências dentro das ilhas seria controle duplicado. */
+.tabletop-experiment[data-interface='lab'] .tabletop-roster-settings {
+  display: none;
+}
+.tabletop-experiment[data-seat-focus='active'] .tabletop-roster-toggle {
   border-color: rgba(217, 181, 107, 0.52);
   color: #eee6d6;
   background: rgba(8, 7, 6, 0.72);
@@ -2061,6 +2066,11 @@ body:has(.chat-panel.open) .tabletop-reactions,
   letter-spacing: 0.16em;
   pointer-events: none;
 }
+/* As ilhas ocupam a faixa de 80px a 144px. No jogo a dica está oculta; só o
+   laboratório precisa subir para não ficar atrás delas. */
+.tabletop-experiment[data-roster='open'] .tabletop-hint {
+  bottom: 152px;
+}
 .tabletop-loading {
   position: absolute;
   inset: 0;
@@ -2289,7 +2299,7 @@ html[data-theme='light'] .tabletop-experiment[data-interface='game'][data-seat-f
 html[data-theme='light'] .tabletop-experiment[data-interface='game'] .tabletop-legend {
   background: rgba(244, 235, 217, 0.88);
 }
-html[data-theme='light'] .tabletop-experiment[data-interface='game'] .tabletop-roster {
+html[data-theme='light'] .tabletop-experiment .tabletop-roster {
   border-color: rgba(94, 68, 30, 0.52);
   background: rgba(250, 245, 235, 0.96);
 }
