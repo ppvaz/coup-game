@@ -97,9 +97,9 @@ begin
     raise exception 'INVALID_PLAYER_NAME' using errcode = '22023';
   end if;
 
-  select host_user_id into room_host_id
-  from public.coup_rooms
-  where code = p_code and expires_at > now()
+  select room.host_user_id into room_host_id
+  from public.coup_rooms as room
+  where room.code = p_code and room.expires_at > now()
   for update;
   if room_host_id is null then
     raise exception 'ROOM_NOT_FOUND' using errcode = 'P0002';
@@ -110,7 +110,7 @@ begin
   where m.room_code = p_code and m.user_id = caller_id;
 
   if canonical_name is null then
-    if (select count(*) from public.coup_room_members where room_code = p_code) >= 6 then
+    if (select count(*) from public.coup_room_members as member where member.room_code = p_code) >= 6 then
       raise exception 'ROOM_FULL' using errcode = 'P0001';
     end if;
     insert into public.coup_room_members (room_code, user_id, player_name)
