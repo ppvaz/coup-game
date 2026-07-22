@@ -180,6 +180,39 @@ export function createCarpetTexture(theme) {
   );
 }
 
+export function createWindowLightTexture(theme) {
+  const daylight = theme === 'light';
+  return canvasTexture(
+    (context, canvas) => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      const length = context.createLinearGradient(0, 0, 0, canvas.height);
+      length.addColorStop(0, daylight ? 'rgba(255,239,190,.82)' : 'rgba(135,163,211,.3)');
+      length.addColorStop(0.72, daylight ? 'rgba(255,218,151,.2)' : 'rgba(102,128,185,.08)');
+      length.addColorStop(1, 'rgba(0,0,0,0)');
+      context.fillStyle = length;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      const edges = context.createLinearGradient(0, 0, canvas.width, 0);
+      edges.addColorStop(0, 'rgba(0,0,0,0)');
+      edges.addColorStop(0.18, 'rgba(255,255,255,.72)');
+      edges.addColorStop(0.5, 'rgba(255,255,255,1)');
+      edges.addColorStop(0.82, 'rgba(255,255,255,.72)');
+      edges.addColorStop(1, 'rgba(0,0,0,0)');
+      context.globalCompositeOperation = 'destination-in';
+      context.fillStyle = edges;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.globalCompositeOperation = 'source-over';
+
+      // A sombra suave da cruzeta da janela faz o brilho parecer projetado,
+      // em vez de apenas uma placa luminosa sobre o piso.
+      context.fillStyle = daylight ? 'rgba(78,55,34,.2)' : 'rgba(20,27,47,.22)';
+      context.fillRect(canvas.width * 0.47, 0, canvas.width * 0.06, canvas.height * 0.78);
+      context.fillRect(canvas.width * 0.12, canvas.height * 0.2, canvas.width * 0.76, canvas.height * 0.045);
+    },
+    { width: 256, height: 512 },
+  );
+}
+
 function createSkylineTexture(variant = 0, theme = 'dark') {
   const daylight = theme === 'light';
   const random = mulberry32(920 + variant * 83);

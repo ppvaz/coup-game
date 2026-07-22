@@ -8,6 +8,7 @@ import {
   createMedallionTexture,
   createOutsideViewTexture,
   createPlasterTexture,
+  createWindowLightTexture,
   mulberry32,
 } from './coup-environment/textures.js';
 
@@ -100,6 +101,26 @@ function createWindow(index, x, palette, theme) {
   );
   group.add(glass);
 
+  const frameMaterial = material(palette.stone, { roughness: 0.9 });
+  const innerGold = material(palette.gold, { metalness: 0.55, roughness: 0.36 });
+  group.add(
+    mesh(new THREE.BoxGeometry(0.105, 3.92, 0.11), frameMaterial, {
+      position: [0, 2.15, 0.09],
+    }),
+  );
+  group.add(
+    mesh(new THREE.BoxGeometry(width - 0.43, 0.1, 0.11), frameMaterial, {
+      position: [0, 2.56, 0.09],
+    }),
+  );
+  for (const mullionX of [-0.73, 0.73]) {
+    group.add(
+      mesh(new THREE.BoxGeometry(0.035, 2.34, 0.055), innerGold, {
+        position: [mullionX, 1.3, 0.16],
+      }),
+    );
+  }
+
   const trimShape = archShape(width, height, 0.12);
   trimShape.holes.push(archShape(width, height, 0.22));
   group.add(
@@ -133,6 +154,30 @@ function createWindow(index, x, palette, theme) {
   group.add(balusters);
   for (const side of [-1, 1]) group.add(createCurtain(side, palette, theme).group);
   return group;
+}
+
+function createWindowLightPool(x, theme) {
+  const daylight = theme === 'light';
+  const pool = mesh(
+    new THREE.PlaneGeometry(3.45, 7.4),
+    new THREE.MeshBasicMaterial({
+      map: createWindowLightTexture(theme),
+      color: daylight ? 0xffe4a8 : 0x7896c8,
+      transparent: true,
+      opacity: daylight ? 0.22 : 0.1,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    }),
+    {
+      position: [x * 0.82, 0.032, -6.7],
+      rotation: [-Math.PI / 2, 0, 0],
+      cast: false,
+      receive: false,
+    },
+  );
+  pool.name = 'window-light-pool';
+  return pool;
 }
 
 function createCurtain(side, palette, theme) {
@@ -255,6 +300,23 @@ function createGrandDoor(palette, theme) {
       }),
     );
   }
+  const studs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.055, 7, 5), gold, 24);
+  studs.castShadow = false;
+  studs.receiveShadow = true;
+  const studMatrix = new THREE.Matrix4();
+  let studIndex = 0;
+  for (const leafX of [-1.08, 1.08]) {
+    for (const panelY of [1.08, 2.35, 3.63]) {
+      for (const offsetX of [-0.69, 0.69]) {
+        for (const offsetY of [-0.36, 0.36]) {
+          studMatrix.makeTranslation(leafX + offsetX, panelY + offsetY, 0.67);
+          studs.setMatrixAt(studIndex, studMatrix);
+          studIndex += 1;
+        }
+      }
+    }
+  }
+  group.add(studs);
   for (let step = 0; step < 3; step += 1) {
     group.add(
       mesh(new THREE.BoxGeometry(6.2 + step * 0.48, 0.16, 0.7), stone, {
@@ -292,7 +354,7 @@ function createWallAlcove(angle, palette, theme, index) {
   group.add(mesh(new THREE.BoxGeometry(2.8, 0.18, 0.62), stone, { position: [0, 1.04, 0.32] }));
   group.add(mesh(new THREE.TorusGeometry(0.48, 0.055, 8, 28), gold, { position: [0, 3.6, 0.38] }));
   group.add(mesh(new THREE.ConeGeometry(0.3, 0.76, 7), stone, { position: [0, 3.23, 0.4] }));
-  const sconce = addWallSconce(group, 0, 2.06, 0.62, palette);
+  const sconce = addWallSconce(group, 0, 2.06, 0.62, palette, { withLight: true });
   return { group, sconce };
 }
 
@@ -578,7 +640,13 @@ export function createCoupEnvironment(stage, { theme = 'dark' } = {}) {
     position: [0, 4.15, -10.82],
   });
   room.add(featureWall);
-  for (const [index, x] of [-5.75, 5.75].entries()) room.add(createWindow(index, x, palette, resolvedTheme));
+  const windowPools = [];
+  for (const [index, x] of [-5.75, 5.75].entries()) {
+    room.add(createWindow(index, x, palette, resolvedTheme));
+    const pool = createWindowLightPool(x, resolvedTheme);
+    windowPools.push(pool);
+    room.add(pool);
+  }
   const centralPanel = new THREE.Group();
   centralPanel.name = 'court-seal-panel';
   centralPanel.position.set(0, 0, -10.5);
@@ -670,7 +738,7 @@ export function createCoupEnvironment(stage, { theme = 'dark' } = {}) {
   cameraFill.position.set(0, 5.8, 8.5);
   cameraFill.target.position.set(0, 2.1, -4.8);
   room.add(cameraFill, cameraFill.target);
-  const wallWashers = [];
+  const wallWashers = alcoves.map((alcove) => alcove.sconce.light).filter(Boolean);
   const sunset = new THREE.PointLight(daylight ? 0xf1c884 : 0xd46b47, 12, 13, 2);
   sunset.position.set(0, 4.2, -8.8);
   room.add(sunset);
@@ -683,6 +751,7 @@ export function createCoupEnvironment(stage, { theme = 'dark' } = {}) {
     ambient,
     cameraFill,
     wallWashers,
+    windowPools,
     sunset,
     dust,
     carpet,
@@ -693,16 +762,19 @@ export function createCoupEnvironment(stage, { theme = 'dark' } = {}) {
     setMood(beat) {
       const victory = beat === 'victory';
       const danger = ['claim', 'block-claim', 'influence-loss'].includes(beat);
-      key.intensity = daylight ? (victory ? 72 : danger ? 82 : 92) : victory ? 42 : danger ? 68 : 76;
-      ambient.intensity = daylight ? (victory ? 1.85 : 2.35) : victory ? 1.8 : danger ? 2.5 : 2.25;
-      cameraFill.intensity = daylight ? (victory ? 1.8 : 2.2) : victory ? 4.2 : danger ? 5.4 : 4.8;
+      key.intensity = daylight ? (victory ? 44 : danger ? 62 : 54) : victory ? 36 : danger ? 54 : 47;
+      ambient.intensity = daylight ? (victory ? 1.55 : danger ? 1.9 : 1.72) : victory ? 2.15 : danger ? 2.75 : 2.5;
+      cameraFill.intensity = daylight ? (victory ? 1.65 : 2) : victory ? 4.5 : danger ? 5.6 : 5;
       wallWashers.forEach((light) => {
-        light.intensity = daylight ? (danger ? 4.8 : 3.5) : victory ? 8 : danger ? 14 : 11;
+        light.intensity = daylight ? (danger ? 2.6 : 1.7) : victory ? 4 : danger ? 7.5 : 5.8;
       });
       grandDoor.light.intensity = daylight ? (danger ? 6.5 : 5) : victory ? 11 : danger ? 18 : 15;
-      sunset.intensity = daylight ? (victory ? 12 : danger ? 18 : 16) : victory ? 7 : danger ? 12 : 10;
+      sunset.intensity = daylight ? (victory ? 7 : danger ? 11 : 8.5) : victory ? 6 : danger ? 11 : 8.5;
       sunset.color.setHex(danger ? 0xa64d3e : daylight ? 0xf1c884 : 0xd46b47);
-      chandelier.glow.intensity = daylight ? (victory ? 5 : 3) : victory ? 13 : 22;
+      chandelier.glow.intensity = daylight ? (victory ? 4 : 2.5) : victory ? 12 : 18;
+      windowPools.forEach((pool) => {
+        pool.material.opacity = daylight ? (danger ? 0.16 : 0.22) : danger ? 0.055 : 0.085;
+      });
     },
     update(elapsed, reducedMotion) {
       for (const candle of flames) {

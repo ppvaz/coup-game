@@ -105,6 +105,11 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
   janelas, cortinas, colunas, teto, lustre, velas e decoração.
 - Um panorama contínuo da cidade alimenta as duas janelas, com versões diurna
   e noturna.
+- As janelas têm cruzetas e montantes internos, projetam luz recortada no piso
+  e os candelabros dos nichos participam do humor de luz. O balanço tonal
+  preserva os veios do mármore durante o dia e os meios-tons do salão à noite.
+- A porta monumental usa ferragens instanciadas, acrescentando relevo sem uma
+  chamada de desenho por cravo.
 - Materiais, paleta, cartas e personagens públicos derivam das artes 2D.
 - Ações usam artes próprias; alegações públicas podem exibir carta e efígie 3D.
 - Os elementos centrais se mantêm voltados e separados em relação à câmera.
