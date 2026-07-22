@@ -149,6 +149,12 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
   abrir, sem entrar no orçamento da home ou da mesa 2D.
 - O benchmark registra FPS, percentis, resolução, DPR, draw calls, triângulos,
   luzes, sombras, tema, câmera e orientação.
+- As quatro arandelas dos nichos preservam chama e brilho emissivo, sem quatro
+  `PointLight` globais adicionais; a cena Cinemática voltou de 11 para 7 luzes
+  ativas. Efígies de intervenção não entram no passe de sombras e congelam as
+  matrizes internas estáticas. No cenário de bloqueio do laboratório, isso
+  reduziu as chamadas de desenho de 591 para 552 no desktop e de 480 para 441
+  no portrait, mantendo o mesmo enquadramento e conteúdo jogável.
 - Qualidade reduz resolução, não conteúdo essencial da partida.
 
 ## Próximos passos, em ordem

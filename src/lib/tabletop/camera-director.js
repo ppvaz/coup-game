@@ -63,20 +63,27 @@ export function targetingCameraAct() {
 }
 
 function cameraForElements(elements, { tight = false } = {}) {
-  const points = (elements ?? []).filter(
-    (point) => point && Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z),
-  );
-  if (!points.length) return null;
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  const zs = points.map((point) => point.z);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minZ = Math.min(...zs);
-  const maxZ = Math.max(...zs);
+  let count = 0;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const point of elements ?? []) {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) continue;
+    count += 1;
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+    minZ = Math.min(minZ, point.z);
+    maxZ = Math.max(maxZ, point.z);
+  }
+  if (!count) return null;
   const centerX = (minX + maxX) / 2;
   const centerZ = (minZ + maxZ) / 2;
-  const centerY = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const centerY = (minY + maxY) / 2;
   const spread = Math.max(tight ? 1.6 : 3.2, maxX - minX + (maxZ - minZ) * 0.45);
   return {
     position: [centerX, centerY + (tight ? 2.25 : 2.85), maxZ + (tight ? 5.3 : 7.7) + spread * 0.18],

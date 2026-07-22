@@ -354,7 +354,9 @@ function createWallAlcove(angle, palette, theme, index) {
   group.add(mesh(new THREE.BoxGeometry(2.8, 0.18, 0.62), stone, { position: [0, 1.04, 0.32] }));
   group.add(mesh(new THREE.TorusGeometry(0.48, 0.055, 8, 28), gold, { position: [0, 3.6, 0.38] }));
   group.add(mesh(new THREE.ConeGeometry(0.3, 0.76, 7), stone, { position: [0, 3.23, 0.4] }));
-  const sconce = addWallSconce(group, 0, 2.06, 0.62, palette, { withLight: true });
+  // A chama emissiva preserva a leitura da arandela sem multiplicar o custo
+  // de iluminação de todos os materiais do salão por quatro PointLights.
+  const sconce = addWallSconce(group, 0, 2.06, 0.62, palette);
   return { group, sconce };
 }
 
@@ -738,7 +740,7 @@ export function createCoupEnvironment(stage, { theme = 'dark' } = {}) {
   cameraFill.position.set(0, 5.8, 8.5);
   cameraFill.target.position.set(0, 2.1, -4.8);
   room.add(cameraFill, cameraFill.target);
-  const wallWashers = alcoves.map((alcove) => alcove.sconce.light).filter(Boolean);
+  const wallWashers = [];
   const sunset = new THREE.PointLight(daylight ? 0xf1c884 : 0xd46b47, 12, 13, 2);
   sunset.position.set(0, 4.2, -8.8);
   room.add(sunset);

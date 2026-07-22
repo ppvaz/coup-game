@@ -149,7 +149,7 @@ export function createDecisionOption(option) {
     color: 0xffffff,
     toneMapped: false,
   });
-  group.add(mesh(new THREE.BoxGeometry(1.08, 0.66, 0.075), edge));
+  group.add(mesh(new THREE.BoxGeometry(1.08, 0.66, 0.075), edge, { cast: false, receive: false }));
   group.add(
     mesh(new THREE.PlaneGeometry(1.02, 0.6), face, {
       position: [0, 0, -0.041],
@@ -201,6 +201,18 @@ export function createDecisionEffigy(option) {
     { position: [0, 1.05, 0.12], cast: false, receive: false },
   );
   group.add(hitbox);
+  // As efígies ficam sobre a mesa por poucos segundos. Mantê-las fora do
+  // shadow map elimina um segundo passe para dezenas de peças pequenas; suas
+  // matrizes internas são estáticas e podem ser congeladas sob o grupo móvel.
+  group.traverse((object) => {
+    if (object.isMesh) {
+      object.castShadow = false;
+      object.receiveShadow = false;
+    }
+    if (object === group) return;
+    object.updateMatrix();
+    object.matrixAutoUpdate = false;
+  });
   group.userData.decisionId = option.id;
   group.userData.enabled = option.enabled;
   return { group, hover: label.hover, id: option.id, enabled: option.enabled };

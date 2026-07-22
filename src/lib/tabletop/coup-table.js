@@ -236,6 +236,7 @@ export class CoupTableScene {
     this.hoveredDecisionId = null;
     this.armedDecisionId = null;
     this.interventionFrameKey = '';
+    this.interventionFocusCache = [];
     this.decisionAppearedAt = -Infinity;
     this.processedStageEvents = new Set();
     this.hasSyncedStageEvents = false;
@@ -276,6 +277,7 @@ export class CoupTableScene {
     this.hoveredDecisionId = null;
     this.armedDecisionId = null;
     this.interventionFrameKey = '';
+    this.interventionFocusCache.length = 0;
     const count = view.seats.length;
     for (const seatView of view.seats) {
       const angle = seatView.azimuthRad;
@@ -919,18 +921,25 @@ export class CoupTableScene {
   interventionFocusPoints(decisionId = null) {
     if (!this.decisionGroup || this.decisionPresentation !== 'intervention') return [];
     this.decisionGroup.updateWorldMatrix(true, true);
-    const points = this.decisionOptions
-      .filter((entry) => !decisionId || entry.id === decisionId)
-      .map((entry) => {
-        const point = new THREE.Vector3(entry.group.position.x, entry.baseY + 1.02, entry.group.position.z);
-        return this.decisionGroup.localToWorld(point);
-      });
+    const points = this.interventionFocusCache;
+    let pointCount = 0;
+    for (const entry of this.decisionOptions) {
+      if (decisionId && entry.id !== decisionId) continue;
+      const point = points[pointCount] ?? new THREE.Vector3();
+      point.set(entry.group.position.x, entry.baseY + 1.02, entry.group.position.z);
+      this.decisionGroup.localToWorld(point);
+      points[pointCount] = point;
+      pointCount += 1;
+    }
     if (this.actionCard.visible || this.actionPresenceTarget > 0) {
       this.actionCard.updateWorldMatrix(true, false);
-      const actionPoint = this.actionCard.getWorldPosition(new THREE.Vector3());
+      const actionPoint = points[pointCount] ?? new THREE.Vector3();
+      this.actionCard.getWorldPosition(actionPoint);
       actionPoint.y = 2.35;
-      points.push(actionPoint);
+      points[pointCount] = actionPoint;
+      pointCount += 1;
     }
+    points.length = pointCount;
     return points;
   }
 
@@ -1243,6 +1252,9 @@ export class CoupTableScene {
     if (!this.actionCard.visible || !this.actionCardFocusDirection) return false;
     const card = this.actionCard.position;
     const direction = this.actionCardFocusDirection;
+    const key = `${card.x.toFixed(2)}:${card.z.toFixed(2)}`;
+    if (!start && key === this.actionCardFocusFrameKey) return false;
+    this.actionCardFocusFrameKey = key;
     const target = [card.x, 2.35, card.z];
     const pose = {
       position: [card.x + direction.x * 2.9, 2.6, card.z + direction.y * 2.9],
@@ -1254,9 +1266,6 @@ export class CoupTableScene {
         fov: 52,
       },
     };
-    const key = `${card.x.toFixed(2)}:${card.z.toFixed(2)}`;
-    if (!start && key === this.actionCardFocusFrameKey) return false;
-    this.actionCardFocusFrameKey = key;
     const retargeted = !start && this.stage.retargetCameraAct('card', pose);
     if (!retargeted) {
       this.stage.defineCameraAct('card', pose);
@@ -1563,7 +1572,11 @@ export class CoupTableScene {
       this.actionCard.rotation.z = reducedMotion ? 0 : (1 - this.actionPresence) * -0.16;
       faceCameraYaw(this.actionCard, this.stage.camera, reducedMotion ? 1 : delta);
       if (this.cameraName === 'card') this.refreshActionCardFocus();
-      if (this.cameraName === 'intervention') this.frameInterventionCamera();
+      const centerpieceMoving =
+        Math.abs(this.actionCard.position.x - this.actionTargetX) > 0.002 ||
+        Math.abs(this.actionCard.position.z - this.actionTargetZ) > 0.002 ||
+        Math.abs(this.actionPresence - this.actionPresenceTarget) > 0.005;
+      if (this.cameraName === 'intervention' && centerpieceMoving) this.frameInterventionCamera();
     }
     if (this.publicRole) {
       this.publicRole.position.x += (this.publicRoleTargetX - this.publicRole.position.x) * centerEase;
