@@ -14,6 +14,11 @@ import {
 import { TABLETOP_QUALITY_KEY, initialTabletopQuality, nextTabletopQuality } from '../lib/tabletop/quality-profiles.js';
 import { TABLETOP_EMOJIS, TABLETOP_THROWABLES } from '../lib/tabletop/reactions.js';
 import {
+  loadTabletopComposition,
+  nextTabletopComposition,
+  tabletopCompositionFromSearch,
+} from '../lib/tabletop/scene-compositions.js';
+import {
   audioTogglesHTML,
   bindGameDecisionControls,
   describeLog,
@@ -256,6 +261,7 @@ export function tableExperimentHTML({ testMode = false } = {}) {
       <div class="tabletop-top-actions">
         ${testMode ? '<button class="tabletop-benchmark" id="tabletop-benchmark" type="button"><span>◷</span><small>Medir FPS</small></button>' : ''}
         ${testMode ? '<button class="tabletop-quality" id="tabletop-quality" type="button"><span>◆</span><small>Cinemático</small></button>' : ''}
+        ${testMode ? '<button class="tabletop-composition" id="tabletop-composition" type="button"><span>◫</span><small>Clássica</small></button>' : ''}
         ${testMode ? '' : `<button class="tabletop-roster-toggle" id="tabletop-roster-toggle" type="button" aria-controls="tabletop-roster" aria-expanded="false"><span>${rosterBookIcon(false)}</span><small>A corte</small></button>`}
         <span class="tabletop-chat-slot" id="tabletop-chat-slot"></span>
         ${testMode ? '<button class="tabletop-theme" id="tabletop-theme" type="button"><span>☀</span><small>Modo diurno</small></button>' : ''}
@@ -365,6 +371,8 @@ export async function mountTableExperiment({
   const processedReactions = new Set();
   const requestedTheme = new URLSearchParams(location.search).get('theme');
   const labShot = testMode ? new URLSearchParams(location.search).get('shot') : null;
+  const composition = tabletopCompositionFromSearch(location.search, { allowExperimental: Boolean(testMode) });
+  root.dataset.composition = composition.id;
   let theme = ['light', 'dark'].includes(requestedTheme)
     ? requestedTheme
     : document.documentElement.dataset.theme === 'light'
@@ -420,6 +428,15 @@ export async function mountTableExperiment({
     button.setAttribute('aria-label', `Qualidade 3D: ${quality.label}. Ativar próximo perfil.`);
     button.dataset.quality = quality.id;
     button.querySelector('small').textContent = quality.label;
+  };
+
+  const paintCompositionControl = () => {
+    const button = root.querySelector('#tabletop-composition');
+    if (!button) return;
+    const next = nextTabletopComposition(composition.id);
+    button.querySelector('small').textContent = composition.label;
+    button.setAttribute('aria-label', `Composição 3D: ${composition.label}. Abrir ${next.label}.`);
+    button.setAttribute('title', `Comparar com a composição ${next.label}`);
   };
 
   const paintRosterControl = () => {
@@ -800,9 +817,10 @@ export async function mountTableExperiment({
   };
 
   paintRosterControl();
+  paintCompositionControl();
   paintState();
   try {
-    const { ACTION_ART, CoupTableScene } = await import('../lib/tabletop/coup-table.js');
+    const { ACTION_ART, CoupTableScene } = await loadTabletopComposition(composition.id);
     scene = new CoupTableScene(canvas, {
       theme,
       quality: quality.id,
@@ -1053,6 +1071,12 @@ export async function mountTableExperiment({
   });
   root.querySelector('#tabletop-quality')?.addEventListener('click', () => {
     applyQuality(nextTabletopQuality(quality.id));
+  });
+  root.querySelector('#tabletop-composition')?.addEventListener('click', () => {
+    const next = nextTabletopComposition(composition.id);
+    const search = new URLSearchParams(location.search);
+    search.set('composition', next.id);
+    location.search = search.toString();
   });
   root.querySelector('#tabletop-benchmark')?.addEventListener('click', () => runBenchmark());
 

@@ -1050,6 +1050,7 @@ html[data-theme='light'] .chat-taunts button {
   .tabletop-theme,
   .tabletop-roster-toggle,
   .tabletop-quality,
+  .tabletop-composition,
   .tabletop-benchmark {
     min-height: 32px;
     padding: 6px 9px;
@@ -1057,6 +1058,7 @@ html[data-theme='light'] .chat-taunts button {
   .tabletop-theme small,
   .tabletop-roster-toggle small,
   .tabletop-quality small,
+  .tabletop-composition small,
   .tabletop-benchmark small {
     display: none;
   }
@@ -1199,6 +1201,7 @@ html[data-theme='light'] .chat-taunts button {
   }
   .tabletop-theme,
   .tabletop-quality,
+  .tabletop-composition,
   .tabletop-benchmark,
   .tabletop-exit {
     min-width: 30px;

@@ -4,6 +4,7 @@
 //
 //   npm run capture:3d                       — matriz completa
 //   npm run capture:3d -- --themes=dark --viewports=portrait --shots=duel:0-3
+//   npm run capture:3d -- --compositions=council --shots=table,pov:3
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
@@ -37,6 +38,7 @@ const SHOTS = [
   'decision:block-confirm',
 ];
 const THEMES = ['dark', 'light'];
+const COMPOSITIONS = ['classic'];
 
 const listArg = (name, fallback) => {
   const raw = process.argv.find((arg) => arg.startsWith(`--${name}=`));
@@ -64,6 +66,7 @@ const waitForServer = async (url, attempts = 60) => {
 const themes = listArg('themes', THEMES);
 const viewports = listArg('viewports', Object.keys(VIEWPORTS));
 const shots = listArg('shots', SHOTS);
+const compositions = listArg('compositions', COMPOSITIONS);
 
 const server = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
 try {
@@ -75,21 +78,27 @@ try {
     await context.addInitScript(() => localStorage.setItem('la-corte-3d-lab-access', 'granted'));
     const page = await context.newPage();
     page.on('pageerror', (error) => console.error(`Browser: ${error.message}`));
-    for (const theme of themes) {
-      const directory = `captures/${theme}/${viewportName}`;
-      await mkdir(directory, { recursive: true });
-      for (const shot of shots) {
-        const label = `${theme}/${viewportName}/${shot}`;
-        try {
-          await page.goto(`${BASE}/3d/lab?shot=${encodeURIComponent(shot)}&theme=${theme}`);
-          await page.waitForSelector('.tabletop-loading.hidden', { timeout: 30_000 });
-          await page.waitForTimeout(700);
-          const path = `${directory}/${shot.replaceAll(':', '-')}.png`;
-          await page.screenshot({ path });
-          console.log(`✓ ${label} → ${path}`);
-        } catch (error) {
-          failures.push(label);
-          console.error(`✖ ${label}: ${error.message.split('\n')[0]}`);
+    for (const composition of compositions) {
+      for (const theme of themes) {
+        const directory =
+          composition === 'classic'
+            ? `captures/${theme}/${viewportName}`
+            : `captures/${composition}/${theme}/${viewportName}`;
+        await mkdir(directory, { recursive: true });
+        for (const shot of shots) {
+          const label = `${composition}/${theme}/${viewportName}/${shot}`;
+          try {
+            const search = new URLSearchParams({ shot, theme, composition });
+            await page.goto(`${BASE}/3d/lab?${search}`);
+            await page.waitForSelector('.tabletop-loading.hidden', { timeout: 30_000 });
+            await page.waitForTimeout(700);
+            const path = `${directory}/${shot.replaceAll(':', '-')}.png`;
+            await page.screenshot({ path });
+            console.log(`✓ ${label} → ${path}`);
+          } catch (error) {
+            failures.push(label);
+            console.error(`✖ ${label}: ${error.message.split('\n')[0]}`);
+          }
         }
       }
     }

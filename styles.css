@@ -933,6 +933,7 @@ body.is-tabletop-lab > .theme-toggle {
 .tabletop-theme,
 .tabletop-roster-toggle,
 .tabletop-quality,
+.tabletop-composition,
 .tabletop-benchmark {
   min-height: 36px;
   padding: 7px 11px;
@@ -946,6 +947,7 @@ body.is-tabletop-lab > .theme-toggle {
 .tabletop-theme span,
 .tabletop-roster-toggle span,
 .tabletop-quality span,
+.tabletop-composition span,
 .tabletop-benchmark span {
   font-size: 14px;
   line-height: 1;
@@ -968,6 +970,7 @@ body.is-tabletop-lab > .theme-toggle {
 .tabletop-theme small,
 .tabletop-roster-toggle small,
 .tabletop-quality small,
+.tabletop-composition small,
 .tabletop-benchmark small {
   color: #a79d8e;
   font-size: 7px;
@@ -978,6 +981,7 @@ body.is-tabletop-lab > .theme-toggle {
 .tabletop-theme:hover,
 .tabletop-roster-toggle:hover,
 .tabletop-quality:hover,
+.tabletop-composition:hover,
 .tabletop-benchmark:hover {
   border-color: #d9b56b;
 }
@@ -2143,6 +2147,7 @@ html[data-theme='light'] .tabletop-engine-badge small {
 html[data-theme='light'] .tabletop-engine-badge,
 html[data-theme='light'] .tabletop-benchmark,
 html[data-theme='light'] .tabletop-quality,
+html[data-theme='light'] .tabletop-composition,
 html[data-theme='light'] .tabletop-theme,
 html[data-theme='light'] .tabletop-roster-toggle,
 html[data-theme='light'] .tabletop-exit {
@@ -2157,6 +2162,9 @@ html[data-theme='light'] .tabletop-benchmark small {
   color: #655845;
 }
 html[data-theme='light'] .tabletop-quality small {
+  color: #655845;
+}
+html[data-theme='light'] .tabletop-composition small {
   color: #655845;
 }
 html[data-theme='light'] .tabletop-story h1 {

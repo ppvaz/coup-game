@@ -51,6 +51,8 @@ test('a saída do 3D é um botão da aplicação, não uma navegação', () => {
   assert.match(html, /id="tabletop-exit-leave"/);
   assert.doesNotMatch(html, /<a href="\/">/);
   assert.doesNotMatch(tableExperimentHTML({ testMode: true }), /tabletop-exit-confirm/);
+  assert.match(tableExperimentHTML({ testMode: true }), /id="tabletop-composition"/);
+  assert.doesNotMatch(tableExperimentHTML(), /id="tabletop-composition"/);
 });
 
 test('a ampulheta pessoal não tem painel em HTML e só é focada no próprio turno', () => {
