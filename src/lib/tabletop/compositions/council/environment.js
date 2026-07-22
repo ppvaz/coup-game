@@ -24,6 +24,20 @@ const PALETTES = {
   },
 };
 
+/**
+ * Medidas do tampo redondo. O anel de assentos e as peças de cada cortesão
+ * derivam daqui: sem isso, cadeira, carta e moeda pousavam em raios diferentes
+ * e a metade delas terminava fora do feltro.
+ */
+export const COUNCIL_TABLE = Object.freeze({
+  radius: 4.7,
+  top: 1.22,
+  feltRadius: 4.34,
+  feltTop: 1.2675,
+  rimRadius: 4.5,
+  rimHeight: 1.285,
+});
+
 export const COUNCIL_THEME_PROFILES = {
   dark: {
     clearColor: PALETTES.dark.background,
@@ -83,15 +97,18 @@ export function createCouncilEnvironment(stage, { theme = 'dark' } = {}) {
   const table = new THREE.Group();
   table.name = 'council-table';
   table.add(
-    mesh(new THREE.CylinderGeometry(4.7, 4.78, 0.3, 40), standardMaterial(palette.wood, { roughness: 0.7 }), {
-      position: [0, 1.07, 0],
-    }),
+    mesh(
+      new THREE.CylinderGeometry(COUNCIL_TABLE.radius, COUNCIL_TABLE.radius + 0.08, 0.3, 40),
+      standardMaterial(palette.wood, { roughness: 0.7 }),
+      { position: [0, COUNCIL_TABLE.top - 0.15, 0] },
+    ),
   );
   table.add(
-    mesh(new THREE.CylinderGeometry(4.34, 4.34, 0.045, 48), standardMaterial(palette.felt, { roughness: 0.94 }), {
-      position: [0, 1.245, 0],
-      cast: false,
-    }),
+    mesh(
+      new THREE.CylinderGeometry(COUNCIL_TABLE.feltRadius, COUNCIL_TABLE.feltRadius, 0.045, 48),
+      standardMaterial(palette.felt, { roughness: 0.94 }),
+      { position: [0, COUNCIL_TABLE.feltTop - 0.0225, 0], cast: false },
+    ),
   );
   const accentMaterial = standardMaterial(palette.edge, {
     emissive: palette.edge,
@@ -100,8 +117,8 @@ export function createCouncilEnvironment(stage, { theme = 'dark' } = {}) {
     roughness: 0.34,
   });
   table.add(
-    mesh(new THREE.TorusGeometry(4.5, 0.035, 7, 64), accentMaterial, {
-      position: [0, 1.285, 0],
+    mesh(new THREE.TorusGeometry(COUNCIL_TABLE.rimRadius, 0.035, 7, 64), accentMaterial, {
+      position: [0, COUNCIL_TABLE.rimHeight, 0],
       rotation: [Math.PI / 2, 0, 0],
       cast: false,
     }),

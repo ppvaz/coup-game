@@ -2,6 +2,7 @@ import { disposeObject3D } from '@la-corte/tabletop-stage';
 import { CoupTableScene as ClassicCoupTableScene } from '../../coup-table.js';
 import { COUNCIL_CAMERA_ACTS, councilPovCameraForSeat } from './camera-layout.js';
 import { COUNCIL_THEME_PROFILES, createCouncilEnvironment } from './environment.js';
+import { COUNCIL_SEAT_RING } from './seat-ring.js';
 
 export { ACTION_ART } from '../../coup-table.js';
 
@@ -22,6 +23,10 @@ export class CoupTableScene extends ClassicCoupTableScene {
     this.seal.visible = false;
   }
 
+  get seatRing() {
+    return COUNCIL_SEAT_RING;
+  }
+
   povCameraForSeat(seat, seatCount) {
     return councilPovCameraForSeat(seat, seatCount);
   }
@@ -38,7 +43,6 @@ export class CoupTableScene extends ClassicCoupTableScene {
       // createNoble olha para -Z; rotacionar apenas pelo azimute aponta todos
       // para o centro e leva a bancada local para cima do tampo.
       seat.group.rotation.y = seatView.azimuthRad;
-      seat.plaque.rotation.z = 0;
       seat.plaque.scale.setScalar(0.82);
     }
   }

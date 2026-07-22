@@ -1,7 +1,8 @@
-import { SALON_SEAT_RING, seatRingPoint } from '../../coup-table/seat-ring.js';
+import { seatRingPoint } from '../../coup-table/seat-ring.js';
+import { COUNCIL_SEAT_RING } from './seat-ring.js';
 
 function seatFrame(seat, seatCount) {
-  const { x, z, outwardX, outwardZ } = seatRingPoint(SALON_SEAT_RING, seat, seatCount);
+  const { x, z, outwardX, outwardZ } = seatRingPoint(COUNCIL_SEAT_RING, seat, seatCount);
   return { seatX: x, seatZ: z, inwardX: -outwardX, inwardZ: -outwardZ };
 }
 
