@@ -40,6 +40,7 @@ commit da mudança.
 | `src/rooms/join.js`                         | Pedido de cadeira do convidado com reenvio e desistência                                                   |
 | `src/rooms/chat.js`                         | Normalização, limites e antiflood do chat                                                                  |
 | `src/rooms/game-sync.js`                    | Aceite de snapshot por `gameId` e `version`                                                                |
+| `src/rooms/network-schema.js`               | Validação estrutural de presença, sala, cifra, handover e chat antes de mutar estado                       |
 | `src/lib/asset-warmup.js`                   | Ordem de aquecimento de assets (imediato × ocioso)                                                         |
 | `src/lib/lab-access.js`                     | Liberação de rota interna por chave na URL                                                                 |
 | `src/lib/bot-timing.js`                     | Atraso humano para jogadas automáticas                                                                     |
@@ -56,21 +57,23 @@ commit da mudança.
 | `src/lib/voice-announcer.js`          | Banco de falas por evento com sorteio sem repetição                                                    | O banco em si é 100% de Coup                                               |
 | `src/lib/decision-clock.js`           | Relógio de decisão derivado do estado, sem timer próprio                                               | Lê `turn`, `phase` e `log` no formato de Coup                              |
 | `src/rooms/session.js`                | Retomada de sessão com validade                                                                        | Migração de carta `Embaixador` → `Embaixadora`                             |
+| `src/rooms/auth.js`                   | Sessão anônima, autorização de cadeira, registro de conexão e transporte via RPC                       | Nomes das RPCs/tabelas `coup_*` e o tópico `la-corte:*`                    |
 | `src/game/handover.js`                | Sucessão do anfitrião a partir de visões redigidas                                                     | Reconstrói cartas e baralho de Coup                                        |
 | `src/ui/table-experiment.js`          | Casca do salão: topbar, roster, doca de reações, chat, preferências, PiP                               | Narrativa, ampulheta e controles de decisão                                |
 | `scripts/capture-shots.mjs`           | Arnês de captura headless: dev server, matriz planos × viewports × temas, PNGs de referência           | A rota de laboratório e o vocabulário de planos (`duel:0-3`, `evidence:1`) |
 
 ### Coup nativo — fica
 
-| Módulo                                      | Conteúdo                                                    |
-| ------------------------------------------- | ----------------------------------------------------------- |
-| `src/game/coup.js`                          | Papéis, ações, fases, desafios, bloqueios                   |
-| `src/game/ai.js`                            | Bots e `awaitedPlayerId`                                    |
-| `src/ui/game-views.js`, `src/ui/screens.js` | Telas e views da mesa 2D                                    |
-| `src/lib/tabletop/coup-view.js`             | Projeção do estado para o palco                             |
-| `src/lib/tabletop/coup-table.js`            | Assentos, cartas, ampulheta, carta de ação, reações na cena |
-| `src/lib/tabletop/coup-environment.js`      | Salão, cidade, luz e paletas                                |
-| `app.js`                                    | Orquestração da aplicação                                   |
+| Módulo                                      | Conteúdo                                                     |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| `src/game/coup.js`                          | Papéis, ações, fases, desafios, bloqueios                    |
+| `src/game/ai.js`                            | Bots e `awaitedPlayerId`                                     |
+| `src/game/network-schema.js`                | Schema de comandos e visões redigidas no vocabulário de Coup |
+| `src/ui/game-views.js`, `src/ui/screens.js` | Telas e views da mesa 2D                                     |
+| `src/lib/tabletop/coup-view.js`             | Projeção do estado para o palco                              |
+| `src/lib/tabletop/coup-table.js`            | Assentos, cartas, ampulheta, carta de ação, reações na cena  |
+| `src/lib/tabletop/coup-environment.js`      | Salão, cidade, luz e paletas                                 |
+| `app.js`                                    | Orquestração da aplicação                                    |
 
 ## Fronteiras que já existem — não fure
 
@@ -261,14 +264,14 @@ comparar as duas implementações lado a lado e decidir **qual das duas versões
 Eleger a de La Corte por ser a de casa seria escolher por acidente — a linhagem começou do outro
 lado, e em várias peças a versão mais madura provavelmente é a de lá.
 
-| Fase                                        | Gatilho                                     | Entregável                                                                                                               | Pronto quando                                                                                                                                                                              |
-| ------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **0 · Fronteira mecanizada**                | Agora                                       | Teste que falha se `packages/` importar `src/`, se a apresentação importar `src/game/` ou se o motor citar papel de Coup | A fronteira deixa de depender de disciplina e passa a quebrar o `npm test`                                                                                                                 |
-| **1 · Workspace**                           | Depois da fase 0                            | `workspaces` no `package.json` da raiz, no lugar da dependência `file:`                                                  | `npm test` e `npm run build` passam sem o link manual                                                                                                                                      |
-| **1.5 · Confronto das duas implementações** | Já disponível                               | Comparação peça a peça (palco, atos, arremesso, sala) escolhendo a melhor versão de cada uma, com o motivo registrado    | Cada peça da fila tem uma versão eleita e uma lista do que falta nela                                                                                                                      |
-| **2 · Prova de portabilidade**              | Depois da fase 1.5                          | Sem Perdão consome o motor fundido por caminho relativo ou submódulo, ainda sem publicar                                 | Sem Perdão roda uma partida ponta a ponta sem editar nenhum arquivo do motor                                                                                                               |
-| **3 · Repositório próprio**                 | Os dois jogos rodando sobre o motor fundido | Repo do motor com escopo neutro, semver, CHANGELOG e publicação em registry privado (GitHub Packages)                    | Os dois jogos instalam a mesma versão publicada, o histórico do motor sobrevive (`git filter-repo`) e a identidade das cadeiras está autenticada (ver "A dívida de segurança viaja junto") |
-| **4 · La Corte vira consumidor**            | Depois da fase 3                            | Este repositório passa a depender da versão publicada e `packages/` some daqui                                           | Uma correção no motor chega aos dois jogos por bump de versão, sem cópia                                                                                                                   |
+| Fase                                        | Gatilho                                     | Entregável                                                                                                             | Pronto quando                                                                                                                                                                              |
+| ------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **0 · Fronteira mecanizada**                | **Concluída em 21/07/2026**                 | Teste que falha se `packages/` importar `src/`, se as regras importarem apresentação ou se o motor citar papel de Coup | `test/architecture-boundaries.test.js` protege as três direções no `npm test`; a dependência UI → regras continua permitida por design                                                     |
+| **1 · Workspace**                           | Depois da fase 0                            | `workspaces` no `package.json` da raiz, no lugar da dependência `file:`                                                | `npm test` e `npm run build` passam sem o link manual                                                                                                                                      |
+| **1.5 · Confronto das duas implementações** | Já disponível                               | Comparação peça a peça (palco, atos, arremesso, sala) escolhendo a melhor versão de cada uma, com o motivo registrado  | Cada peça da fila tem uma versão eleita e uma lista do que falta nela                                                                                                                      |
+| **2 · Prova de portabilidade**              | Depois da fase 1.5                          | Sem Perdão consome o motor fundido por caminho relativo ou submódulo, ainda sem publicar                               | Sem Perdão roda uma partida ponta a ponta sem editar nenhum arquivo do motor                                                                                                               |
+| **3 · Repositório próprio**                 | Os dois jogos rodando sobre o motor fundido | Repo do motor com escopo neutro, semver, CHANGELOG e publicação em registry privado (GitHub Packages)                  | Os dois jogos instalam a mesma versão publicada, o histórico do motor sobrevive (`git filter-repo`) e a identidade das cadeiras está autenticada (ver "A dívida de segurança viaja junto") |
+| **4 · La Corte vira consumidor**            | Depois da fase 3                            | Este repositório passa a depender da versão publicada e `packages/` some daqui                                         | Uma correção no motor chega aos dois jogos por bump de versão, sem cópia                                                                                                                   |
 
 ### O que nunca vai junto
 
@@ -295,8 +298,11 @@ e caros depois de publicado, porque viram mudança de API entre repositórios:
   transforma todo o motor em `any`, e aí a fronteira não protege mais nada.
 - **Controle de câmera.** La Corte tem arraste e zoom próprios dentro do palco; Sem Perdão usa
   `OrbitControls` de `three/examples`. Duas respostas para a mesma pergunta: escolher uma na fase 1.5.
-- **Identidade e envelopes.** Autenticar a cadeira e validar estruturalmente tudo que chega do canal.
-  É a pendência P0 da auditoria e mora justo na camada que vai virar motor.
+- **Identidade e envelopes.** La Corte já combina os schemas de
+  `src/rooms/network-schema.js`/`src/game/network-schema.js` com Anonymous Auth,
+  canal privado, RLS e IDs de remetente derivados no banco. Antes da extração,
+  os nomes `coup_*` e o tópico precisam virar configuração do adaptador, e o
+  mesmo desenho precisa ser portado e testado no Sem Perdão.
 - **Classes de tela.** Quantas são e como o jogo declara composição para cada uma. Hoje são duas na
   API e três na validação; celular deitado não tem nome. Mexer nisso depois de publicado quebra todo
   ato de câmera já autorado, então é decisão de agora.
@@ -351,20 +357,19 @@ Duas peças de ferramental do ciclo 3D também são de motor, e nenhuma existe d
 
 Este é o ponto mais caro do plano, e ele vem da auditoria de segurança de 18/07/2026.
 
-A camada que está prestes a virar motor — sala, presença, canal, host autoritativo — é exatamente a
-que tem a pendência de prioridade máxima: o canal Supabase é público e todas as identidades
-(`playerId`, chave de
-presença, `connectionId`, chave pública) são declaradas pelo próprio cliente. Quem conhece o código
-da sala pode se passar por outra cadeira e, como o host cifra a visão de um jogador para todas as
-presenças daquele ID, chegar à mão privada dela.
+A camada que está prestes a virar motor — sala, presença, canal, host autoritativo — era exatamente a
+que tinha a pendência de prioridade máxima. Em La Corte, desde 22/07/2026, Anonymous Auth, canal
+privado, RLS e RPCs `security definer` vinculam cadeira/conexão a `auth.uid()` e substituem os IDs do
+remetente antes do Broadcast. A Presence só entra no estado quando a conexão e a chave de cifra
+coincidem com o registro autenticado.
 
-**Sem Perdão tem a mesma arquitetura e o mesmo furo** — o README de lá também avisa que os canais
-públicos não são fronteira anti-cheat.
+**Sem Perdão ainda precisa receber a mesma correção** — extrair o transporte antes desse porte
+reintroduziria o furo no pacote compartilhado.
 
-A consequência para a fusão é direta: extrair a sala como está multiplica a falha por todos os jogos
-futuros, e cada consumidor novo encarece a correção. Autenticação de identidade e validação
-estrutural dos envelopes (snapshots, visões, handover, presença) não são "melhorias posteriores" do
-motor — são pré-requisito de publicá-lo.
+A consequência para a fusão continua direta: Auth/RLS e validação estrutural dos envelopes
+(snapshots, visões, handover, presença) são contrato obrigatório do adaptador, não melhorias
+posteriores. A migration atual também mantém a eleição do host validada pelos clientes; um motor
+competitivo ainda precisa de autoridade de servidor para regras, sorteio e snapshots.
 
 A mesma auditoria já entregou, de graça, duas coisas que o plano precisava:
 

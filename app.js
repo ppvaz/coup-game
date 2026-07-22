@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured, supabaseConfigError } from './src/lib/supabase.js';
 import { createGame, dispatchGame, viewForPlayer } from './src/game/coup.js';
 import { reconstructGame } from './src/game/handover.js';
+import { isCommandEnvelope, isGameView } from './src/game/network-schema.js';
 import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/secure-channel.js';
 import { RECONNECT_GIVE_UP_MS, trackPresence } from './src/lib/realtime.js';
 import { createSoundManager } from './src/lib/sounds.js';
@@ -8,7 +9,7 @@ import { consumeLabAccess } from './src/lib/lab-access.js';
 import { botDelayMs } from './src/lib/bot-timing.js';
 import { decisionClockKey } from './src/lib/decision-clock.js';
 import { warmupPlan } from './src/lib/asset-warmup.js';
-import { appendTabletopReaction } from './src/lib/tabletop/reactions.js';
+import { appendTabletopReaction, isTabletopReactionEnvelope } from './src/lib/tabletop/reactions.js';
 import { voiceFilesForTransition } from './src/lib/voice-announcer.js';
 import { CHAT_MAX_LENGTH, appendChatMessage, createChatGuard, normalizeChatText } from './src/rooms/chat.js';
 import { chatPanelHTML, connectionUIHTML, lobbyHTML, roomHTML } from './src/ui/screens.js';
@@ -28,6 +29,25 @@ import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/
 import { shouldAcceptGameView, shouldResetGame } from './src/rooms/game-sync.js';
 import { canAcceptRoomSnapshot, hasRoomSeat, startJoinAttempt } from './src/rooms/join.js';
 import { createSubscriptionHandler } from './src/rooms/connection.js';
+import {
+  authorizeRoomSeat,
+  broadcastRoomEvent,
+  registerRoomConnection,
+  roomConnectionRegistry,
+} from './src/rooms/auth.js';
+import {
+  isChatHistory,
+  isChatMessageEnvelope,
+  isChatRejection,
+  isChatRequest,
+  isHandoverRequest,
+  isHandoverResponse,
+  isJoinRequest,
+  isPresenceState,
+  isPrivateEnvelope,
+  isPublicKey,
+  isRoomEnvelope,
+} from './src/rooms/network-schema.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import { mountTableExperiment, tableExperimentHTML } from './src/ui/table-experiment.js';
 import duquePortrait from './assets/characters/duque.webp';
@@ -143,6 +163,9 @@ if (resumeSnapshot) {
   };
 }
 let roomChannel = null;
+let activeRoomCode = null;
+let authorizedHostId = null;
+let connectionRegistry = new Map();
 let botTimer = null;
 let clock = { key: '', deadline: 0, total: 0 };
 let hostElectionTimer = null;
@@ -207,7 +230,15 @@ themeToggle.onclick = () => {
 };
 paintThemeToggle();
 
-const sendRoom = (event, payload = {}) => roomChannel?.send({ type: 'broadcast', event, payload });
+const sendRoom = (event, payload = {}) => {
+  if (!supabase || !activeRoomCode || !connectionId) return Promise.resolve('error');
+  return broadcastRoomEvent(supabase, {
+    code: activeRoomCode,
+    connectionId,
+    event,
+    payload,
+  });
+};
 
 function addTabletopReaction(value) {
   const next = appendTabletopReaction(state.tabletopReactions, value, {
@@ -311,7 +342,9 @@ function addChatMessage(message, notify = true) {
 
 async function sendPrivateChat(event, recipientId, value) {
   if (!encryptionIdentity) return false;
-  const recipients = roomChannel?.presenceState()?.[recipientId] ?? [];
+  const presence = validatedPresenceState();
+  if (!presence) return false;
+  const recipients = presence[recipientId] ?? [];
   const sends = recipients
     .filter((recipient) => recipient.publicKey && recipient.connectionId)
     .map(async (recipient) => {
@@ -329,7 +362,12 @@ async function sendPrivateChat(event, recipientId, value) {
 }
 
 async function readPrivateChat(payload) {
-  if (!encryptionIdentity || payload?.recipientId !== state.myId || payload.recipientConnectionId !== connectionId)
+  if (
+    !encryptionIdentity ||
+    !isPrivateEnvelope(payload) ||
+    payload.recipientId !== state.myId ||
+    payload.recipientConnectionId !== connectionId
+  )
     return null;
   const sender = presenceEntry(payload.senderId, payload.senderConnectionId);
   if (!sender?.publicKey) return null;
@@ -433,15 +471,17 @@ function applyCommand(command) {
 }
 
 function presenceEntry(playerId, targetConnectionId) {
-  const entries = roomChannel?.presenceState()?.[playerId] ?? [];
+  const entries = validatedPresenceState()?.[playerId] ?? [];
   return targetConnectionId ? entries.find((entry) => entry.connectionId === targetConnectionId) : entries.at(-1);
 }
 
 async function syncViews() {
   if (!state.online || !state.isHost || !state.game || !encryptionIdentity) return;
+  const presence = validatedPresenceState();
+  if (!presence) return;
   const sends = [];
   for (const player of state.game.players.filter((candidate) => candidate.id !== state.myId)) {
-    for (const recipient of roomChannel?.presenceState()?.[player.id] ?? []) {
+    for (const recipient of presence[player.id] ?? []) {
       if (!recipient.publicKey || !recipient.connectionId) continue;
       const view = viewForPlayer(state.game, player.id);
       view.log = view.log.slice(-20);
@@ -514,7 +554,9 @@ function watchTableContinuity() {
     leaveTable();
     return;
   }
-  const connectedIds = roomChannel ? Object.keys(roomChannel.presenceState()) : [];
+  const presence = roomChannel ? validatedPresenceState() : {};
+  if (!presence) return;
+  const connectedIds = Object.keys(presence);
   if (state.hostIssue || presenceDiverges(state.room, connectedIds)) handlePresenceSync();
 }
 setInterval(watchTableContinuity, 2_000);
@@ -623,7 +665,7 @@ function startOnline() {
     playerIds: seats.map((seat) => seat.id),
   });
   resetClock();
-  sendRoom('game_started', { gameId });
+  sendRoom('game_started', { room: publicRoom() });
   broadcastRoom();
   render();
   syncViews();
@@ -662,9 +704,52 @@ function acceptRoom(incoming) {
   return true;
 }
 
-function handlePresenceSync() {
+const samePublicKey = (left, right) =>
+  isPublicKey(left) &&
+  isPublicKey(right) &&
+  left.kty === right.kty &&
+  left.crv === right.crv &&
+  left.x === right.x &&
+  left.y === right.y;
+
+async function refreshConnectionRegistry() {
+  if (!supabase || !activeRoomCode) return false;
+  const registry = await roomConnectionRegistry(supabase, activeRoomCode);
+  if (!registry) return false;
+  connectionRegistry = registry;
+  return true;
+}
+
+function boundConnection(playerId, targetConnectionId, publicKey) {
+  const registered = connectionRegistry.get(targetConnectionId);
+  return Boolean(
+    registered &&
+    registered.room_code === activeRoomCode &&
+    registered.user_id === playerId &&
+    (!publicKey || samePublicKey(registered.encryption_public_key, publicKey)),
+  );
+}
+
+async function hasBoundSender(payload) {
+  if (boundConnection(payload?.senderId, payload?.senderConnectionId)) return true;
+  return (await refreshConnectionRegistry()) && boundConnection(payload?.senderId, payload?.senderConnectionId);
+}
+
+function validatedPresenceState() {
+  const presence = roomChannel?.presenceState();
+  if (!isPresenceState(presence)) return null;
+  const bound = Object.entries(presence).every(([playerId, entries]) =>
+    entries.every((entry) => boundConnection(playerId, entry.connectionId, entry.publicKey)),
+  );
+  return bound ? presence : null;
+}
+
+async function handlePresenceSync() {
   if (!roomChannel || !state.room || !state.online) return;
-  const connectedIds = Object.keys(roomChannel.presenceState());
+  if (!(await refreshConnectionRegistry())) return;
+  const presence = validatedPresenceState();
+  if (!presence) return;
+  const connectedIds = Object.keys(presence);
   // O snapshot inicial pode chegar antes do nosso próprio track. Não tratamos
   // esse instante como uma queda coletiva.
   if (!connectedIds.includes(state.myId)) return;
@@ -729,9 +814,10 @@ function beginHostPromotion() {
   render();
 }
 
-function finishHostPromotion() {
+async function finishHostPromotion() {
   clearTimeout(handoverTimer);
   handoverTimer = null;
+  const previousHostId = handover?.previousHostId ?? state.room?.hostId;
   if (handover && state.game) {
     try {
       state.game = reconstructGame(
@@ -757,7 +843,15 @@ function finishHostPromotion() {
     state.screen = 'game';
     resetClock();
   }
-  sendRoom('host_changed', { room: publicRoom() });
+  if ((await sendRoom('host_changed', { room: publicRoom() })) !== 'ok') {
+    state.room = { ...state.room, hostId: previousHostId };
+    state.isHost = false;
+    state.hostIssue = { status: 'failed', candidateName: state.name };
+    state.error = 'O Supabase não confirmou a troca de anfitrião.';
+    render();
+    return;
+  }
+  authorizedHostId = state.myId;
   broadcastRoom();
   render();
   syncViews();
@@ -766,8 +860,7 @@ function finishHostPromotion() {
 
 async function replyToHandover(payload) {
   if (
-    !payload?.requestId ||
-    !payload.successorId ||
+    !isHandoverRequest(payload) ||
     payload.successorId === state.myId ||
     !state.game ||
     !encryptionIdentity ||
@@ -778,21 +871,26 @@ async function replyToHandover(payload) {
   if (election.candidateId !== payload.successorId || election.status === 'stable') return;
   const successor = presenceEntry(payload.successorId, payload.successorConnectionId);
   if (!successor?.publicKey) return;
-  const encrypted = await encryptFor(encryptionIdentity, successor.publicKey, state.game);
-  sendRoom('handover_response', {
-    requestId: payload.requestId,
-    successorId: payload.successorId,
-    successorConnectionId: payload.successorConnectionId,
-    playerId: state.myId,
-    senderConnectionId: connectionId,
-    encrypted,
-  });
+  try {
+    const encrypted = await encryptFor(encryptionIdentity, successor.publicKey, state.game);
+    sendRoom('handover_response', {
+      requestId: payload.requestId,
+      successorId: payload.successorId,
+      successorConnectionId: payload.successorConnectionId,
+      playerId: state.myId,
+      senderConnectionId: connectionId,
+      encrypted,
+    });
+  } catch {
+    // A chave passou pelo schema, mas ainda pode não representar um ponto EC válido.
+  }
 }
 
 async function collectHandover(payload) {
   if (
     !handover ||
-    payload?.requestId !== handover.id ||
+    !isHandoverResponse(payload) ||
+    payload.requestId !== handover.id ||
     payload.successorId !== state.myId ||
     payload.successorConnectionId !== connectionId ||
     !encryptionIdentity
@@ -803,6 +901,14 @@ async function collectHandover(payload) {
   if (!sender?.publicKey) return;
   try {
     const view = await decryptFrom(encryptionIdentity, sender.publicKey, payload.encrypted);
+    if (
+      !isGameView(view, {
+        viewerId: payload.playerId,
+        expectedGameId: state.room.activeGameId,
+        expectedPlayerIds: state.room.activePlayerIds,
+      })
+    )
+      return;
     handover?.responses.set(payload.playerId, view);
   } catch {
     // Resposta corrompida ou destinada a outra eleição: é ignorada.
@@ -813,7 +919,7 @@ async function connectRoom(kind) {
   if (!isSupabaseConfigured) {
     state.error =
       supabaseConfigError ||
-      'Multiplayer online ainda não foi configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.';
+      'Multiplayer online ainda não foi configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.';
     render();
     return;
   }
@@ -823,6 +929,10 @@ async function connectRoom(kind) {
   reconnectingSince = 0;
   state.presenceReady = false;
   roomChannel?.unsubscribe();
+  roomChannel = null;
+  activeRoomCode = null;
+  authorizedHostId = null;
+  connectionRegistry = new Map();
   const nextConnectionId = crypto.randomUUID();
   connectionId = nextConnectionId;
   render();
@@ -837,21 +947,62 @@ async function connectRoom(kind) {
     render();
     return;
   }
+
+  let access;
+  try {
+    access = await authorizeRoomSeat(supabase, {
+      kind,
+      code: state.room?.code || state.joinCode,
+      name: state.name,
+      generateCode: generateRoomCode,
+    });
+    if (connectionId !== nextConnectionId) return;
+    if (resume && resumeSnapshot?.myId !== access.userId) {
+      throw new Error('A sessão autenticada mudou. Entre novamente pelo convite da sala.');
+    }
+    state.myId = access.userId;
+    state.name = access.name;
+    state.isHost = access.isHost;
+    activeRoomCode = access.code;
+    authorizedHostId = access.hostId;
+    await registerRoomConnection(supabase, {
+      code: access.code,
+      connectionId,
+      publicKey: encryptionIdentity.publicKey,
+    });
+    if (!(await refreshConnectionRegistry())) throw new Error('Não foi possível confirmar a conexão autenticada.');
+  } catch (error) {
+    if (connectionId !== nextConnectionId) return;
+    state.error = error.message;
+    state.connection = 'idle';
+    state.screen = 'lobby';
+    state.online = false;
+    connectionId = null;
+    encryptionIdentity = null;
+    activeRoomCode = null;
+    authorizedHostId = null;
+    clearOnlineSession(sessionStorage);
+    render();
+    return;
+  }
+
   if (!resume) {
-    state.myId = crypto.randomUUID();
-    state.isHost = kind === 'create';
     state.chatMessages = [];
     state.chatDraft = '';
     state.chatUnread = 0;
     state.chatError = null;
   }
-  const code = kind === 'create' ? generateRoomCode() : state.room?.code || state.joinCode;
+  const code = access.code;
   const channel = supabase.channel(`la-corte:${code}`, {
-    config: { broadcast: { self: false }, presence: { key: state.myId, enabled: true } },
+    config: { private: true, broadcast: { self: false }, presence: { key: state.myId, enabled: true } },
   });
   roomChannel = channel
-    .on('broadcast', { event: 'join_request' }, ({ payload }) => {
+    .on('broadcast', { event: 'join_request' }, async ({ payload }) => {
       if (!state.isHost || !state.room) return;
+      if (!isJoinRequest(payload) || !(await hasBoundSender(payload))) return;
+      await refreshConnectionRegistry();
+      const presence = isJoinRequest(payload) ? presenceEntry(payload.id) : null;
+      if (!presence || presence.connectionId !== payload.senderConnectionId || presence.name !== payload.name) return;
       try {
         const room =
           state.room.status === 'playing' && !state.room.activePlayerIds?.length && state.game
@@ -870,33 +1021,46 @@ async function connectRoom(kind) {
       sendChatHistory(payload.id);
       render();
     })
-    .on('broadcast', { event: 'room' }, ({ payload }) => {
+    .on('broadcast', { event: 'room' }, async ({ payload }) => {
+      const expectedHostId = state.room?.hostId ?? authorizedHostId;
+      if (
+        !isRoomEnvelope(payload) ||
+        !(await hasBoundSender(payload)) ||
+        payload.senderId !== expectedHostId ||
+        payload.room.hostId !== payload.senderId
+      )
+        return;
       if (acceptRoom(payload.room)) render();
     })
-    .on('broadcast', { event: 'host_changed' }, ({ payload }) => {
+    .on('broadcast', { event: 'host_changed' }, async ({ payload }) => {
+      if (!state.room || !isRoomEnvelope(payload) || !(await hasBoundSender(payload))) return;
+      const election = hostElection(state.room);
+      if (payload.room.hostId !== payload.senderId || election.candidateId !== payload.senderId) return;
       if (!acceptRoom(payload.room)) return;
+      authorizedHostId = payload.senderId;
       handover = null;
       clearTimeout(handoverTimer);
       state.hostIssue = null;
       state.connection = 'connected';
       render();
     })
-    .on('broadcast', { event: 'game_started' }, ({ payload }) => {
-      if (state.isHost) return;
+    .on('broadcast', { event: 'game_started' }, async ({ payload }) => {
+      if (
+        state.isHost ||
+        !isRoomEnvelope(payload) ||
+        !(await hasBoundSender(payload)) ||
+        payload.senderId !== state.room?.hostId ||
+        payload.room.hostId !== payload.senderId
+      )
+        return;
       warnedClockKey = '';
-      if (payload?.gameId) state.room = { ...state.room, status: 'playing', activeGameId: payload.gameId };
-      if (shouldResetGame(state.game, payload?.gameId)) state.game = null;
-      state.targetAction = null;
-      state.exchangePicks = [];
-      clock = { key: '', deadline: 0, total: 0 };
-      state.screen = 'waiting_game';
-      persistSession();
-      render();
+      if (acceptRoom(payload.room)) render();
     })
     .on('broadcast', { event: 'game_state' }, async ({ payload }) => {
       if (state.isHost) return;
       if (
-        payload?.recipientId !== state.myId ||
+        !isPrivateEnvelope(payload) ||
+        payload.recipientId !== state.myId ||
         payload.recipientConnectionId !== connectionId ||
         payload.senderId !== state.room?.hostId ||
         !encryptionIdentity
@@ -910,6 +1074,14 @@ async function connectRoom(kind) {
       } catch {
         return;
       }
+      if (
+        !isGameView(view, {
+          viewerId: state.myId,
+          expectedGameId: state.room?.activeGameId,
+          expectedPlayerIds: state.room?.activePlayerIds,
+        })
+      )
+        return;
       if (!shouldAcceptGameView(state.game, view, state.room?.activeGameId)) return;
       const previous = state.game;
       state.game = view;
@@ -926,27 +1098,27 @@ async function connectRoom(kind) {
     })
     .on('broadcast', { event: 'command' }, ({ payload }) => {
       if (!state.isHost || !state.game) return;
-      if (!payload?.command || payload.command.actorId !== payload.playerId) return;
+      const playerIds = state.game.players.map((player) => player.id);
+      if (!isCommandEnvelope(payload, { playerIds }) || !presenceEntry(payload.playerId, payload.senderConnectionId))
+        return;
       applyCommand(payload.command);
     })
     .on('broadcast', { event: 'chat_request' }, async ({ payload }) => {
       if (!state.isHost) return;
       const request = await readPrivateChat(payload);
-      if (!request || request.playerId !== payload.senderId) return;
+      if (!isChatRequest(request) || request.playerId !== payload.senderId) return;
       acceptChatRequest(request);
     })
     .on('broadcast', { event: 'chat_message' }, async ({ payload }) => {
       if (payload?.senderId !== state.room?.hostId) return;
       const accepted = await readPrivateChat(payload);
-      if (accepted?.message && addChatMessage(accepted.message)) render();
+      if (isChatMessageEnvelope(accepted) && addChatMessage(accepted.message)) render();
     })
     .on('broadcast', { event: 'chat_history' }, async ({ payload }) => {
       if (state.isHost || payload?.senderId !== state.room?.hostId) return;
       const history = await readPrivateChat(payload);
-      if (!history) return;
-      const merged = [...(history.messages ?? []), ...state.chatMessages].sort(
-        (left, right) => left.sentAt - right.sentAt,
-      );
+      if (!isChatHistory(history)) return;
+      const merged = [...history.messages, ...state.chatMessages].sort((left, right) => left.sentAt - right.sentAt);
       state.chatMessages = merged.reduce(
         (messages, message) => appendChatMessage(messages, normalizeIncomingChat(message)),
         [],
@@ -957,13 +1129,19 @@ async function connectRoom(kind) {
     .on('broadcast', { event: 'chat_rejected' }, async ({ payload }) => {
       if (payload?.senderId !== state.room?.hostId) return;
       const rejection = await readPrivateChat(payload);
-      if (!rejection) return;
-      const retryAfter = Math.max(1_000, Number(rejection.retryAfter) || 1_000);
+      if (!isChatRejection(rejection)) return;
+      const retryAfter = rejection.retryAfter;
       setChatError(`Muitas mensagens. Aguarde ${Math.ceil(retryAfter / 1000)}s para continuar.`, retryAfter);
       render();
     })
     .on('broadcast', { event: 'tabletop_reaction' }, ({ payload }) => {
-      if (payload?.senderId !== payload?.playerId || !hasRoomSeat(state.room, payload.playerId)) return;
+      if (!state.game) return;
+      const playerIds = state.game.players.map((player) => player.id);
+      if (
+        !isTabletopReactionEnvelope(payload, { playerIds }) ||
+        !presenceEntry(payload.playerId, payload.senderConnectionId)
+      )
+        return;
       if (addTabletopReaction(payload)) render();
     })
     .on('broadcast', { event: 'handover_request' }, ({ payload }) => replyToHandover(payload))
@@ -1039,18 +1217,14 @@ async function connectRoom(kind) {
             startJoinAttempt({
               isActive: () => roomChannel === channel,
               hasSeat: () => hasRoomSeat(state.room, state.myId),
-              send: () =>
-                channel
-                  .send({
-                    type: 'broadcast',
-                    event: 'join_request',
-                    payload: { id: state.myId, name: state.name },
-                  })
-                  .catch(() => {}),
+              send: () => sendRoom('join_request', { id: state.myId, name: state.name }).catch(() => {}),
               onTimeout: () => {
                 roomChannel = null;
                 connectionId = null;
                 encryptionIdentity = null;
+                activeRoomCode = null;
+                authorizedHostId = null;
+                connectionRegistry = new Map();
                 state.online = false;
                 state.room = null;
                 state.error = 'Sala não encontrada ou anfitrião offline.';
@@ -1101,6 +1275,9 @@ function leaveTable() {
   roomChannel = null;
   connectionId = null;
   encryptionIdentity = null;
+  activeRoomCode = null;
+  authorizedHostId = null;
+  connectionRegistry = new Map();
   channel?.untrack();
   channel?.unsubscribe();
   history.replaceState(null, '', '/');

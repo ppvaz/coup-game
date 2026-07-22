@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   TABLETOP_THROWABLES,
   appendTabletopReaction,
+  isTabletopReactionEnvelope,
   normalizeTabletopReaction,
 } from '../src/lib/tabletop/reactions.js';
 
@@ -76,4 +77,24 @@ test('a ampulheta é arremessável como os demais adereços da corte', () => {
     TABLETOP_THROWABLES.some((item) => item.id === 'hourglass'),
     'o painel de reações oferece a ampulheta',
   );
+});
+
+test('envelope de rede exige UUIDs, remetente vinculado e somente campos conhecidos', () => {
+  const ana = '11111111-1111-4111-8111-111111111111';
+  const bia = '22222222-2222-4222-8222-222222222222';
+  const reaction = {
+    id: '33333333-3333-4333-8333-333333333333',
+    kind: 'throw',
+    playerId: ana,
+    targetId: bia,
+    throwable: 'tomato',
+    sentAt: 10,
+    senderId: ana,
+    senderConnectionId: '44444444-4444-4444-8444-444444444444',
+  };
+  const onlinePlayers = { playerIds: [ana, bia] };
+  assert.equal(isTabletopReactionEnvelope(reaction, onlinePlayers), true);
+  assert.equal(isTabletopReactionEnvelope({ ...reaction, senderId: bia }, onlinePlayers), false);
+  assert.equal(isTabletopReactionEnvelope({ ...reaction, id: 'curto' }, onlinePlayers), false);
+  assert.equal(isTabletopReactionEnvelope({ ...reaction, html: '<script>' }, onlinePlayers), false);
 });

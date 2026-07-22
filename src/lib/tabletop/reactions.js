@@ -12,6 +12,7 @@ export const TABLETOP_THROWABLES = Object.freeze([
 
 const THROWABLE_IDS = new Set(TABLETOP_THROWABLES.map((item) => item.id));
 const EMOJI_IDS = new Set(TABLETOP_EMOJIS);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const shortId = (value) => {
   const normalized = String(value ?? '').slice(0, 80);
@@ -50,4 +51,18 @@ export function appendTabletopReaction(reactions, value, options) {
   const normalized = normalizeTabletopReaction(value, options);
   if (!normalized || reactions.some((reaction) => reaction.id === normalized.id)) return reactions;
   return [...reactions.slice(-23), normalized];
+}
+
+export function isTabletopReactionEnvelope(value, options) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const allowed =
+    value.kind === 'emoji'
+      ? ['id', 'kind', 'playerId', 'emoji', 'sentAt', 'senderId', 'senderConnectionId']
+      : ['id', 'kind', 'playerId', 'targetId', 'throwable', 'sentAt', 'senderId', 'senderConnectionId'];
+  if (!Object.keys(value).every((key) => allowed.includes(key))) return false;
+  if (!UUID_PATTERN.test(value.id) || !UUID_PATTERN.test(value.senderId) || value.senderId !== value.playerId)
+    return false;
+  if (!UUID_PATTERN.test(value.senderConnectionId)) return false;
+  const normalized = normalizeTabletopReaction(value, options);
+  return Boolean(normalized && normalized.id === value.id && normalized.playerId === value.playerId);
 }

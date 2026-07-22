@@ -8,7 +8,7 @@ La Corte é uma experiência premium de blefe e influência inspirada nas mecân
 
 - Partidas de 2 a 6 jogadores, com três bots na partida solo.
 - Salas multiplayer por código curto e links no formato `/sala/SW8X4`.
-- Salas sincronizadas por Supabase Realtime, prontas para domínio público.
+- Salas privadas sincronizadas por Supabase Realtime, com cadeiras vinculadas ao Supabase Auth.
 - Renda, Ajuda Externa, Imposto, Roubo, Troca, Assassinato e Golpe.
 - Influências, moedas, eliminação, turnos e vitória.
 - Contestações de alegações contra bots; bots também podem contestar alegações do jogador.
@@ -98,12 +98,16 @@ contendo apenas a própria mão. Duas consequências práticas:
 
 - O anfitrião tem acesso técnico a todas as mãos (DevTools ou armazenamento da
   sessão), como quem embaralha um baralho físico poderia espiar as cartas.
-- Quem conhece o código da sala consegue entrar; ainda não há autenticação de
-  identidade entre os participantes.
+- A entrada continua sem cadastro visível, mas cada cadeira é um usuário anônimo
+  do Supabase Auth. O banco vincula cadeira, conexão e chave de cifra a
+  `auth.uid()`; o remetente dos Broadcasts é injetado por uma RPC, não aceito do
+  payload do navegador.
 
-O formato atende partidas casuais entre pessoas que confiam umas nas outras.
-Jogo competitivo com desconhecidos exigiria autenticação das cadeiras e estado
-autoritativo fora do cliente, evoluções previstas no roteiro do projeto.
+RLS restringe Broadcast e Presence aos membros do canal privado. Isso impede
+que alguém apenas imite o ID de outra cadeira, mas não transforma o host em um
+servidor confiável: o formato atende partidas casuais. Jogo competitivo com
+desconhecidos ainda exige tirar regras, sorteio e snapshots autoritativos do
+cliente, por exemplo para um servidor ou Edge Function.
 
 ## Regras implementadas
 
@@ -131,15 +135,15 @@ npm run check
 
 Os testes cobrem o motor genérico de Coup, códigos de sala, presença, retomada
 da cadeira, eleição e migração de host, reconstrução da partida, chat,
-criptografia das visões privadas, projeção segura da mesa 3D, acesso ao
-laboratório, benchmark e reações.
+validação dos envelopes de rede, criptografia das visões privadas, projeção
+segura da mesa 3D, acesso ao laboratório, benchmark e reações.
 
 ## Estrutura
 
 ```text
 app.js                         Orquestração da aplicação, partidas e transportes
 src/game/                      Regras, bots e reconstrução autoritativa
-src/rooms/                     Sala, presença, sessão, chat e continuidade
+src/rooms/                     Sala, Auth, presença, sessão, chat e continuidade
 src/lib/secure-channel.js      Criptografia das visões privadas no Broadcast
 src/lib/tabletop/              Projeção, compositor e ferramental específicos do 3D
 src/ui/                        Views HTML compartilhadas e interface da mesa 3D
@@ -157,10 +161,26 @@ O projeto usa Vite e pode ser publicado diretamente na Vercel. Adicione estas va
 
 ```text
 VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
-VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_sua-chave-publica
 ```
 
-Após salvar as variáveis, faça um novo deploy. A rota `/sala/*` já possui rewrite para a aplicação e as salas usam Supabase Realtime. Nunca configure uma chave `service_role` na Vercel ou no navegador.
+Projetos antigos que ainda usam `VITE_SUPABASE_ANON_KEY` continuam
+compatíveis, mas a chave publicável é a opção atual recomendada. Após salvar as
+variáveis, faça um novo deploy. A rota `/sala/*` já possui rewrite para a
+aplicação e as salas usam Supabase Realtime. Nunca configure uma chave secreta
+ou `service_role` na Vercel ou no navegador.
+
+Antes de usar o multiplayer no projeto Supabase:
+
+1. Em **Authentication > Providers**, habilite **Anonymous Sign-Ins**.
+2. Aplique [`supabase/migrations/202607220001_secure_multiplayer.sql`](supabase/migrations/202607220001_secure_multiplayer.sql), pelo SQL Editor ou com `supabase db push` em um projeto ligado à CLI.
+3. Em **Realtime Settings**, desabilite o acesso público a canais. A aplicação já assina `la-corte:*` com `private: true`, e a migration permite Broadcast/Presence somente aos membros autenticados.
+4. Faça o deploy e valide criar, entrar, reconectar e promover o anfitrião em duas sessões de navegador.
+
+Sem a migration e o login anônimo habilitado, salas online falham de forma
+fechada; partidas locais e contra bots continuam disponíveis. Usuários anônimos
+contam como usuários Auth e devem entrar na política de retenção/limpeza do
+projeto se a aplicação ganhar uso contínuo.
 
 ## Licença e créditos
 
