@@ -18,21 +18,24 @@ TabletopStage              ← câmera, loop, resize, WebGL, CRT e descarte
 
 ## O que é comum
 
-`packages/tabletop-stage/index.js` não conhece Coup nem Sem Perdão. Ele é um
-pacote local, consumido por `@la-corte/tabletop-stage`, e oferece:
+`packages/tabletop-stage/` não conhece Coup nem Sem Perdão. Ele é um pacote
+local, consumido por `@la-corte/tabletop-stage`. `TabletopStage` coordena os
+subsistemas sem concentrar suas implementações:
 
-- cena, câmera e raiz de apresentação;
-- atos de câmera com transição e controle por arrasto/roda;
-- loop de animação com callbacks registráveis;
-- render target de resolução controlada e pós-processo retrô;
-- resize, preferência de movimento reduzido e descarte de recursos;
-- utilitários para texturas de canvas e limpeza de objetos Three.js.
+- `camera-rig.js`: câmera, atos, transição e controle por arrasto/roda;
+- `render-pipeline.js`: renderer, render target e pós-processo retrô;
+- `inset-camera.js`: segunda câmera e composição PiP;
+- `scene-utils.js`: texturas de canvas e limpeza de objetos Three.js;
+- `index.js`: cena, loop, resize, instrumentação e ciclo de vida público.
 
-`src/lib/tabletop/coup-table.js` é deliberadamente específico: salão, mesa,
-conselheiros, moedas, influências e as batidas de alegação, bloqueio, perda e
-vitória. Outro jogo implementa outro compositor sobre o mesmo `TabletopStage`.
+`src/lib/tabletop/coup-table.js` é deliberadamente específico e coordena os
+apresentadores de La Corte em `src/lib/tabletop/coup-table/`: cartas, figuras,
+moedas, ampulheta, reações, câmeras de assento e catálogo visual. Outro jogo
+implementa outro compositor sobre o mesmo `TabletopStage`.
 
-`src/lib/tabletop/coup-environment.js` compõe o fundo nativo da partida: câmara
+`src/lib/tabletop/coup-environment.js` compõe o fundo nativo da partida; a
+geração procedural de superfícies vive em `coup-environment/textures.js`. A
+cena contém a câmara
 palaciana curva, piso de mármore, janelas, colunas, brasões dos cinco papéis,
 tapeçarias, esculturas, teto, lustre, velas e poeira em suspensão. As duas
 janelas amostram partes de um único panorama contínuo da cidade em cada tema,
