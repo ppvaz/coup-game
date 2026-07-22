@@ -15,3 +15,16 @@ test('join_coup_room qualifica colunas que também são nomes de saída', async 
     assert.doesNotMatch(source, /from public\.coup_room_members where room_code = p_code/);
   }
 });
+
+test('Broadcast direto segue negado e a RPC libera somente sua transação', async () => {
+  for (const source of await Promise.all([
+    migration('202607220001_secure_multiplayer.sql'),
+    migration('202607220003_allow_rpc_realtime_broadcast.sql'),
+  ])) {
+    assert.match(source, /set_config\('app\.coup_server_broadcast', caller_id::text, true\)/);
+    assert.match(source, /current_setting\('app\.coup_server_broadcast', true\) = \(select auth\.uid\(\)\)::text/);
+    assert.match(source, /realtime\.messages\.extension = 'presence'/);
+    assert.match(source, /realtime\.messages\.extension = 'broadcast'/);
+    assert.match(source, /realtime\.messages\.topic = 'la-corte:' \|\| membership\.room_code/);
+  }
+});

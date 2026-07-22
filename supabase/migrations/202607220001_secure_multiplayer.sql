@@ -248,6 +248,9 @@ begin
     end if;
   end if;
 
+  -- A política de INSERT libera Broadcast somente dentro desta transação.
+  -- set_config(..., true) é local e não concede permissão ao WebSocket do cliente.
+  perform set_config('app.coup_server_broadcast', caller_id::text, true);
   perform realtime.send(
     authenticated_payload,
     p_event,
@@ -297,9 +300,9 @@ using (
   )
 );
 
--- Broadcast de clientes é proibido: passa obrigatoriamente pela RPC acima,
--- que deriva senderId de auth.uid(). O cliente só escreve Presence direto.
-create policy "room members can publish private presence"
+-- Broadcast de clientes é proibido. A extensão broadcast só passa quando a
+-- RPC marca a própria transação; o cliente pode escrever Presence direto.
+create policy "room members can publish presence or rpc broadcast"
 on realtime.messages
 for insert
 to authenticated
@@ -307,7 +310,16 @@ with check (
   exists (
     select 1 from public.coup_room_members as membership
     where membership.user_id = (select auth.uid())
-      and ('la-corte:' || membership.room_code) = (select realtime.topic())
-      and realtime.messages.extension = 'presence'
+      and (
+        (
+          realtime.messages.extension = 'presence'
+          and ('la-corte:' || membership.room_code) = (select realtime.topic())
+        )
+        or (
+          realtime.messages.extension = 'broadcast'
+          and current_setting('app.coup_server_broadcast', true) = (select auth.uid())::text
+          and realtime.messages.topic = 'la-corte:' || membership.room_code
+        )
+      )
   )
 );
