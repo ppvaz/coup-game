@@ -22,6 +22,7 @@ const IDS = {
   guestConnection: '55555555-5555-4555-8555-555555555555',
   request: '66666666-6666-4666-8666-666666666666',
   message: '77777777-7777-4777-8777-777777777777',
+  transport: '88888888-8888-4888-8888-888888888888',
 };
 
 const publicKey = {
@@ -61,6 +62,10 @@ const privateEnvelope = {
 test('aceita snapshot público coerente e rejeita relações ou limites inválidos', () => {
   assert.equal(isRoomSnapshot(room), true);
   assert.equal(isRoomEnvelope({ room, senderId: IDS.host, senderConnectionId: IDS.hostConnection }), true);
+  assert.equal(
+    isRoomEnvelope({ id: IDS.transport, room, senderId: IDS.host, senderConnectionId: IDS.hostConnection }),
+    true,
+  );
 
   assert.equal(isRoomSnapshot({ ...room, version: '4' }), false);
   assert.equal(isRoomSnapshot({ ...room, hostId: IDS.request }), false);
@@ -110,6 +115,8 @@ test('valida metadados de presença, a chave pública e a relação chave-jogado
 
 test('rejeita envelopes cifrados truncados, extensos ou com IDs inválidos', () => {
   assert.equal(isPrivateEnvelope(privateEnvelope), true);
+  assert.equal(isPrivateEnvelope({ ...privateEnvelope, id: IDS.transport }), true);
+  assert.equal(isPrivateEnvelope({ ...privateEnvelope, id: 'transporte-inválido' }), false);
   assert.equal(isPrivateEnvelope({ ...privateEnvelope, senderId: 'host' }), false);
   assert.equal(isPrivateEnvelope({ ...privateEnvelope, encrypted: { ...encrypted, iv: 'curto' } }), false);
   assert.equal(
@@ -140,6 +147,7 @@ test('valida pedidos de cadeira e handover antes de acessar seus campos', () => 
     senderConnectionId: IDS.guestConnection,
   };
   assert.equal(isHandoverRequest(request), true);
+  assert.equal(isHandoverRequest({ ...request, id: IDS.transport }), true);
   assert.equal(isHandoverRequest({ ...request, successorId: IDS.host }), false);
 
   const response = {
@@ -152,6 +160,7 @@ test('valida pedidos de cadeira e handover antes de acessar seus campos', () => 
     encrypted,
   };
   assert.equal(isHandoverResponse(response), true);
+  assert.equal(isHandoverResponse({ ...response, id: IDS.transport }), true);
   assert.equal(isHandoverResponse({ ...response, playerId: IDS.guest }), false);
 });
 

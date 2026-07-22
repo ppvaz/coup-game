@@ -155,7 +155,8 @@ export function isEncryptedValue(value) {
 export function isPrivateEnvelope(value) {
   return (
     isRecord(value) &&
-    hasOnlyKeys(value, ['recipientId', 'recipientConnectionId', 'senderId', 'senderConnectionId', 'encrypted']) &&
+    hasOnlyKeys(value, ['id', 'recipientId', 'recipientConnectionId', 'senderId', 'senderConnectionId', 'encrypted']) &&
+    (value.id === undefined || isUuid(value.id)) &&
     isUuid(value.recipientId) &&
     isUuid(value.recipientConnectionId) &&
     isUuid(value.senderId) &&
@@ -178,7 +179,8 @@ export function isJoinRequest(value) {
 
 export const isRoomEnvelope = (value) =>
   isRecord(value) &&
-  hasOnlyKeys(value, ['room', 'senderId', 'senderConnectionId']) &&
+  hasOnlyKeys(value, ['id', 'room', 'senderId', 'senderConnectionId']) &&
+  (value.id === undefined || isUuid(value.id)) &&
   isUuid(value.senderId) &&
   isUuid(value.senderConnectionId) &&
   isRoomSnapshot(value.room);
@@ -187,6 +189,7 @@ export function isHandoverRequest(value) {
   return (
     isRecord(value) &&
     hasOnlyKeys(value, [
+      'id',
       'requestId',
       'successorId',
       'successorConnectionId',
@@ -194,6 +197,7 @@ export function isHandoverRequest(value) {
       'senderId',
       'senderConnectionId',
     ]) &&
+    (value.id === undefined || isUuid(value.id)) &&
     isUuid(value.requestId) &&
     isUuid(value.successorId) &&
     isUuid(value.successorConnectionId) &&
@@ -208,6 +212,7 @@ export function isHandoverResponse(value) {
   return (
     isRecord(value) &&
     hasOnlyKeys(value, [
+      'id',
       'requestId',
       'successorId',
       'successorConnectionId',
@@ -216,6 +221,7 @@ export function isHandoverResponse(value) {
       'senderConnectionId',
       'encrypted',
     ]) &&
+    (value.id === undefined || isUuid(value.id)) &&
     isUuid(value.requestId) &&
     isUuid(value.successorId) &&
     isUuid(value.successorConnectionId) &&
