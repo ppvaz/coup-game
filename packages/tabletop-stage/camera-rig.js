@@ -11,6 +11,13 @@ export class CameraRig {
     this.viewportMode = null;
     this.tween = null;
     this.drag = null;
+    this.navigationMode = 'orbit';
+    this.firstPerson = {
+      centerYaw: 0,
+      maxYaw: Math.PI * 0.42,
+      minPolar: 0.55,
+      maxPolar: 2.2,
+    };
 
     this.onPointerDown = (event) => {
       this.drag = { x: event.clientX, y: event.clientY };
@@ -21,6 +28,28 @@ export class CameraRig {
       const dx = event.clientX - this.drag.x;
       const dy = event.clientY - this.drag.y;
       this.drag = { x: event.clientX, y: event.clientY };
+      if (this.navigationMode === 'first-person') {
+        const direction = this.target.clone().sub(this.camera.position);
+        const distance = Math.max(1, direction.length());
+        const spherical = new THREE.Spherical().setFromVector3(direction);
+        spherical.theta -= dx * 0.004;
+        const yawDelta = Math.atan2(
+          Math.sin(spherical.theta - this.firstPerson.centerYaw),
+          Math.cos(spherical.theta - this.firstPerson.centerYaw),
+        );
+        spherical.theta =
+          this.firstPerson.centerYaw +
+          THREE.MathUtils.clamp(yawDelta, -this.firstPerson.maxYaw, this.firstPerson.maxYaw);
+        spherical.phi = THREE.MathUtils.clamp(
+          spherical.phi + dy * 0.003,
+          this.firstPerson.minPolar,
+          this.firstPerson.maxPolar,
+        );
+        direction.setFromSpherical(spherical).setLength(distance);
+        this.target.copy(this.camera.position).add(direction);
+        this.camera.lookAt(this.target);
+        return;
+      }
       const offset = this.camera.position.clone().sub(this.target);
       const spherical = new THREE.Spherical().setFromVector3(offset);
       spherical.theta -= dx * 0.004;
@@ -34,7 +63,7 @@ export class CameraRig {
     };
     this.onWheel = (event) => {
       event.preventDefault();
-      if (this.tween) return;
+      if (this.tween || this.navigationMode === 'first-person') return;
       const offset = this.camera.position.clone().sub(this.target);
       const maximumDistance = this.viewportMode === 'portrait' ? 22 : 16;
       offset.setLength(THREE.MathUtils.clamp(offset.length() + event.deltaY * 0.008, 4.2, maximumDistance));
@@ -47,22 +76,37 @@ export class CameraRig {
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
-  defineAct(name, { position, target, fov = 48, portrait = null }) {
+  defineAct(name, { position, target, fov = 48, portrait = null, transitionMs = 720, navigation = null }) {
     const makeAct = (definition) => ({
       position: new THREE.Vector3(...definition.position),
       target: new THREE.Vector3(...definition.target),
       fov: definition.fov,
+      transitionMs: definition.transitionMs,
+      navigation: definition.navigation,
     });
     this.acts.set(name, {
-      landscape: makeAct({ position, target, fov }),
+      landscape: makeAct({ position, target, fov, transitionMs, navigation }),
       portrait: portrait
         ? makeAct({
             position: portrait.position ?? position,
             target: portrait.target ?? target,
             fov: portrait.fov ?? fov,
+            transitionMs: portrait.transitionMs ?? transitionMs,
+            navigation: portrait.navigation ?? navigation,
           })
         : null,
     });
+  }
+
+  setNavigationMode(mode, options = {}) {
+    this.navigationMode = mode === 'first-person' ? 'first-person' : 'orbit';
+    if (this.navigationMode !== 'first-person') return;
+    const direction = this.target.clone().sub(this.camera.position);
+    const spherical = new THREE.Spherical().setFromVector3(direction);
+    this.firstPerson.centerYaw = spherical.theta;
+    this.firstPerson.maxYaw = Math.max(0, options.maxYaw ?? Math.PI * 0.42);
+    this.firstPerson.minPolar = options.minPolar ?? 0.55;
+    this.firstPerson.maxPolar = options.maxPolar ?? 2.2;
   }
 
   setAct(name, { immediate = false } = {}) {
@@ -77,17 +121,20 @@ export class CameraRig {
       this.camera.updateProjectionMatrix();
       this.camera.lookAt(this.target);
       this.tween = null;
+      this.setNavigationMode(act.navigation?.mode, act.navigation);
       return;
     }
+    this.setNavigationMode('orbit');
     this.tween = {
       startedAt: performance.now(),
-      duration: 720,
+      duration: act.transitionMs ?? 720,
       fromPosition: this.camera.position.clone(),
       toPosition: act.position.clone(),
       fromTarget: this.target.clone(),
       toTarget: act.target.clone(),
       fromFov: this.camera.fov,
       toFov: act.fov,
+      navigation: act.navigation,
     };
   }
 
@@ -103,6 +150,7 @@ export class CameraRig {
       this.tween.toPosition.copy(act.position);
       this.tween.toTarget.copy(act.target);
       this.tween.toFov = act.fov;
+      this.tween.navigation = act.navigation;
       return true;
     }
     this.camera.position.copy(act.position);
@@ -110,6 +158,7 @@ export class CameraRig {
     this.camera.fov = act.fov;
     this.camera.updateProjectionMatrix();
     this.camera.lookAt(this.target);
+    this.setNavigationMode(act.navigation?.mode, act.navigation);
     return true;
   }
 
@@ -130,7 +179,11 @@ export class CameraRig {
     this.camera.fov = THREE.MathUtils.lerp(this.tween.fromFov, this.tween.toFov, eased);
     this.camera.updateProjectionMatrix();
     this.camera.lookAt(this.target);
-    if (progress === 1) this.tween = null;
+    if (progress === 1) {
+      const navigation = this.tween.navigation;
+      this.tween = null;
+      this.setNavigationMode(navigation?.mode, navigation);
+    }
   }
 
   dispose() {

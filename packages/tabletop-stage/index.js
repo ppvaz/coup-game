@@ -177,6 +177,10 @@ export class TabletopStage {
     return this.cameraRig.retargetAct(name, definition);
   }
 
+  setCameraNavigation(mode, options = {}) {
+    this.cameraRig.setNavigationMode(mode, options);
+  }
+
   resize() {
     const width = Math.max(1, this.canvas.clientWidth || window.innerWidth);
     const height = Math.max(1, this.canvas.clientHeight || window.innerHeight);
