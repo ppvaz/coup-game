@@ -31,6 +31,7 @@ commit da mudança.
 | `packages/tabletop-stage/performance.js`    | Amostragem de quadros e resumo de FPS                                                            |
 | `packages/tabletop-stage/projectile-cam.js` | Parábola do voo, saída do quadro, pose da câmera de perseguição e ancoragem do PiP na borda      |
 | `packages/tabletop-stage/gesture-track.js`  | Duração, prioridade de atropelo e pose aditiva por encaixe nomeado                               |
+| `packages/tabletop-stage/model-registry.js` | Forma, validação e endereço de um catálogo de modelos                                            |
 | `src/lib/tabletop/quality-profiles.js`      | Perfis de qualidade 3D e persistência da escolha                                                 |
 | `src/lib/tabletop/benchmark-kit.js`         | Execução e histórico de benchmark pela URL                                                       |
 | `src/lib/realtime.js`                       | Tradução de status de canal Supabase em reação do app; presença com ACK                          |
@@ -49,22 +50,24 @@ commit da mudança.
 
 ### Motor com amarra — leva a máquina, deixa o catálogo
 
-| Módulo                                | Máquina (motor)                                                                                        | Amarra a Coup                                                              |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `src/lib/tabletop/camera-director.js` | Beat da partida → ato de câmera; chave de corte que evita recortes repetidos; geometria de duelo/trono | O vocabulário de beats (`claim`, `block-window`, `influence-loss`…)        |
-| `src/lib/tabletop/foley.js`           | Síntese no `AudioContext` da mesa, intervalo mínimo por evento                                         | Nomes dos eventos (alegação, bloqueio, desafio, derrota, vitória e props)  |
-| `src/lib/tabletop/reactions.js`       | Normalização, deduplicação e janela dos últimos N                                                      | Catálogo de arremessáveis (adaga da Assassina, moeda do Duque…)            |
-| `src/lib/tabletop/coin-layout.js`     | Distribuição determinística e limites de pilhas repetidas                                              | Hoje recebe a contagem do tesouro de Coup                                  |
-| `src/lib/tabletop/coin-transfer.js`   | Curva, cascata, duração e variante de movimento reduzido para transferências                           | Hoje anima ganhos, custos, roubos e reembolsos em moedas                   |
-| `src/lib/tabletop/hourglass-sand.js`  | Perfil e volume de areia dentro de um vidro de revolução                                               | Nasceu do relógio de decisão, mas serve a qualquer timer diegético         |
-| `src/lib/sounds.js`                   | Síntese de padrões curtos + mudo persistido                                                            | Chaves `la-corte-*` no `localStorage` e os nomes dos eventos               |
-| `src/lib/voice-announcer.js`          | Banco de falas por evento com sorteio sem repetição                                                    | O banco em si é 100% de Coup                                               |
-| `src/lib/decision-clock.js`           | Relógio de decisão derivado do estado, sem timer próprio                                               | Lê `turn`, `phase` e `log` no formato de Coup                              |
-| `src/rooms/session.js`                | Retomada de sessão com validade                                                                        | Migração de carta `Embaixador` → `Embaixadora`                             |
-| `src/rooms/auth.js`                   | Sessão anônima, autorização de cadeira, registro de conexão e transporte via RPC                       | Nomes das RPCs/tabelas `coup_*` e o tópico `la-corte:*`                    |
-| `src/game/handover.js`                | Sucessão do anfitrião a partir de visões redigidas                                                     | Reconstrói cartas e baralho de Coup                                        |
-| `src/ui/table-experiment.js`          | Casca do salão: topbar, roster, doca de reações, chat, preferências, PiP                               | Narrativa, ampulheta e controles de decisão                                |
-| `scripts/capture-shots.mjs`           | Arnês de captura headless: dev server, matriz planos × viewports × temas, PNGs de referência           | A rota de laboratório e o vocabulário de planos (`duel:0-3`, `evidence:1`) |
+| Módulo                                | Máquina (motor)                                                                                        | Amarra a Coup                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `src/lib/tabletop/camera-director.js` | Beat da partida → ato de câmera; chave de corte que evita recortes repetidos; geometria de duelo/trono | O vocabulário de beats (`claim`, `block-window`, `influence-loss`…)         |
+| `src/lib/tabletop/foley.js`           | Síntese no `AudioContext` da mesa, intervalo mínimo por evento                                         | Nomes dos eventos (alegação, bloqueio, desafio, derrota, vitória e props)   |
+| `src/lib/tabletop/reactions.js`       | Normalização, deduplicação e janela dos últimos N                                                      | Catálogo de arremessáveis (adaga da Assassina, moeda do Duque…)             |
+| `src/lib/tabletop/coin-layout.js`     | Distribuição determinística e limites de pilhas repetidas                                              | Hoje recebe a contagem do tesouro de Coup                                   |
+| `src/lib/tabletop/coin-transfer.js`   | Curva, cascata, duração e variante de movimento reduzido para transferências                           | Hoje anima ganhos, custos, roubos e reembolsos em moedas                    |
+| `src/lib/tabletop/hourglass-sand.js`  | Perfil e volume de areia dentro de um vidro de revolução                                               | Nasceu do relógio de decisão, mas serve a qualquer timer diegético          |
+| `src/lib/tabletop/model-catalog.js`   | Nenhuma: a máquina toda é do registro no pacote                                                        | Só o acervo — cortesão, efígies, moeda, tesouro, carta, ampulheta, adereços |
+| `src/ui/model-gallery.js`             | Estúdio, enquadramento pela esfera que envolve a peça, endereço e tema                                 | Só o catálogo padrão do argumento `catalog`                                 |
+| `src/lib/sounds.js`                   | Síntese de padrões curtos + mudo persistido                                                            | Chaves `la-corte-*` no `localStorage` e os nomes dos eventos                |
+| `src/lib/voice-announcer.js`          | Banco de falas por evento com sorteio sem repetição                                                    | O banco em si é 100% de Coup                                                |
+| `src/lib/decision-clock.js`           | Relógio de decisão derivado do estado, sem timer próprio                                               | Lê `turn`, `phase` e `log` no formato de Coup                               |
+| `src/rooms/session.js`                | Retomada de sessão com validade                                                                        | Migração de carta `Embaixador` → `Embaixadora`                              |
+| `src/rooms/auth.js`                   | Sessão anônima, autorização de cadeira, registro de conexão e transporte via RPC                       | Nomes das RPCs/tabelas `coup_*` e o tópico `la-corte:*`                     |
+| `src/game/handover.js`                | Sucessão do anfitrião a partir de visões redigidas                                                     | Reconstrói cartas e baralho de Coup                                         |
+| `src/ui/table-experiment.js`          | Casca do salão: topbar, roster, doca de reações, chat, preferências, PiP                               | Narrativa, ampulheta e controles de decisão                                 |
+| `scripts/capture-shots.mjs`           | Arnês de captura headless: dev server, matriz planos × viewports × temas, PNGs de referência           | A rota de laboratório e o vocabulário de planos (`duel:0-3`, `evidence:1`)  |
 
 ### Coup nativo — fica
 
@@ -124,6 +127,7 @@ arranjo, é o produto; os jogos são a prova dele.
 | ------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Arremesso           | `throwReaction` (coup-table.js)                                           | `arremessarEntre` (retroMesa.ts)                     |
 | Gestos do boneco    | `gesture-track.js` + `COURT_GESTURES` (8 gestos)                          | `acao()`, `PRIORIDADE`, `DURACAO` (reus.ts, 8 ações) |
+| Vitrine de uma peça | `model-gallery.js` sobre `model-registry.js`                              | `vitrineReu.ts`                                      |
 | Barreira de dados   | `projectCoupTableView` (coup-view.js)                                     | `mesaView.ts`, também puro e testado no Node         |
 | Atos de câmera      | `defineCameraAct` / `setCameraAct`                                        | `Ato`, `CONFIG_ATO`, `setAto`                        |
 | Pós-processo        | Render target + quad CRT + `pixelScale`                                   | Render target + `blitScene` + `pixelSize`            |

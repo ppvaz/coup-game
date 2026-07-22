@@ -1,11 +1,6 @@
 import * as THREE from 'three';
 import { TabletopStage, disposeObject3D } from '@la-corte/tabletop-stage';
-import {
-  MODEL_CATALOG,
-  MODEL_CATEGORIES,
-  modelSearch,
-  modelSelectionFromSearch,
-} from '../lib/tabletop/model-catalog.js';
+import { COURT_MODELS } from '../lib/tabletop/model-catalog.js';
 import { escapeHTML } from './screens.js';
 
 // Direção e cor da luz são as mesmas nos dois modos — é o que faz o modelo
@@ -29,17 +24,19 @@ const THEMES = {
   },
 };
 
-export function modelGalleryHTML() {
-  const groups = MODEL_CATEGORIES.map((category) => {
-    const entries = MODEL_CATALOG.filter((model) => model.category === category.id);
-    if (!entries.length) return '';
-    return `<section class="gallery-group"><h2>${escapeHTML(category.label)}</h2>${entries
-      .map(
-        (model) =>
-          `<button type="button" class="gallery-entry" data-model="${escapeHTML(model.id)}">${escapeHTML(model.label)}</button>`,
-      )
-      .join('')}</section>`;
-  }).join('');
+export function modelGalleryHTML({ catalog = COURT_MODELS } = {}) {
+  const groups = catalog.categories
+    .map((category) => {
+      const entries = catalog.models.filter((model) => model.category === category.id);
+      if (!entries.length) return '';
+      return `<section class="gallery-group"><h2>${escapeHTML(category.label)}</h2>${entries
+        .map(
+          (model) =>
+            `<button type="button" class="gallery-entry" data-model="${escapeHTML(model.id)}">${escapeHTML(model.label)}</button>`,
+        )
+        .join('')}</section>`;
+    })
+    .join('');
 
   return `<main class="model-gallery" data-theme-scope="gallery">
     <canvas id="gallery-canvas" aria-label="Vitrine de modelos 3D"></canvas>
@@ -167,7 +164,12 @@ export function frameForBounds(box, { fov = FOV, margin = 1.42 } = {}) {
   };
 }
 
-export async function mountModelGallery({ canvas, search = location.search, theme: initialTheme = 'dark' } = {}) {
+export async function mountModelGallery({
+  canvas,
+  search = location.search,
+  theme: initialTheme = 'dark',
+  catalog = COURT_MODELS,
+} = {}) {
   const requestedTheme = new URLSearchParams(search).get('theme');
   const root = document.querySelector('.model-gallery');
   const loading = document.querySelector('#gallery-loading');
@@ -175,7 +177,7 @@ export async function mountModelGallery({ canvas, search = location.search, them
   // que aqui viraria um segundo controle para a mesma preferência.
   document.body.classList.add('is-tabletop-lab');
   let theme = ['light', 'dark'].includes(requestedTheme) ? requestedTheme : initialTheme === 'light' ? 'light' : 'dark';
-  let { model, options } = modelSelectionFromSearch(search);
+  let { model, options } = catalog.fromSearch(search);
 
   const stage = new TabletopStage(canvas, { clearColor: THEMES[theme].clearColor });
   let studio = createStudio(stage, theme);
@@ -194,7 +196,7 @@ export async function mountModelGallery({ canvas, search = location.search, them
 
   // O endereço é a forma de uma captura automática pedir exatamente esta peça:
   // modelo, parâmetros e tema precisam sobreviver a cada troca.
-  const addressFor = () => `${modelSearch(model, options)}&theme=${theme}`;
+  const addressFor = () => `${catalog.toSearch(model, options)}&theme=${theme}`;
 
   const paintRail = () => {
     for (const button of root.querySelectorAll('[data-model]')) {
@@ -277,9 +279,9 @@ export async function mountModelGallery({ canvas, search = location.search, them
 
   for (const button of root.querySelectorAll('[data-model]')) {
     button.addEventListener('click', () => {
-      const next = MODEL_CATALOG.find((candidate) => candidate.id === button.dataset.model);
+      const next = catalog.models.find((candidate) => candidate.id === button.dataset.model);
       if (!next || next.id === model.id) return;
-      ({ model, options } = modelSelectionFromSearch(`?modelo=${next.id}`));
+      ({ model, options } = catalog.fromSearch(`?modelo=${next.id}`));
       paintParams();
       void show();
     });

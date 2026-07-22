@@ -8,9 +8,10 @@
 // O estado da animação fica com a instância — nada de guardá-lo no catálogo,
 // que é compartilhado entre todas as construções.
 
+import { defineModelCatalog } from '@la-corte/tabletop-stage/model-registry';
 import { TABLETOP_THROWABLES } from './reactions.js';
 
-export const MODEL_CATEGORIES = Object.freeze([
+const MODEL_CATEGORIES = Object.freeze([
   Object.freeze({ id: 'figura', label: 'Figuras' }),
   Object.freeze({ id: 'objeto', label: 'Objetos' }),
 ]);
@@ -180,32 +181,9 @@ const MODELS = [
   },
 ];
 
-export const MODEL_CATALOG = Object.freeze(MODELS.map((model) => Object.freeze({ ...model })));
-
-export const findModel = (id) => MODEL_CATALOG.find((model) => model.id === id) ?? MODEL_CATALOG[0];
-
-/** Valores padrão de um modelo: sempre a primeira opção de cada parâmetro. */
-export function defaultModelOptions(params) {
-  return Object.fromEntries(params.map((param) => [param.id, param.values[0].value]));
-}
-
 /**
- * Lê modelo e parâmetros da URL. Um valor fora do catálogo cai no padrão em vez
- * de derrubar a vitrine — é um endereço colado à mão ou uma captura antiga.
+ * O catálogo de La Corte. Toda a mecânica de busca, padrões e endereço vem do
+ * registro compartilhado — aqui fica só o acervo, que é a única parte que outro
+ * jogo não reaproveita.
  */
-export function modelSelectionFromSearch(search) {
-  const query = new URLSearchParams(search);
-  const model = findModel(query.get('modelo'));
-  const options = defaultModelOptions(model.params);
-  for (const param of model.params) {
-    const requested = query.get(param.id);
-    if (param.values.some((option) => option.value === requested)) options[param.id] = requested;
-  }
-  return { model, options };
-}
-
-export function modelSearch(model, options) {
-  const query = new URLSearchParams({ modelo: model.id });
-  for (const [id, value] of Object.entries(options)) query.set(id, value);
-  return query.toString();
-}
+export const COURT_MODELS = defineModelCatalog({ categories: MODEL_CATEGORIES, models: MODELS });

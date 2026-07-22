@@ -24,6 +24,7 @@ subsistemas sem concentrar suas implementações:
 
 - `camera-rig.js`: câmera, atos, transição e controle por arrasto/roda;
 - `gesture-track.js`: duração, atropelo e avaliação de gestos por quadro;
+- `model-registry.js`: forma, validação e endereço de um catálogo de modelos;
 - `render-pipeline.js`: renderer, render target e pós-processo retrô;
 - `inset-camera.js`: segunda câmera e composição PiP;
 - `scene-utils.js`: texturas de canvas e limpeza de objetos Three.js;
@@ -101,6 +102,15 @@ carrega a seleção inteira — `?modelo=influencia&papel=Duque&estado=propria&t
 reabre exatamente aquela carta, que é como uma captura automática a pede. O
 catálogo fica em `src/lib/tabletop/model-catalog.js` e só guarda metadado: a
 construção é `import()` tardio, porque metade das fábricas importa texturas.
+
+A vitrine não conhece La Corte. `defineModelCatalog({ categories, models })`
+devolve um registro com `find`, `defaults`, `fromSearch` e `toSearch`, e é ele
+que `mountModelGallery({ catalog })` recebe — o catálogo da corte é só o padrão
+do argumento. Outro jogo publica o seu com a mesma chamada e abre a mesma
+vitrine. A validação acontece na definição, não na renderização: categoria
+inexistente, id repetido, fábrica ausente ou parâmetro de opção única derrubam
+o catálogo no carregamento, onde um teste vê, em vez de virarem um botão morto
+na tela.
 
 `http://localhost:5173/lab` é o laboratório técnico. Ele mantém uma cena
 estática para testar ambiente e câmeras sem bots avançando a partida. Benchmark,
