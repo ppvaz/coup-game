@@ -100,6 +100,7 @@ if ('requestIdleCallback' in window) requestIdleCallback(warmIdleAssets, { timeo
 else setTimeout(warmIdleAssets, 1500);
 
 const NAMES = ['Lorenzo', 'Beatrice', 'Vittorio'];
+const DEFAULT_GAME_PRESENTATION = '3d';
 // Relógio por fase, em segundos: estourou, a autoridade joga o padrão conservador.
 const PHASE_SECONDS = {
   turn: 30,
@@ -132,7 +133,7 @@ const resumeSnapshot = isTabletopExperiment ? null : loadOnlineSession(sessionSt
 let state = {
   screen: 'lobby',
   // Apresentação da partida: o estado e as regras não mudam entre 2D e 3D.
-  presentation: isTabletopExperiment ? '3d' : '2d',
+  presentation: DEFAULT_GAME_PRESENTATION,
   mode: inviteCode.length === 5 ? 'join' : 'bots',
   joinCode: inviteCode,
   name: '',
@@ -1474,7 +1475,9 @@ async function connectRoom(kind) {
 }
 
 function leaveTable() {
-  state.presentation = '2d';
+  // Uma escolha explícita pelo 2D vale durante a mesa atual. Ao voltar ao
+  // salão, a próxima partida começa novamente na experiência padrão.
+  state.presentation = DEFAULT_GAME_PRESENTATION;
   clearTimeout(botTimer);
   clearHostElection();
   clearTimeout(handoverTimer);

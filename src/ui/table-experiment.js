@@ -112,7 +112,7 @@ export function tabletopRosterHTML(state, context) {
     })
     .join(
       '',
-    )}<small class="tabletop-roster-hint">CLIQUE EM UM NOME PARA FOCAR</small><section class="tabletop-roster-settings" aria-label="Preferências da experiência">${context.canSwitchTo2D ? '<button class="tabletop-2d" id="tabletop-2d" type="button" title="Voltar à mesa 2D" aria-label="Voltar à mesa 2D, mantendo a partida"><span>▦</span><small>Mesa 2D</small></button>' : ''}<button class="tabletop-theme" id="tabletop-theme" type="button" title="Alternar ambiente"><span>☀</span><small>Modo diurno</small></button>${audioTogglesHTML(context)}${context.labAccess ? '<a class="tabletop-lab-link" href="/3d/lab" aria-label="Abrir laboratório 3D" title="Abrir laboratório 3D"><span>◇</span><small>Abrir laboratório 3D</small></a>' : ''}</section></aside>`;
+    )}<small class="tabletop-roster-hint">CLIQUE EM UM NOME PARA FOCAR</small><section class="tabletop-roster-settings" aria-label="Preferências da experiência">${context.canSwitchTo2D ? '<button class="tabletop-2d" id="tabletop-2d" type="button" title="Usar a mesa 2D" aria-label="Alternar para a mesa 2D, mantendo a partida"><span>▦</span><small>Mesa 2D</small></button>' : ''}<button class="tabletop-theme" id="tabletop-theme" type="button" title="Alternar ambiente"><span>☀</span><small>Modo diurno</small></button>${audioTogglesHTML(context)}${context.labAccess ? '<a class="tabletop-lab-link" href="/3d/lab" aria-label="Abrir laboratório 3D" title="Abrir laboratório 3D"><span>◇</span><small>Abrir laboratório 3D</small></a>' : ''}</section></aside>`;
 }
 
 function tabletopBenchDecisionHTML(state, context, { fallbackOpen = false } = {}) {

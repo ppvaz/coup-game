@@ -66,6 +66,7 @@ test('o painel da Corte oferece a volta à mesa 2D quando permitido', () => {
   const game = createGame(seats, { random: () => 0.42 });
   const allowed = tabletopRosterHTML(stateFor(game), context);
   assert.match(allowed, /id="tabletop-2d"/);
+  assert.match(allowed, /aria-label="Alternar para a mesa 2D, mantendo a partida"/);
   const lab = tabletopRosterHTML(stateFor(game), { ...context, canSwitchTo2D: false });
   assert.doesNotMatch(lab, /id="tabletop-2d"/);
 });
