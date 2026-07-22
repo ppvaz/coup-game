@@ -371,14 +371,24 @@ A consequência para a fusão continua direta: Auth/RLS e validação estrutural
 posteriores. A migration atual também mantém a eleição do host validada pelos clientes; um motor
 competitivo ainda precisa de autoridade de servidor para regras, sorteio e snapshots.
 
+Em 22/07/2026, uma validação manual no deploy exercitou duas sessões na mesma sala: Chrome anônimo no
+desktop e Brave no Android. O Android host encerrou a partida, mas o convidado no desktop rejeitou a
+visão terminal e ficou preso com o relógio zerado. A validação estrita introduzida por `dd97859`
+expôs o relógio inválido do estado final; `bbb5518` e `240c445` corrigem e cobrem esse payload. Uma
+recuperação autenticada por `state_sync_request` foi adicionada localmente para reparar sala, host e
+visão privada após Broadcast perdido. Comandos agora usam ACK, retry e deduplicação por versão, sem
+polling na partida saudável; a coleta do handover também é repetida durante a promoção. O deploy e a
+revalidação desses caminhos continuam pendentes.
+
 A mesma auditoria já entregou, de graça, duas coisas que o plano precisava:
 
 - **A forma da extração.** As fronteiras sugeridas para desmontar `app.js` — `RoomTransport`,
   `OnlineSessionController`, `GameController`, `UIController` — são o desenho do runtime de sala com
   adaptador por stack. É mais concreto do que "núcleo puro + adaptador".
-- **O portão da fase 3.** Os testes que faltam (duas sessões no mesmo canal, reconexão e troca de
-  host ponta a ponta, payloads malformados, tentativa de impersonação, CI rodando tudo) são
-  precisamente a suíte que o motor precisa para merecer publicação. Nenhum deles é sobre Coup.
+- **O portão da fase 3.** O primeiro fluxo manual com duas sessões encontrou divergência terminal;
+  ainda faltam revalidar a correção, automatizar o cenário, cobrir reconexão e troca de host ponta a
+  ponta, payloads malformados, tentativa de impersonação e CI rodando tudo. Essa é precisamente a
+  suíte que o motor precisa para merecer publicação. Nenhum desses testes é sobre Coup.
 
 ## Manutenção
 

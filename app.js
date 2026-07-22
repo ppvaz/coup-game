@@ -26,9 +26,18 @@ import {
   syncRoomPresence,
 } from './src/rooms/room.js';
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
-import { gameViewWithClock, shouldAcceptGameView, shouldResetGame } from './src/rooms/game-sync.js';
+import {
+  BACKGROUND_STATE_SYNC_MS,
+  gameViewWithClock,
+  needsBackgroundStateSync,
+  needsGameViewSync,
+  shouldAcceptGameView,
+  shouldRequestStateSync,
+  shouldResetGame,
+} from './src/rooms/game-sync.js';
 import { canAcceptRoomSnapshot, hasRoomSeat, startJoinAttempt } from './src/rooms/join.js';
 import { createSubscriptionHandler } from './src/rooms/connection.js';
+import { pendingCommandAction, rememberCommandReceipt } from './src/rooms/reliable-command.js';
 import {
   authorizeRoomSeat,
   broadcastRoomEvent,
@@ -40,6 +49,7 @@ import {
   isChatMessageEnvelope,
   isChatRejection,
   isChatRequest,
+  isCommandAck,
   isHandoverRequest,
   isHandoverResponse,
   isJoinRequest,
@@ -47,6 +57,7 @@ import {
   isPrivateEnvelope,
   isPublicKey,
   isRoomEnvelope,
+  isStateSyncRequest,
 } from './src/rooms/network-schema.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import { mountTableExperiment, tableExperimentHTML } from './src/ui/table-experiment.js';
@@ -142,6 +153,7 @@ let state = {
   chatDraft: '',
   chatUnread: 0,
   chatError: null,
+  commandError: null,
   tabletopReactions: [],
 };
 if (resumeSnapshot) {
@@ -170,10 +182,15 @@ let botTimer = null;
 let clock = { key: '', deadline: 0, total: 0 };
 let hostElectionTimer = null;
 let handoverTimer = null;
+let handoverRetryTimer = null;
 let handover = null;
 let encryptionIdentity = null;
 let connectionId = null;
 let warnedClockKey = '';
+let lastStateSyncRequestAt = 0;
+const lastStateSyncResponseByConnection = new Map();
+let pendingCommand = null;
+const processedCommandReceipts = new Map();
 let chatErrorTimer = null;
 let reconnectingSince = 0;
 let lastTabletopReactionAt = 0;
@@ -438,7 +455,18 @@ function sendChatHistory(recipientId) {
 
 function dispatch(command) {
   if (state.online && !state.isHost) {
-    sendRoom('command', { playerId: state.myId, command });
+    if (pendingCommand || !state.game || state.connection !== 'connected' || state.hostIssue) return;
+    pendingCommand = {
+      requestId: crypto.randomUUID(),
+      hostId: state.room.hostId,
+      gameId: state.game.gameId,
+      baseVersion: state.game.version,
+      command,
+      createdAt: Date.now(),
+      lastSentAt: 0,
+    };
+    state.commandError = null;
+    deliverPendingCommand();
     state.targetAction = null;
     state.exchangePicks = [];
     render();
@@ -455,7 +483,7 @@ function applyCommand(command) {
     // Comandos locais são filtrados pela UI; aqui chegam sobretudo comandos
     // remotos inválidos/atrasados, que o host simplesmente ignora.
     console.error('Comando rejeitado:', error.message, command);
-    return;
+    return false;
   }
   announceGameState(previous, state.game);
   if (state.online && state.isHost && previous?.status !== 'finished' && state.game.status === 'finished') {
@@ -468,11 +496,73 @@ function applyCommand(command) {
   render();
   syncViews();
   scheduleBots();
+  return true;
 }
+
+async function deliverPendingCommand() {
+  const pending = pendingCommand;
+  if (!pending) return;
+  pending.lastSentAt = Date.now();
+  const result = await sendRoom('command', {
+    requestId: pending.requestId,
+    gameId: pending.gameId,
+    baseVersion: pending.baseVersion,
+    playerId: state.myId,
+    command: pending.command,
+  });
+  if (pendingCommand === pending && result !== 'ok') pending.lastSentAt = 0;
+}
+
+function clearPendingCommand(message = null) {
+  pendingCommand = null;
+  state.commandError = message;
+}
+
+function watchPendingCommand() {
+  if (!pendingCommand || !state.online) return;
+  const action = pendingCommandAction(pendingCommand, {
+    hostId: state.room?.hostId,
+    gameId: state.game?.gameId,
+    version: state.game?.version ?? 0,
+    connection: state.connection,
+  });
+  if (action === 'send') {
+    deliverPendingCommand();
+    return;
+  }
+  if (action === 'confirmed') {
+    clearPendingCommand();
+    return;
+  }
+  if (action === 'stale' || action === 'timeout') {
+    clearPendingCommand('Sua jogada não foi confirmada. A mesa foi sincronizada antes de permitir outra decisão.');
+    requestStateSync({ force: true, refreshGame: true });
+    render();
+  }
+}
+setInterval(watchPendingCommand, 250);
 
 function presenceEntry(playerId, targetConnectionId) {
   const entries = validatedPresenceState()?.[playerId] ?? [];
   return targetConnectionId ? entries.find((entry) => entry.connectionId === targetConnectionId) : entries.at(-1);
+}
+
+function projectedGameView(playerId) {
+  const view = gameViewWithClock(viewForPlayer(state.game, playerId), clock);
+  view.log = view.log.slice(-20);
+  return view;
+}
+
+async function sendGameView(playerId, recipient, view = projectedGameView(playerId)) {
+  if (!recipient?.publicKey || !recipient.connectionId) return 'error';
+  const encrypted = await encryptFor(encryptionIdentity, recipient.publicKey, view);
+  return sendRoom('game_state', {
+    recipientId: playerId,
+    recipientConnectionId: recipient.connectionId,
+    senderId: state.myId,
+    senderConnectionId: connectionId,
+    encrypted,
+  });
 }
 
 async function syncViews() {
@@ -481,25 +571,40 @@ async function syncViews() {
   if (!presence) return;
   const sends = [];
   for (const player of state.game.players.filter((candidate) => candidate.id !== state.myId)) {
+    const view = projectedGameView(player.id);
     for (const recipient of presence[player.id] ?? []) {
       if (!recipient.publicKey || !recipient.connectionId) continue;
-      const view = gameViewWithClock(viewForPlayer(state.game, player.id), clock);
-      view.log = view.log.slice(-20);
-      sends.push(
-        encryptFor(encryptionIdentity, recipient.publicKey, view).then((encrypted) =>
-          sendRoom('game_state', {
-            recipientId: player.id,
-            recipientConnectionId: recipient.connectionId,
-            senderId: state.myId,
-            senderConnectionId: connectionId,
-            encrypted,
-          }),
-        ),
-      );
+      sends.push(sendGameView(player.id, recipient, view));
     }
   }
   await Promise.allSettled(sends);
   persistSession();
+}
+
+async function requestStateSync({ force = false, retryMs, refreshGame = false } = {}) {
+  if (!state.online || state.isHost || !state.room || !connectionId) return;
+  const now = Date.now();
+  if (
+    !shouldRequestStateSync({
+      room: state.room,
+      game: state.game,
+      clock,
+      lastRequestAt: lastStateSyncRequestAt,
+      now,
+      force,
+      retryMs,
+    })
+  )
+    return;
+  lastStateSyncRequestAt = now;
+  const result = await sendRoom('state_sync_request', {
+    hostId: state.room.hostId,
+    roomVersion: state.room.version,
+    gameId: state.game?.gameId ?? null,
+    version: state.game?.version ?? 0,
+    refreshGame,
+  });
+  if (result !== 'ok') lastStateSyncRequestAt = 0;
 }
 
 function resetClock() {
@@ -529,7 +634,10 @@ function tickClock() {
     sounds.play('warning');
   }
   if (remaining > 0) return;
-  if (state.online && !state.isHost) return; // o host aplica pelo ausente
+  if (state.online && !state.isHost) {
+    requestStateSync({ refreshGame: true });
+    return; // somente o host decide pelo ausente
+  }
   const awaited = awaitedPlayerId(state.game);
   if (!awaited) return;
   applyCommand(timeoutCommand(state.game, awaited));
@@ -554,7 +662,14 @@ function watchTableContinuity() {
   const presence = roomChannel ? validatedPresenceState() : {};
   if (!presence) return;
   const connectedIds = Object.keys(presence);
-  if (state.hostIssue || presenceDiverges(state.room, connectedIds)) handlePresenceSync();
+  const diverges = presenceDiverges(state.room, connectedIds);
+  if (!state.isHost) {
+    const urgent = state.hostIssue || diverges || needsGameViewSync(state.room, state.game);
+    if (urgent || needsBackgroundStateSync(state.room, state.game)) {
+      requestStateSync({ force: true, retryMs: urgent ? undefined : BACKGROUND_STATE_SYNC_MS });
+    }
+  }
+  if (state.hostIssue || diverges) handlePresenceSync();
 }
 setInterval(watchTableContinuity, 2_000);
 
@@ -645,6 +760,8 @@ function startOnline() {
   warnedClockKey = '';
   const previousWinnerId = state.game?.winnerId;
   state.tabletopReactions = [];
+  clearPendingCommand();
+  processedCommandReceipts.clear();
   const readySeats = nextGameSeats(state.room);
   if (readySeats.length < 2) {
     render();
@@ -687,6 +804,7 @@ function acceptRoom(incoming) {
   if (state.room && incoming.version < state.room.version) return false;
   if (shouldResetGame(state.game, incoming.activeGameId)) {
     state.game = null;
+    clearPendingCommand();
     state.targetAction = null;
     state.exchangePicks = [];
     clock = { key: '', deadline: 0, total: 0 };
@@ -800,12 +918,19 @@ function beginHostPromotion() {
   }
 
   handover = { id: crypto.randomUUID(), previousHostId, responses: new Map() };
-  sendRoom('handover_request', {
-    requestId: handover.id,
-    successorId: state.myId,
-    successorConnectionId: connectionId,
-    previousHostId,
-  });
+  const requestId = handover.id;
+  const requestHandoverViews = () => {
+    if (handover?.id !== requestId) return;
+    sendRoom('handover_request', {
+      requestId,
+      successorId: state.myId,
+      successorConnectionId: connectionId,
+      previousHostId,
+    });
+  };
+  requestHandoverViews();
+  clearInterval(handoverRetryTimer);
+  handoverRetryTimer = setInterval(requestHandoverViews, 400);
   clearTimeout(handoverTimer);
   handoverTimer = setTimeout(finishHostPromotion, 1_400);
   render();
@@ -814,6 +939,8 @@ function beginHostPromotion() {
 async function finishHostPromotion() {
   clearTimeout(handoverTimer);
   handoverTimer = null;
+  clearInterval(handoverRetryTimer);
+  handoverRetryTimer = null;
   const previousHostId = handover?.previousHostId ?? state.room?.hostId;
   if (handover && state.game) {
     try {
@@ -907,6 +1034,18 @@ async function collectHandover(payload) {
     )
       return;
     handover?.responses.set(payload.playerId, view);
+    const expectedResponders = new Set(
+      state.game.players
+        .filter(
+          (player) =>
+            player.id !== state.myId && state.room.seats.some((seat) => seat.id === player.id && seat.connected),
+        )
+        .map((player) => player.id),
+    );
+    if ([...expectedResponders].every((playerId) => handover?.responses.has(playerId))) {
+      clearInterval(handoverRetryTimer);
+      handoverRetryTimer = null;
+    }
   } catch {
     // Resposta corrompida ou destinada a outra eleição: é ignorada.
   }
@@ -930,6 +1069,8 @@ async function connectRoom(kind) {
   activeRoomCode = null;
   authorizedHostId = null;
   connectionRegistry = new Map();
+  lastStateSyncRequestAt = 0;
+  lastStateSyncResponseByConnection.clear();
   const nextConnectionId = crypto.randomUUID();
   connectionId = nextConnectionId;
   render();
@@ -1027,7 +1168,10 @@ async function connectRoom(kind) {
         payload.room.hostId !== payload.senderId
       )
         return;
-      if (acceptRoom(payload.room)) render();
+      if (acceptRoom(payload.room)) {
+        render();
+        if (needsGameViewSync(payload.room, state.game)) requestStateSync({ force: true });
+      }
     })
     .on('broadcast', { event: 'host_changed' }, async ({ payload }) => {
       if (!state.room || !isRoomEnvelope(payload) || !(await hasBoundSender(payload))) return;
@@ -1037,9 +1181,13 @@ async function connectRoom(kind) {
       authorizedHostId = payload.senderId;
       handover = null;
       clearTimeout(handoverTimer);
+      clearInterval(handoverRetryTimer);
+      handoverRetryTimer = null;
       state.hostIssue = null;
       state.connection = 'connected';
+      lastStateSyncRequestAt = 0;
       render();
+      requestStateSync({ force: true });
     })
     .on('broadcast', { event: 'game_started' }, async ({ payload }) => {
       if (
@@ -1051,7 +1199,10 @@ async function connectRoom(kind) {
       )
         return;
       warnedClockKey = '';
-      if (acceptRoom(payload.room)) render();
+      if (acceptRoom(payload.room)) {
+        render();
+        if (needsGameViewSync(payload.room, state.game)) requestStateSync({ force: true });
+      }
     })
     .on('broadcast', { event: 'game_state' }, async ({ payload }) => {
       if (state.isHost) return;
@@ -1081,7 +1232,11 @@ async function connectRoom(kind) {
         return;
       if (!shouldAcceptGameView(state.game, view, state.room?.activeGameId)) return;
       const previous = state.game;
+      if (pendingCommand?.gameId === view.gameId && view.version > pendingCommand.baseVersion) {
+        clearPendingCommand();
+      }
       state.game = view;
+      if (!pendingCommand) state.commandError = null;
       announceGameState(previous, view);
       state.screen = 'game';
       state.connection = 'connected';
@@ -1094,14 +1249,82 @@ async function connectRoom(kind) {
             }
           : { key: '', deadline: 0, total: 0 };
       persistSession();
+      lastStateSyncRequestAt = 0;
       render();
+    })
+    .on('broadcast', { event: 'state_sync_request' }, async ({ payload }) => {
+      if (!state.isHost || !state.room || !isStateSyncRequest(payload) || !(await hasBoundSender(payload))) return;
+      const recipient = presenceEntry(payload.senderId, payload.senderConnectionId);
+      if (!recipient || !hasRoomSeat(state.room, payload.senderId)) return;
+      const now = Date.now();
+      const previousResponse = lastStateSyncResponseByConnection.get(payload.senderConnectionId) ?? 0;
+      if (now - previousResponse < 1_000) return;
+      lastStateSyncResponseByConnection.set(payload.senderConnectionId, now);
+      const hostChanged = payload.hostId !== state.room.hostId;
+      const roomChanged = payload.roomVersion === undefined || payload.roomVersion !== state.room.version;
+      if (hostChanged) await sendRoom('host_changed', { room: publicRoom() });
+      else if (roomChanged) await sendRoom('room', { room: publicRoom() });
+      const gameChanged =
+        state.game && (payload.gameId !== state.game.gameId || payload.version !== state.game.version);
+      if (
+        state.game?.players.some((player) => player.id === payload.senderId) &&
+        (payload.refreshGame || gameChanged)
+      ) {
+        await sendGameView(payload.senderId, recipient).catch(() => {});
+      }
     })
     .on('broadcast', { event: 'command' }, ({ payload }) => {
       if (!state.isHost || !state.game) return;
       const playerIds = state.game.players.map((player) => player.id);
       if (!isCommandEnvelope(payload, { playerIds }) || !presenceEntry(payload.playerId, payload.senderConnectionId))
         return;
-      applyCommand(payload.command);
+      // Clientes carregados antes do protocolo de ACK continuam funcionando
+      // durante um deploy gradual, embora sem a garantia de reentrega.
+      if (!payload.requestId) {
+        applyCommand(payload.command);
+        return;
+      }
+      const receiptKey = `${payload.playerId}:${payload.requestId}`;
+      let receipt = processedCommandReceipts.get(receiptKey);
+      if (!receipt) {
+        const currentGame = state.game;
+        const matchesBase = payload.gameId === currentGame.gameId && payload.baseVersion === currentGame.version;
+        const accepted = matchesBase && applyCommand(payload.command);
+        receipt = rememberCommandReceipt(processedCommandReceipts, receiptKey, {
+          gameId: state.game?.gameId ?? payload.gameId,
+          version: state.game?.version ?? payload.baseVersion,
+          accepted: Boolean(accepted),
+          reason: accepted ? 'applied' : matchesBase ? 'invalid' : 'stale',
+        });
+      }
+      sendRoom('command_ack', {
+        requestId: payload.requestId,
+        recipientId: payload.playerId,
+        recipientConnectionId: payload.senderConnectionId,
+        ...receipt,
+      });
+    })
+    .on('broadcast', { event: 'command_ack' }, async ({ payload }) => {
+      if (
+        state.isHost ||
+        !pendingCommand ||
+        !isCommandAck(payload) ||
+        payload.recipientId !== state.myId ||
+        payload.recipientConnectionId !== connectionId ||
+        payload.senderId !== state.room?.hostId ||
+        payload.requestId !== pendingCommand.requestId ||
+        !(await hasBoundSender(payload))
+      )
+        return;
+      const needsRefresh = payload.accepted && (state.game?.version ?? 0) < payload.version;
+      clearPendingCommand(
+        payload.accepted ? null : 'A mesa mudou antes de confirmar sua jogada. O estado foi atualizado.',
+      );
+      if (needsRefresh || !payload.accepted) {
+        lastStateSyncRequestAt = 0;
+        requestStateSync({ force: true, refreshGame: true });
+      }
+      render();
     })
     .on('broadcast', { event: 'chat_request' }, async ({ payload }) => {
       if (!state.isHost) return;
@@ -1191,6 +1414,7 @@ async function connectRoom(kind) {
             handlePresenceSync();
             render();
             persistSession();
+            requestStateSync({ force: true });
           },
           openCreatedRoom() {
             state.room = createRoom({ code, hostId: state.myId, hostName: state.name });
@@ -1210,6 +1434,7 @@ async function connectRoom(kind) {
             }
             handlePresenceSync();
             persistSession();
+            requestStateSync({ force: true });
           },
           beginJoin() {
             // A rede é agendada antes do primeiro render: se a UI lançar, o
@@ -1225,6 +1450,8 @@ async function connectRoom(kind) {
                 activeRoomCode = null;
                 authorizedHostId = null;
                 connectionRegistry = new Map();
+                lastStateSyncRequestAt = 0;
+                lastStateSyncResponseByConnection.clear();
                 state.online = false;
                 state.room = null;
                 state.error = 'Sala não encontrada ou anfitrião offline.';
@@ -1251,6 +1478,7 @@ function leaveTable() {
   clearTimeout(botTimer);
   clearHostElection();
   clearTimeout(handoverTimer);
+  clearInterval(handoverRetryTimer);
   clearTimeout(chatErrorTimer);
   handover = null;
   warnedClockKey = '';
@@ -1269,6 +1497,7 @@ function leaveTable() {
   state.chatDraft = '';
   state.chatUnread = 0;
   state.chatError = null;
+  state.commandError = null;
   state.tabletopReactions = [];
   clearOnlineSession(sessionStorage);
   const channel = roomChannel;
@@ -1278,6 +1507,10 @@ function leaveTable() {
   activeRoomCode = null;
   authorizedHostId = null;
   connectionRegistry = new Map();
+  lastStateSyncRequestAt = 0;
+  lastStateSyncResponseByConnection.clear();
+  clearPendingCommand();
+  processedCommandReceipts.clear();
   channel?.untrack();
   channel?.unsubscribe();
   history.replaceState(null, '', '/');

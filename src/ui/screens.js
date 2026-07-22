@@ -36,8 +36,11 @@ export function chatPanelHTML(state) {
 
 export function connectionUIHTML(state) {
   const offline = (state.room?.seats ?? []).filter((seat) => seat.kind === 'human' && !seat.connected);
-  const banner =
-    offline.length && !state.hostIssue
+  const commandBanner = state.commandError
+    ? `<div class="disconnect-banner" role="status"><i></i><span>${escapeHTML(state.commandError)}</span></div>`
+    : '';
+  const presenceBanner =
+    offline.length && !state.hostIssue && !state.commandError
       ? `<div class="disconnect-banner" role="status"><i></i><span>${offline.map((seat) => escapeHTML(seat.name)).join(', ')} ${offline.length === 1 ? 'está desconectado' : 'estão desconectados'} — a mesa continua.</span></div>`
       : '';
 
@@ -60,7 +63,7 @@ export function connectionUIHTML(state) {
     }[state.hostIssue.status] ?? ['Reconectando a mesa', 'Aguarde um instante…'];
     overlay = `<div class="connection-overlay" role="alert"><div class="connection-card"><i class="connection-spinner"></i><div class="eyebrow">Continuidade da partida</div><h2>${content[0]}</h2><p>${content[1]}</p></div></div>`;
   }
-  return banner + overlay;
+  return commandBanner + presenceBanner + overlay;
 }
 
 export function lobbyHTML(state) {

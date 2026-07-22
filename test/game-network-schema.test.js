@@ -12,6 +12,7 @@ const IDS = {
   game: '44444444-4444-4444-8444-444444444444',
   connection: '55555555-5555-4555-8555-555555555555',
   transport: '66666666-6666-4666-8666-666666666666',
+  request: '77777777-7777-4777-8777-777777777777',
 };
 const seats = [
   { id: IDS.ana, name: 'Ana', kind: 'human' },
@@ -111,6 +112,9 @@ test('valida comandos e vincula o ator ao envelope', () => {
   const playerIds = seats.map((seat) => seat.id);
   const command = { type: 'declare_action', actorId: IDS.ana, action: 'tax' };
   const envelope = {
+    requestId: IDS.request,
+    gameId: IDS.game,
+    baseVersion: 1,
     playerId: IDS.ana,
     command,
     senderId: IDS.ana,
@@ -122,6 +126,13 @@ test('valida comandos e vincula o ator ao envelope', () => {
   assert.equal(isCommandEnvelope({ ...envelope, id: 'transporte-inválido' }, { playerIds }), false);
   assert.equal(isCommandEnvelope({ ...envelope, playerId: IDS.bia }, { playerIds }), false);
   assert.equal(isCommandEnvelope({ ...envelope, senderId: IDS.bia }, { playerIds }), false);
+  assert.equal(isCommandEnvelope({ ...envelope, requestId: undefined }, { playerIds }), false);
+  assert.equal(isCommandEnvelope({ ...envelope, gameId: undefined }, { playerIds }), false);
+  assert.equal(isCommandEnvelope({ ...envelope, baseVersion: 0 }, { playerIds }), false);
+  const legacy = Object.fromEntries(
+    Object.entries(envelope).filter(([key]) => !['requestId', 'gameId', 'baseVersion'].includes(key)),
+  );
+  assert.equal(isCommandEnvelope(legacy, { playerIds }), true);
   assert.equal(isGameCommand({ ...command, action: 'hack' }, { playerIds }), false);
   assert.equal(isGameCommand({ ...command, targetId: IDS.bia }, { playerIds }), false);
   assert.equal(isGameCommand({ type: 'declare_action', actorId: IDS.ana, action: 'coup' }, { playerIds }), false);

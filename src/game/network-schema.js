@@ -339,8 +339,22 @@ export function isGameCommand(value, { playerIds = [] } = {}) {
 
 export const isCommandEnvelope = (value, options) =>
   isRecord(value) &&
-  hasOnlyKeys(value, ['id', 'playerId', 'command', 'senderId', 'senderConnectionId']) &&
+  hasOnlyKeys(value, [
+    'id',
+    'requestId',
+    'gameId',
+    'baseVersion',
+    'playerId',
+    'command',
+    'senderId',
+    'senderConnectionId',
+  ]) &&
   (value.id === undefined || isUuid(value.id)) &&
+  (value.requestId === undefined || isUuid(value.requestId)) &&
+  (value.gameId === undefined || isUuid(value.gameId)) &&
+  (value.baseVersion === undefined || isSafeInteger(value.baseVersion, 1)) &&
+  ((value.requestId === undefined && value.gameId === undefined && value.baseVersion === undefined) ||
+    (isUuid(value.requestId) && isUuid(value.gameId) && isSafeInteger(value.baseVersion, 1))) &&
   isUuid(value.playerId) &&
   value.senderId === value.playerId &&
   isUuid(value.senderConnectionId) &&

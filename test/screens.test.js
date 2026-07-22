@@ -20,6 +20,7 @@ const baseState = {
   chatDraft: '',
   chatUnread: 0,
   chatError: null,
+  commandError: null,
 };
 
 const seat = (id, extra = {}) => ({ id, name: id, kind: 'human', connected: true, ...extra });
@@ -75,6 +76,16 @@ test('continuidade da partida cobre eleição e nome do candidato escapado', () 
   });
   assert.match(html, /Anfitrião desconectado/);
   assert.match(html, /&lt;b&gt;Bia&lt;\/b&gt;/);
+});
+
+test('falha de confirmação da jogada aparece sem aceitar HTML', () => {
+  const html = connectionUIHTML({
+    ...baseState,
+    connection: 'connected',
+    commandError: 'Jogada <b>não confirmada</b>',
+  });
+  assert.match(html, /Jogada &lt;b&gt;não confirmada&lt;\/b&gt;/);
+  assert.doesNotMatch(html, /<b>não confirmada<\/b>/);
 });
 
 test('salão alterna os campos conforme o modo e mostra erros', () => {

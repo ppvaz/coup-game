@@ -5,6 +5,7 @@ import {
   isChatMessageEnvelope,
   isChatRejection,
   isChatRequest,
+  isCommandAck,
   isHandoverRequest,
   isHandoverResponse,
   isJoinRequest,
@@ -12,6 +13,7 @@ import {
   isPrivateEnvelope,
   isRoomEnvelope,
   isRoomSnapshot,
+  isStateSyncRequest,
 } from '../src/rooms/network-schema.js';
 
 const IDS = {
@@ -162,6 +164,48 @@ test('valida pedidos de cadeira e handover antes de acessar seus campos', () => 
   assert.equal(isHandoverResponse(response), true);
   assert.equal(isHandoverResponse({ ...response, id: IDS.transport }), true);
   assert.equal(isHandoverResponse({ ...response, playerId: IDS.guest }), false);
+});
+
+test('valida pedidos autenticados de recuperação do estado', () => {
+  const request = {
+    hostId: IDS.host,
+    roomVersion: 4,
+    gameId: IDS.game,
+    version: 7,
+    refreshGame: false,
+    senderId: IDS.guest,
+    senderConnectionId: IDS.guestConnection,
+  };
+  assert.equal(isStateSyncRequest(request), true);
+  assert.equal(isStateSyncRequest({ ...request, id: IDS.transport }), true);
+  assert.equal(isStateSyncRequest({ ...request, gameId: null, version: 0 }), true);
+  assert.equal(isStateSyncRequest({ ...request, hostId: 'host' }), false);
+  assert.equal(isStateSyncRequest({ ...request, roomVersion: 0 }), false);
+  assert.equal(isStateSyncRequest({ ...request, gameId: 'partida' }), false);
+  assert.equal(isStateSyncRequest({ ...request, refreshGame: 'sim' }), false);
+  assert.equal(isStateSyncRequest({ ...request, recipientId: IDS.host }), false);
+  assert.equal(isStateSyncRequest({ ...request, roomVersion: undefined, refreshGame: undefined }), true);
+});
+
+test('valida ACK de jogada emitido pelo anfitrião e destinado à conexão exata', () => {
+  const ack = {
+    requestId: IDS.request,
+    recipientId: IDS.guest,
+    recipientConnectionId: IDS.guestConnection,
+    gameId: IDS.game,
+    version: 8,
+    accepted: true,
+    reason: 'applied',
+    senderId: IDS.host,
+    senderConnectionId: IDS.hostConnection,
+  };
+  assert.equal(isCommandAck(ack), true);
+  assert.equal(isCommandAck({ ...ack, id: IDS.transport }), true);
+  assert.equal(isCommandAck({ ...ack, accepted: false, reason: 'stale' }), true);
+  assert.equal(isCommandAck({ ...ack, accepted: false, reason: 'applied' }), false);
+  assert.equal(isCommandAck({ ...ack, accepted: true, reason: 'invalid' }), false);
+  assert.equal(isCommandAck({ ...ack, recipientConnectionId: 'conexão' }), false);
+  assert.equal(isCommandAck({ ...ack, extra: true }), false);
 });
 
 test('valida cada conteúdo de chat decifrado sem normalizar payload hostil', () => {

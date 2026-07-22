@@ -185,6 +185,60 @@ export const isRoomEnvelope = (value) =>
   isUuid(value.senderConnectionId) &&
   isRoomSnapshot(value.room);
 
+export function isStateSyncRequest(value) {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, [
+      'id',
+      'hostId',
+      'roomVersion',
+      'gameId',
+      'version',
+      'refreshGame',
+      'senderId',
+      'senderConnectionId',
+    ]) &&
+    (value.id === undefined || isUuid(value.id)) &&
+    isUuid(value.hostId) &&
+    (value.roomVersion === undefined || isSafeInteger(value.roomVersion, 1)) &&
+    (value.gameId === null || isUuid(value.gameId)) &&
+    isSafeInteger(value.version) &&
+    (value.refreshGame === undefined || typeof value.refreshGame === 'boolean') &&
+    isUuid(value.senderId) &&
+    isUuid(value.senderConnectionId)
+  );
+}
+
+export function isCommandAck(value) {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [
+      'id',
+      'requestId',
+      'recipientId',
+      'recipientConnectionId',
+      'gameId',
+      'version',
+      'accepted',
+      'reason',
+      'senderId',
+      'senderConnectionId',
+    ]) ||
+    (value.id !== undefined && !isUuid(value.id)) ||
+    !isUuid(value.requestId) ||
+    !isUuid(value.recipientId) ||
+    !isUuid(value.recipientConnectionId) ||
+    !isUuid(value.gameId) ||
+    !isSafeInteger(value.version, 1) ||
+    typeof value.accepted !== 'boolean' ||
+    !['applied', 'stale', 'invalid'].includes(value.reason) ||
+    !isUuid(value.senderId) ||
+    !isUuid(value.senderConnectionId)
+  )
+    return false;
+  return value.accepted ? value.reason === 'applied' : value.reason !== 'applied';
+}
+
 export function isHandoverRequest(value) {
   return (
     isRecord(value) &&

@@ -188,6 +188,7 @@ test('divergência de presença acusa sincronização perdida nas duas direçõe
 
   assert.equal(presenceDiverges(room, ['a', 'b']), false);
   assert.equal(presenceDiverges(room, ['a']), true);
+  assert.equal(presenceDiverges(room, ['a', 'b', 'c']), true);
 
   room = syncRoomPresence(room, ['a'], 1_000);
   assert.equal(presenceDiverges(room, ['a']), false);

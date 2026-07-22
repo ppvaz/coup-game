@@ -28,3 +28,13 @@ test('Broadcast direto segue negado e a RPC libera somente sua transação', asy
     assert.match(source, /realtime\.messages\.topic = 'la-corte:' \|\| membership\.room_code/);
   }
 });
+
+test('RPC permite pedido autenticado de recuperação do estado', async () => {
+  const source = await migration('202607220004_add_state_sync_request.sql');
+  assert.match(source, /'state_sync_request'/);
+  assert.match(source, /connection_id = p_connection_id/);
+  assert.match(source, /'senderId', caller_id/);
+  const hostOnlyEvents = source.match(/if p_event in \(([^)]+)\)/)?.[1] ?? '';
+  assert.doesNotMatch(hostOnlyEvents, /state_sync_request/);
+  assert.match(hostOnlyEvents, /command_ack/);
+});

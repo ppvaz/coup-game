@@ -111,7 +111,11 @@ export function continuityPlan(room, { myId, handoverActive = false, now = Date.
 // sincronização perdida (ex.: snapshot que chegou antes do próprio track).
 export function presenceDiverges(room, connectedIds) {
   const connected = new Set(connectedIds);
-  return room.seats.some((seat) => seat.kind === 'human' && seat.connected !== connected.has(seat.id));
+  const seated = new Set(room.seats.filter((seat) => seat.kind === 'human').map((seat) => seat.id));
+  return (
+    [...connected].some((playerId) => !seated.has(playerId)) ||
+    room.seats.some((seat) => seat.kind === 'human' && seat.connected !== connected.has(seat.id))
+  );
 }
 
 export function dispatchRoom(source, command) {

@@ -173,11 +173,11 @@ ou `service_role` na Vercel ou no navegador.
 Antes de usar o multiplayer no projeto Supabase:
 
 1. Em **Authentication > Providers**, habilite **Anonymous Sign-Ins**.
-2. Aplique [`supabase/migrations/202607220001_secure_multiplayer.sql`](supabase/migrations/202607220001_secure_multiplayer.sql), pelo SQL Editor ou com `supabase db push` em um projeto ligado à CLI.
+2. Aplique todos os arquivos de [`supabase/migrations/`](supabase/migrations/) na ordem do nome, pelo SQL Editor, ou execute `supabase db push` em um projeto ligado à CLI. As migrations posteriores corrigem a entrada na sala, autorizam o Broadcast da RPC e habilitam recuperação de estado e ACK de jogadas; aplicar somente a primeira deixa o cliente e o banco incompatíveis.
 3. Em **Realtime Settings**, desabilite o acesso público a canais. A aplicação já assina `la-corte:*` com `private: true`, e a migration permite Broadcast/Presence somente aos membros autenticados.
 4. Faça o deploy e valide criar, entrar, reconectar e promover o anfitrião em duas sessões de navegador.
 
-Sem a migration e o login anônimo habilitado, salas online falham de forma
+Sem as migrations e o login anônimo habilitado, salas online falham de forma
 fechada; partidas locais e contra bots continuam disponíveis. Usuários anônimos
 contam como usuários Auth e devem entrar na política de retenção/limpeza do
 projeto se a aplicação ganhar uso contínuo.
