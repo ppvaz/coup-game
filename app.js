@@ -26,7 +26,7 @@ import {
   syncRoomPresence,
 } from './src/rooms/room.js';
 import { clearOnlineSession, loadOnlineSession, saveOnlineSession } from './src/rooms/session.js';
-import { shouldAcceptGameView, shouldResetGame } from './src/rooms/game-sync.js';
+import { gameViewWithClock, shouldAcceptGameView, shouldResetGame } from './src/rooms/game-sync.js';
 import { canAcceptRoomSnapshot, hasRoomSeat, startJoinAttempt } from './src/rooms/join.js';
 import { createSubscriptionHandler } from './src/rooms/connection.js';
 import {
@@ -483,11 +483,8 @@ async function syncViews() {
   for (const player of state.game.players.filter((candidate) => candidate.id !== state.myId)) {
     for (const recipient of presence[player.id] ?? []) {
       if (!recipient.publicKey || !recipient.connectionId) continue;
-      const view = viewForPlayer(state.game, player.id);
+      const view = gameViewWithClock(viewForPlayer(state.game, player.id), clock);
       view.log = view.log.slice(-20);
-      // Restante em ms, não timestamp: o relógio do convidado pode divergir do host.
-      view.clockRemaining = clock.deadline - Date.now();
-      view.clockTotal = clock.total;
       sends.push(
         encryptFor(encryptionIdentity, recipient.publicKey, view).then((encrypted) =>
           sendRoom('game_state', {
@@ -1088,11 +1085,14 @@ async function connectRoom(kind) {
       announceGameState(previous, view);
       state.screen = 'game';
       state.connection = 'connected';
-      clock = {
-        key: decisionClockKey(view),
-        deadline: Date.now() + Math.max(0, view.clockRemaining ?? 0),
-        total: view.clockTotal || 1,
-      };
+      clock =
+        view.status === 'playing'
+          ? {
+              key: decisionClockKey(view),
+              deadline: Date.now() + Math.max(0, view.clockRemaining ?? 0),
+              total: view.clockTotal || 1,
+            }
+          : { key: '', deadline: 0, total: 0 };
       persistSession();
       render();
     })
