@@ -3,6 +3,7 @@ import test from 'node:test';
 import { awaitedPlayerId, timeoutCommand } from '../src/game/ai.js';
 import { createGame, dispatchGame, viewForPlayer } from '../src/game/coup.js';
 import { isCommandEnvelope, isGameCommand, isGameView } from '../src/game/network-schema.js';
+import { gameViewWithClock } from '../src/rooms/game-sync.js';
 
 const IDS = {
   ana: '11111111-1111-4111-8111-111111111111',
@@ -52,6 +53,32 @@ test('continua aceitando todas as visões de uma partida autoritativa até o fim
   assert.equal(game.status, 'finished');
   for (const { id } of game.players) {
     assert.equal(isGameView(networkView(game, id), { viewerId: id, expectedGameId: IDS.game }), true);
+  }
+});
+
+test('convidados aceitam a visão terminal depois que o host zera o relógio', () => {
+  let game = makeGame();
+  for (let step = 0; game.status === 'playing' && step < 500; step += 1) {
+    const playerId = awaitedPlayerId(game);
+    game = dispatchGame(game, timeoutCommand(game, playerId), () => 0.42);
+  }
+  assert.equal(game.status, 'finished');
+
+  for (const { id } of game.players) {
+    const terminal = gameViewWithClock(
+      { ...viewForPlayer(game, id), log: game.log.slice(-20) },
+      { deadline: 0, total: 0 },
+    );
+    assert.equal('clockRemaining' in terminal, false);
+    assert.equal('clockTotal' in terminal, false);
+    assert.equal(
+      isGameView(terminal, {
+        viewerId: id,
+        expectedGameId: IDS.game,
+        expectedPlayerIds: seats.map((seat) => seat.id),
+      }),
+      true,
+    );
   }
 });
 
