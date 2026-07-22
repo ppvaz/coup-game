@@ -28,6 +28,8 @@ const SHOTS = [
   'duel:2',
   'evidence:1',
   'throne:3',
+  'victory:3',
+  'victory-reactions:3-0',
   'coins:steal',
   'decision:challenge',
   'decision:challenge-confirm',

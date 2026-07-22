@@ -629,19 +629,26 @@ export class CoupTableScene {
   }
 
   showEmojiReaction(playerId, emoji) {
-    const seat = this.seats.get(playerId);
-    if (!seat || !emoji) return false;
+    const origin = this.reactionAnchor(playerId, { y: 2.95, z: -0.08 });
+    if (!origin || !emoji) return false;
     if (this.emojiReactions.length >= 6) {
       const oldest = this.emojiReactions.shift();
       if (oldest) disposeObject3D(oldest.sprite);
     }
     const sprite = createEmojiSprite(emoji);
-    const origin = seat.group.position.clone().multiplyScalar(0.94);
-    origin.y = 3.05;
     sprite.position.copy(origin);
     this.stage.add(sprite);
     this.emojiReactions.push({ sprite, origin, startedAt: this.elapsed, duration: 2.2 });
     return true;
+  }
+
+  // Reações pertencem ao cortesão, não à cadeira. Durante a vitória isso
+  // redireciona naturalmente a origem/destino para o avatar no centro.
+  reactionAnchor(playerId, { y = 2, z = -0.18 } = {}) {
+    const body = playerId === this.winnerAvatarId ? this.winnerAvatar : this.seats.get(playerId)?.body;
+    if (!body || !body.visible) return null;
+    body.updateWorldMatrix(true, false);
+    return body.localToWorld(new THREE.Vector3(0, y, z));
   }
 
   setSeatGesture(playerId, kind, duration = 0.9) {
@@ -709,16 +716,14 @@ export class CoupTableScene {
    * mesa. Os demais clientes veem o objeto voar e mais nada.
    */
   throwReaction(sourceId, targetId, type, { spotlight = false } = {}) {
-    const source = this.seats.get(sourceId);
-    const target = this.seats.get(targetId);
-    if (!source || !target || sourceId === targetId || !THROWABLE_TYPES.has(type)) return false;
+    const start = this.reactionAnchor(sourceId, { y: 1.78, z: -0.38 });
+    const end = this.reactionAnchor(targetId, { y: 1.92, z: -0.18 });
+    if (!start || !end || sourceId === targetId || !THROWABLE_TYPES.has(type)) return false;
     if (this.flyingReactions.length >= 8) {
       const oldest = this.flyingReactions.shift();
       if (oldest) disposeObject3D(oldest.group);
     }
     const group = createThrowable(type);
-    const start = source.group.position.clone().multiplyScalar(0.86).setY(2.25);
-    const end = target.group.position.clone().multiplyScalar(0.9).setY(2.08);
     const control = start.clone().lerp(end, 0.5).setY(4.15);
     group.position.copy(start);
     this.stage.add(group);
@@ -1262,7 +1267,7 @@ export class CoupTableScene {
 
   // Instrumentação do laboratório: congela qualquer ato para capturas de
   // validação visual — dirigidos ("duel:0-3", "duel:2", "evidence:1",
-  // "throne:4", "claim:2", "pov:2") ou fixos
+  // "victory:4", "victory-reactions:4-1", "claim:2", "pov:2") ou fixos
   // ("table", "targeting", "player", "overhead", "portal").
   applyLabShot(spec) {
     const seats = this.view?.seats ?? [];
@@ -1272,6 +1277,27 @@ export class CoupTableScene {
       .map(Number)
       .filter((index) => Number.isInteger(index) && index >= 0 && index < seats.length)
       .map((index) => seats[index]);
+    if (['victory', 'victory-reactions'].includes(act)) {
+      const winner = subjects[0] ?? seats[0];
+      if (!winner) return null;
+      const victoryView = {
+        ...this.view,
+        beat: 'victory',
+        winner: { id: winner.id, name: winner.name },
+        seats: seats.map((seat) => ({ ...seat, isWinner: seat.id === winner.id })),
+      };
+      this.sync(victoryView);
+      this.cameraOverridden = true;
+      this.cameraName = 'throne';
+      this.stage.defineCameraAct('throne', throneCameraForSeat(winner, seats.length));
+      this.stage.setCameraAct('throne', { immediate: true });
+      if (act === 'victory-reactions' && subjects[1]) {
+        this.showEmojiReaction(winner.id, '👏');
+        this.throwReaction(winner.id, subjects[1].id, 'rose');
+        this.throwReaction(subjects[1].id, winner.id, 'tomato');
+      }
+      return act;
+    }
     if (act === 'decision') {
       const confirmation = String(indexPart ?? '').endsWith('-confirm');
       const catalogKey = String(indexPart ?? '').replace('-confirm', '');
@@ -1558,7 +1584,8 @@ export class CoupTableScene {
         ? 0.7
         : this.winnerAvatar.position.y +
           (0.7 + Math.sin(elapsed * 1.35) * 0.025 - this.winnerAvatar.position.y) * centerEase;
-      faceCameraYaw(this.winnerAvatar, this.stage.camera, reducedMotion ? 1 : delta);
+      // O nobre foi modelado olhando para -Z; cards/efígies usam +Z.
+      faceCameraYaw(this.winnerAvatar, this.stage.camera, reducedMotion ? 1 : delta, Math.PI);
     }
     for (let index = this.emojiReactions.length - 1; index >= 0; index -= 1) {
       const reaction = this.emojiReactions[index];

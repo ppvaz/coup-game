@@ -238,14 +238,21 @@ export function coinTransferCameraForSeats(subjects, seatCount) {
   };
 }
 
-// O trono vê o rosto do vencedor de um ângulo mais baixo, com a efígie do
-// centro fora do eixo da visada.
-export const throneCameraForSeat = (seat, seatCount) =>
-  sideShot(seat, seatCount, {
-    azimuthOffset: 0.5,
-    radiusFactor: 1.95,
-    height: 3.2,
-    targetY: 1.8,
-    fov: 36,
-    portraitFov: 50,
-  });
+// Na vitória o cortesão deixa a cadeira e ocupa o centro do salão. O plano
+// precisa acompanhar essa nova posição cênica, não a geografia do assento que
+// ele ocupava durante a partida.
+export const throneCameraForSeat = (seat, seatCount) => {
+  // O meio passo angular coloca a lente no vão entre duas cadeiras. Partir da
+  // antiga posição do vencedor mantém o plano estável em qualquer lotação.
+  const gapAzimuth = seat.azimuthRad + Math.PI / Math.max(2, seatCount);
+  return {
+    position: [Math.sin(gapAzimuth) * 6.9, 3.35, Math.cos(gapAzimuth) * 6.9],
+    target: [0, 1.76, 0],
+    fov: 32,
+    portrait: {
+      position: [Math.sin(gapAzimuth) * 7.2, 3.75, Math.cos(gapAzimuth) * 7.2],
+      target: [0, 1.8, 0],
+      fov: 42,
+    },
+  };
+};

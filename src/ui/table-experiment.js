@@ -222,15 +222,25 @@ export function gameplayHTML(
   return `${roster}<section class="tabletop-result"><span>FIM DA PARTIDA</span><strong>${defeated ? 'Você caiu da corte' : `${escapeHTML(winner?.name ?? '?')} venceu`}</strong>${again}</section>`;
 }
 
+export function tabletopReactionTargets(game, myId) {
+  if (!game || !myId) return [];
+  const finished = game.status === 'finished';
+  return game.players.filter(
+    (candidate) => candidate.id !== myId && (finished || candidate.cards.some((card) => !card.revealed)),
+  );
+}
+
+export function toggleTabletopHudPanel(current, requested) {
+  return current === requested ? null : requested;
+}
+
 function reactionDockHTML(state, { open, throwable }) {
   if (!state.game || !state.myId) return '';
-  const targets = state.game.players.filter(
-    (candidate) => candidate.id !== state.myId && candidate.cards.some((card) => !card.revealed),
-  );
+  const targets = tabletopReactionTargets(state.game, state.myId);
   const panel = !open
     ? ''
     : throwable
-      ? `<aside class="tabletop-reaction-panel" role="dialog" aria-label="Escolha quem receberá o arremesso"><span>ESCOLHA O ALVO</span><div class="tabletop-reaction-targets">${targets.map((target) => `<button type="button" data-reaction-target="${escapeHTML(target.id)}">${escapeHTML(target.name)}</button>`).join('')}</div><button type="button" class="tabletop-reaction-back" data-reaction-back>← Voltar</button></aside>`
+      ? `<aside class="tabletop-reaction-panel" role="dialog" aria-label="Escolha quem receberá o arremesso"><span>ESCOLHA O ALVO</span>${targets.length ? `<div class="tabletop-reaction-targets">${targets.map((target) => `<button type="button" data-reaction-target="${escapeHTML(target.id)}">${escapeHTML(target.name)}</button>`).join('')}</div>` : '<p class="tabletop-reaction-empty">Não há outro cortesão nesta mesa.</p>'}<button type="button" class="tabletop-reaction-back" data-reaction-back>← Voltar</button></aside>`
       : `<aside class="tabletop-reaction-panel" role="dialog" aria-label="Reações da corte"><span>REAGIR</span><div class="tabletop-reaction-emojis">${TABLETOP_EMOJIS.map((emoji) => `<button type="button" data-reaction-emoji="${emoji}" aria-label="Reagir com ${emoji}">${emoji}</button>`).join('')}</div><span>ARREMESSAR</span><div class="tabletop-reaction-throws">${TABLETOP_THROWABLES.map((item) => `<button type="button" data-reaction-throw="${item.id}" title="${item.label}"><b>${item.icon}</b><small>${item.label}</small></button>`).join('')}</div></aside>`;
   return `<div class="tabletop-reactions ${open ? 'open' : ''}">${panel}<button type="button" class="tabletop-reaction-trigger" id="tabletop-reaction-trigger" aria-expanded="${open}" aria-label="${open ? 'Fechar reações' : 'Abrir reações'}"><span>${open ? '×' : '☺'}</span><small>Reagir</small></button></div>`;
 }
@@ -340,9 +350,8 @@ export async function mountTableExperiment({
   let benchmarkKit = null;
   let currentState = initialState;
   let currentContext = context;
-  let rosterOpen = false;
+  let hudPanel = null;
   let focusedSeat = null;
-  let reactionOpen = false;
   let reactionThrowable = null;
   let benchFallbackOpen = false;
   let benchDecisionKey = '';
@@ -414,6 +423,7 @@ export async function mountTableExperiment({
   };
 
   const paintRosterControl = () => {
+    const rosterOpen = hudPanel === 'roster';
     root.dataset.roster = rosterOpen ? 'open' : 'closed';
     root.dataset.seatFocus = focusedSeat ? 'active' : 'idle';
     const button = root.querySelector('#tabletop-roster-toggle');
@@ -487,6 +497,8 @@ export async function mountTableExperiment({
     const chatSlot = root.querySelector('#tabletop-chat-slot');
     const chatLayer = root.querySelector('#tabletop-chat-layer');
     const visibleChatState = chatState();
+    if (visibleChatState.chatOpen && hudPanel) setHudPanel(null);
+    root.dataset.hudPanel = visibleChatState.chatOpen ? 'chat' : (hudPanel ?? 'none');
     if (chatSlot) chatSlot.innerHTML = chatToggleHTML(visibleChatState);
     if (chatLayer) chatLayer.innerHTML = chatPanelHTML(visibleChatState);
     bindChat?.();
@@ -496,23 +508,17 @@ export async function mountTableExperiment({
     const layer = root.querySelector('#tabletop-reaction-layer');
     if (!layer) return;
     layer.innerHTML = reactionDockHTML(currentState, {
-      open: reactionOpen,
+      open: hudPanel === 'reactions',
       throwable: reactionThrowable,
     });
     layer.querySelector('#tabletop-reaction-trigger')?.addEventListener('click', () => {
-      reactionOpen = !reactionOpen;
       reactionThrowable = null;
-      if (reactionOpen && rosterOpen) {
-        rosterOpen = false;
-        paintRosterControl();
-      }
-      paintReactionDock();
+      setHudPanel(toggleTabletopHudPanel(hudPanel, 'reactions'));
     });
     layer.querySelectorAll('[data-reaction-emoji]').forEach((button) => {
       button.addEventListener('click', () => {
         sendReaction?.({ kind: 'emoji', emoji: button.dataset.reactionEmoji });
-        reactionOpen = false;
-        paintReactionDock();
+        setHudPanel(null);
       });
     });
     layer.querySelectorAll('[data-reaction-throw]').forEach((button) => {
@@ -524,15 +530,25 @@ export async function mountTableExperiment({
     layer.querySelectorAll('[data-reaction-target]').forEach((button) => {
       button.addEventListener('click', () => {
         sendReaction?.({ kind: 'throw', throwable: reactionThrowable, targetId: button.dataset.reactionTarget });
-        reactionOpen = false;
         reactionThrowable = null;
-        paintReactionDock();
+        setHudPanel(null);
       });
     });
     layer.querySelector('[data-reaction-back]')?.addEventListener('click', () => {
       reactionThrowable = null;
       paintReactionDock();
     });
+  };
+
+  const setHudPanel = (next) => {
+    hudPanel = currentState.chatOpen ? null : next;
+    if (hudPanel !== 'reactions') reactionThrowable = null;
+    root.dataset.hudPanel = currentState.chatOpen ? 'chat' : (hudPanel ?? 'none');
+    const exitConfirm = root.querySelector('#tabletop-exit-confirm');
+    if (exitConfirm) exitConfirm.hidden = hudPanel !== 'exit';
+    root.querySelector('#tabletop-exit-request')?.setAttribute('aria-expanded', String(hudPanel === 'exit'));
+    paintRosterControl();
+    paintReactionDock();
   };
 
   const playPendingReactions = () => {
@@ -658,6 +674,7 @@ export async function mountTableExperiment({
       decisionFallbackOpen,
       armedDecisionId,
     });
+    if (hudPanel && gameplay.querySelector('.modal-wrap, .tabletop-bench-decision')) setHudPanel(null);
     bindGameDecisionControls(gameplay, {
       state: currentState,
       dispatch,
@@ -1011,27 +1028,18 @@ export async function mountTableExperiment({
   const exitRequest = root.querySelector('#tabletop-exit-request');
   const exitConfirm = root.querySelector('#tabletop-exit-confirm');
   const closeExitConfirm = () => {
-    if (!exitConfirm) return;
-    exitConfirm.hidden = true;
-    exitRequest?.setAttribute('aria-expanded', 'false');
+    if (hudPanel === 'exit') setHudPanel(null);
   };
   exitRequest?.addEventListener('click', () => {
-    const opening = exitConfirm?.hidden ?? false;
     if (!exitConfirm) return;
-    exitConfirm.hidden = !opening;
-    exitRequest.setAttribute('aria-expanded', String(opening));
+    setHudPanel(toggleTabletopHudPanel(hudPanel, 'exit'));
   });
   root.querySelector('#tabletop-exit-cancel')?.addEventListener('click', closeExitConfirm);
   root.querySelector('#tabletop-exit-leave')?.addEventListener('click', () => exitTable?.());
   root.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closeExitConfirm();
+    if (event.key === 'Escape' && hudPanel) setHudPanel(null);
   });
   root.querySelector('#tabletop-roster-toggle')?.addEventListener('click', () => {
-    if (reactionOpen) {
-      reactionOpen = false;
-      reactionThrowable = null;
-      paintReactionDock();
-    }
     // Com um assento focado, o botão age como "Voltar": retoma o Auto e
     // preserva o painel aberto — fechá-lo é o clique seguinte.
     if (focusedSeat) {
@@ -1041,8 +1049,7 @@ export async function mountTableExperiment({
       paintRosterControl();
       return;
     }
-    rosterOpen = !rosterOpen;
-    paintRosterControl();
+    setHudPanel(toggleTabletopHudPanel(hudPanel, 'roster'));
   });
   root.querySelector('#tabletop-quality')?.addEventListener('click', () => {
     applyQuality(nextTabletopQuality(quality.id));

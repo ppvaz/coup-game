@@ -7,8 +7,10 @@ import {
   shouldFocusDecisionHourglass,
   tableExperimentHTML,
   tabletopInfluenceCommand,
+  tabletopReactionTargets,
   tabletopRosterHTML,
   tabletopTargetCommand,
+  toggleTabletopHudPanel,
 } from '../src/ui/table-experiment.js';
 
 const seats = [
@@ -74,6 +76,31 @@ test('o painel da Corte oferece a volta à mesa 2D quando permitido', () => {
   assert.match(allowed, /<small>\(VOCÊ\)<\/small>/);
   const lab = tabletopRosterHTML(stateFor(game), { ...context, canSwitchTo2D: false });
   assert.doesNotMatch(lab, /id="tabletop-2d"/);
+});
+
+test('arremessos da vitória podem mirar cortesãos eliminados', () => {
+  const game = createGame(seats, { random: () => 0.42 });
+  for (const candidate of game.players.filter((candidate) => candidate.id !== 'a')) {
+    for (const card of candidate.cards) card.revealed = true;
+  }
+  const finished = { ...game, status: 'finished', phase: 'finished', winnerId: 'a' };
+
+  assert.deepEqual(
+    tabletopReactionTargets(finished, 'a').map((candidate) => candidate.id),
+    ['b', 'c'],
+  );
+  assert.deepEqual(
+    tabletopReactionTargets(finished, 'b').map((candidate) => candidate.id),
+    ['a', 'c'],
+  );
+  assert.deepEqual(tabletopReactionTargets(game, 'a'), []);
+});
+
+test('as ilhas da HUD compartilham um único painel expansível', () => {
+  assert.equal(toggleTabletopHudPanel(null, 'roster'), 'roster');
+  assert.equal(toggleTabletopHudPanel('roster', 'reactions'), 'reactions');
+  assert.equal(toggleTabletopHudPanel('reactions', 'exit'), 'exit');
+  assert.equal(toggleTabletopHudPanel('exit', 'exit'), null);
 });
 
 test('a revanche 3D é do anfitrião; convidados aguardam', () => {

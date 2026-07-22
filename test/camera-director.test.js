@@ -103,6 +103,11 @@ test('vitória corta para o trono do vencedor', () => {
   const game = dispatchGame(duo, { type: 'declare_action', actorId: 'a', action: 'coup', targetId: 'b' });
   assert.equal(game.status, 'finished');
   assert.deepEqual(directCamera(projectCoupTableView(game, 'b')), { act: 'throne', seatIds: ['a'] });
+  const shot = throneCameraForSeat(projectCoupTableView(game, 'b').seats[0], 2);
+  assert.deepEqual(shot.target, [0, 1.76, 0]);
+  assert.equal(Math.hypot(shot.position[0], shot.position[2]) > 6.5, true);
+  // Dois jogadores ocupam lados opostos; o plano de vitória entra pelo vão.
+  assert.equal(Math.abs(shot.position[2]) < 0.001, true);
 });
 
 test('foco de elementos acompanha posição e abertura do tríptico', () => {

@@ -196,7 +196,11 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
   parametrizado pelos dois envolvidos (`camera-director.js`, puro e testado).
 - [Concluído] Enquadramento da vítima para assassinato, golpe e perda pública
   (ato `evidence` apontado ao assento) e troca rival testemunhada.
-- [Concluído] Vitória no trono do vencedor.
+- [Concluído] Vitória no centro do salão: câmera entra pelo vão entre cadeiras,
+  o vencedor encara a lente e reações nascem do corpo promovido, não do
+  assento vazio. No pós-partida, vivos e eliminados podem se alvejar; Corte,
+  Reações, Saída e Chat compartilham prioridade e não cobrem o resultado ao
+  mesmo tempo.
 - [Concluído] Intervenção central para contestações e bloqueios locais; o foco
   acompanha posição e abertura do conjunto efígie–carta–efígie. O motor pode
   redirecionar um cinemático em curso sem reiniciar sua duração, evitando que

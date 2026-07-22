@@ -1476,6 +1476,15 @@ body.is-tabletop-lab > .theme-toggle {
 .tabletop-reaction-back {
   width: 100%;
 }
+.tabletop-reaction-empty {
+  margin: 4px 0 10px;
+  padding: 11px 8px;
+  border: 1px solid rgba(217, 181, 107, 0.16);
+  color: #aaa194;
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: center;
+}
 .tabletop-experiment:has(.tabletop-gameplay .modal-wrap) .tabletop-reactions,
 .tabletop-experiment:has(.tabletop-bench-decision) .tabletop-reactions {
   opacity: 0;
@@ -1522,6 +1531,24 @@ body:has(.chat-panel.open) .tabletop-reactions,
 }
 .tabletop-result button {
   padding: 9px 14px;
+}
+.tabletop-result {
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms;
+}
+.tabletop-experiment:is(
+    [data-hud-panel='roster'],
+    [data-hud-panel='reactions'],
+    [data-hud-panel='exit'],
+    [data-hud-panel='chat']
+  )
+  .tabletop-result {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* A partida privilegia o salão; instrumentação completa vive em /3d/lab. */
