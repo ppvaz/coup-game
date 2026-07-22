@@ -59,6 +59,7 @@ export function projectCoupTableView(game, myId, { exchangePicks = [] } = {}) {
             revealed: Boolean(card.revealed),
             role: self || card.revealed ? card.role : null,
             selectable: Boolean(self && selfChoosesInfluence && !card.revealed),
+            focusable: self,
           }),
         ),
       ),

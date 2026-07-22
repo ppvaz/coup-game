@@ -65,11 +65,12 @@ o palco representa um resultado; nunca decide um resultado.
 npm run dev
 ```
 
-`http://localhost:5173/3d` é a experiência jogável WIP. Ela monta uma partida
-real contra bots ou apresenta a sala multiplayer atual, reutilizando os mesmos
-comandos HTML e o mesmo `dispatchGame()` da mesa 2D. O compositor WebGL é
-carregado somente depois dessa entrada explícita e sua instância é preservada
-entre renders.
+O 3D é a apresentação padrão das partidas novas e retomadas;
+`http://localhost:5173/3d` mantém uma partida isolada para validação. A mesa
+real contra bots ou multiplayer reutiliza o mesmo `dispatchGame()` do 2D e pode
+alternar de apresentação sem perder estado. O compositor WebGL é carregado sob
+demanda quando uma partida 3D começa, preservado entre renders e descartado ao
+voltar para a mesa 2D.
 
 `http://localhost:5173/3d/lab` é o laboratório técnico. Ele mantém uma cena
 estática para testar ambiente e câmeras sem bots avançando a partida. Benchmark,
@@ -86,13 +87,19 @@ A HUD do jogo é própria para o 3D e usa ilhas compactas em vez do cabeçalho d
 mesa 2D. Ela inclui:
 
 - narrativa do ato e progresso das respostas coletivas;
-- ações e decisões HTML completas, inclusive contexto e relógio;
+- ações e decisões HTML completas como caminho acessível; perda de influência
+  e troca da Embaixadora também são concluídas diretamente na bancada 3D;
 - painel recolhível da Corte com moedas, influências ativas e reveladas;
 - foco de câmera em qualquer nome sem alterar a geografia global dos assentos;
 - visão Jogador automática quando chega a vez local;
 - chat multiplayer, sons, vozes, tema e confirmação explícita de saída;
 - emojis e arremessos efêmeros, com tomate, luva, rosa e objetos próprios da
   corte, sem entrar no estado autoritativo da partida.
+
+A mão privada aceita foco aproximado, e o tesouro mostra a quantia exata em
+moedas instanciadas e revela o saldo no hover. A moeda arremessável reutiliza o
+mesmo modelo genérico da corte; `duke_coin` é apenas o ID temático compatível do
+catálogo de reações.
 
 Modais, chat e confirmação de saída recolhem a barra de ações. O painel da
 Corte e as reações são mutuamente exclusivos, mas continuam consultas rápidas.

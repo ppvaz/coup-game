@@ -56,6 +56,16 @@ test('somente a própria influência fica selecionável na decisão de perda', (
   assert.ok(observerView.seats.flatMap((seat) => seat.influences).every((card) => card.selectable === false));
 });
 
+test('somente a mão privada fica focalizável pelo jogador', () => {
+  const game = createGame(seats, { random: () => 0.42 });
+  const view = projectCoupTableView(game, 'b');
+  const self = view.seats.find((seat) => seat.id === 'b');
+  const rivals = view.seats.filter((seat) => seat.id !== 'b');
+
+  assert.ok(self.influences.every((card) => card.focusable));
+  assert.ok(rivals.flatMap((seat) => seat.influences).every((card) => card.focusable === false));
+});
+
 test('opções e escolhas da Embaixadora chegam somente ao palco do ator', () => {
   let game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
   game = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'exchange' });

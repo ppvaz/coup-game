@@ -21,9 +21,8 @@ La Corte é uma experiência premium de blefe e influência inspirada nas mecân
 - Chat cifrado da mesa com provocações rápidas, histórico, contador e proteção contra spam.
 - Tema escuro e tema claro “pergaminho imperial”, persistidos no navegador.
 - Interface responsiva e assets originais: cenário noturno/diurno, cinco personagens e favicon.
-- Apresentação 3D jogável e opcional, carregada somente ao entrar explicitamente
-  na experiência, com a mesma partida autoritativa e as mesmas decisões da
-  interface 2D.
+- Apresentação 3D jogável como visão padrão da partida, carregada sob demanda,
+  com a mesma partida autoritativa e opção de voltar à mesa 2D.
 
 ## Executar localmente
 
@@ -38,16 +37,19 @@ Abra [http://localhost:5173](http://localhost:5173), ou use o endereço exibido 
 
 ### La Corte 3D
 
-Abra [http://localhost:5173/3d](http://localhost:5173/3d) para jogar a versão
-WIP da mesa 3D. O salão usa o mesmo motor de regras e a mesma partida da mesa
-2D; o WebGL apenas projeta e encena o estado já decidido. A HUD oferece ações,
-decisões, crônica, painel da Corte, chat multiplayer e reações efêmeras sem
+Partidas novas e retomadas abrem na mesa 3D. A rota
+[http://localhost:5173/3d](http://localhost:5173/3d) mantém uma partida isolada
+para validação. O salão usa o mesmo motor de regras e a mesma partida da mesa
+2D; o WebGL apenas projeta e encena o estado já decidido. O painel da Corte
+permite alternar para a mesa 2D sem perder sala, crônica ou relógio. A HUD
+oferece ações, decisões, crônica, chat multiplayer e reações efêmeras sem
 revelar influências privadas dos adversários.
 
-Os assets e módulos 3D são importados apenas depois de uma navegação explícita
-para `/3d`; visitar a home ou jogar em 2D não inicializa o salão. Depois de
-carregada, a cena é preservada entre atualizações da partida. Dia e noite usam
-a mesma preferência da interface 2D.
+Os assets e módulos 3D são importados somente quando a partida padrão começa
+ou quando o jogador alterna do 2D para o 3D; visitar a home ou permanecer em 2D
+não inicializa o salão. Depois de carregada, a cena é preservada entre
+atualizações da partida e descartada ao voltar ao 2D. Dia e noite usam a mesma
+preferência da interface 2D.
 
 O laboratório técnico fica em `/3d/lab` e não avança uma partida. Para liberar
 seu botão, configure `VITE_CORTE_3D_LAB_KEY` e visite uma vez:

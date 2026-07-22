@@ -39,7 +39,8 @@ commit da mudança.
 | `src/rooms/connection.js`                   | Sequência de assinatura do canal, create/resume/join e reassinatura                                        |
 | `src/rooms/join.js`                         | Pedido de cadeira do convidado com reenvio e desistência                                                   |
 | `src/rooms/chat.js`                         | Normalização, limites e antiflood do chat                                                                  |
-| `src/rooms/game-sync.js`                    | Aceite de snapshot por `gameId` e `version`                                                                |
+| `src/rooms/game-sync.js`                    | Aceite de snapshot e reconciliação condicional por `gameId` e `version`                                    |
+| `src/rooms/reliable-command.js`             | ACK, retry, obsolescência e deduplicação limitada de comandos                                              |
 | `src/rooms/network-schema.js`               | Validação estrutural de presença, sala, cifra, handover e chat antes de mutar estado                       |
 | `src/lib/asset-warmup.js`                   | Ordem de aquecimento de assets (imediato × ocioso)                                                         |
 | `src/lib/lab-access.js`                     | Liberação de rota interna por chave na URL                                                                 |
@@ -52,6 +53,7 @@ commit da mudança.
 | `src/lib/tabletop/camera-director.js` | Beat da partida → ato de câmera; chave de corte que evita recortes repetidos; geometria de duelo/trono | O vocabulário de beats (`claim`, `block-window`, `influence-loss`…)        |
 | `src/lib/tabletop/foley.js`           | Síntese no `AudioContext` da mesa, intervalo mínimo por evento                                         | Nomes dos eventos (moeda, carta revelada, arremesso)                       |
 | `src/lib/tabletop/reactions.js`       | Normalização, deduplicação e janela dos últimos N                                                      | Catálogo de arremessáveis (adaga da Assassina, moeda do Duque…)            |
+| `src/lib/tabletop/coin-layout.js`     | Distribuição determinística e limites de pilhas repetidas                                              | Hoje recebe a contagem do tesouro de Coup                                  |
 | `src/lib/tabletop/hourglass-sand.js`  | Perfil e volume de areia dentro de um vidro de revolução                                               | Nasceu do relógio de decisão, mas serve a qualquer timer diegético         |
 | `src/lib/sounds.js`                   | Síntese de padrões curtos + mudo persistido                                                            | Chaves `la-corte-*` no `localStorage` e os nomes dos eventos               |
 | `src/lib/voice-announcer.js`          | Banco de falas por evento com sorteio sem repetição                                                    | O banco em si é 100% de Coup                                               |
@@ -108,6 +110,8 @@ arranjo, é o produto; os jogos são a prova dele.
 | 17/07/2026 | Sem Perdão nasce e, no mesmo dia, ganha a mesa 3D retrô pixelada em Three.js na rota `/3d`                                             |
 | 20/07/2026 | La Corte parte dessa base para levantar o próprio ambiente 3D                                                                          |
 | 20–21/07   | Os dois evoluem em separado: PiP, diretor de câmera e ampulheta de um lado; provas, veredito, martelada e pipeline ElevenLabs do outro |
+| 22/07/2026 | La Corte torna o 3D padrão, leva decisões privadas ao palco e endurece a entrega multiplayer                                           |
+| 22/07/2026 | O tesouro 3D passa a refletir a contagem exata com layout puro e geometria instanciada                                                 |
 | Agora      | Intenção de combinar os dois num motor genérico                                                                                        |
 
 ### Onde as duas bases se encostam
@@ -175,21 +179,26 @@ jogo. E ainda faltam baselines por dispositivo — desktop, Android e iOS medido
 Os dois jogos têm duas apresentações para o mesmo estado autoritativo, e chegaram a arranjos
 diferentes:
 
-|                | La Corte                                                                | Sem Perdão                               |
-| -------------- | ----------------------------------------------------------------------- | ---------------------------------------- |
-| 2D             | Mesa completa, alternável a qualquer momento                            | `GameBoard.tsx`, só quando o WebGL falha |
-| Troca          | `state.presentation`, na mesma URL, preservando sala, crônica e relógio | Sem troca: é fallback de erro            |
-| Carga do WebGL | Import dinâmico no primeiro clique; ao voltar, a cena é descartada      | Ao entrar na mesa                        |
+|                | La Corte                                                                   | Sem Perdão                               |
+| -------------- | -------------------------------------------------------------------------- | ---------------------------------------- |
+| 2D             | Mesa completa, alternável a qualquer momento                               | `GameBoard.tsx`, só quando o WebGL falha |
+| Troca          | `state.presentation`, na mesma URL, preservando sala, crônica e relógio    | Sem troca: é fallback de erro            |
+| Carga do WebGL | Import dinâmico ao iniciar a partida 3D padrão; no 2D, a cena é descartada | Ao entrar na mesa                        |
 
 O arranjo de La Corte é o mais forte e vira contrato de motor: **apresentação é casca trocável sobre
 um estado só**. Dele saem três exigências que o motor precisa garantir — e que um jogo não deveria
 ter que reinventar:
 
 1. Trocar de apresentação não toca o estado: sala, histórico e relógios sobrevivem à troca.
-2. O 3D entra por import dinâmico e sai por descarte real, para não cobrar bundle nem memória de quem
-   nunca abriu a cena (aqui o palco é um chunk separado de ~650 kB).
+2. O 3D entra por import dinâmico e sai por descarte real: a home e a sala não
+   pagam o chunk do palco, e a apresentação 2D libera renderer e memória (o 3D
+   é o padrão da partida, não mais uma entrada por primeiro clique).
 3. O caminho 2D é a mesma coisa que o fallback de WebGL indisponível — quem já tem troca ganha
    fallback de graça, e não duas soluções para o mesmo problema.
+4. A apresentação 3D deve conseguir concluir seu fluxo principal dentro do
+   palco. Objetos 3D emitem intenções; o controlador autoritativo valida e
+   aplica comandos. HTML continua como adaptador acessível e fallback, não como
+   dependência obrigatória da experiência 3D.
 
 ## Tema claro e escuro atravessa casca e cena
 
@@ -375,19 +384,23 @@ Em 22/07/2026, uma validação manual no deploy exercitou duas sessões na mesma
 desktop e Brave no Android. O Android host encerrou a partida, mas o convidado no desktop rejeitou a
 visão terminal e ficou preso com o relógio zerado. A validação estrita introduzida por `dd97859`
 expôs o relógio inválido do estado final; `bbb5518` e `240c445` corrigem e cobrem esse payload. Uma
-recuperação autenticada por `state_sync_request` foi adicionada localmente para reparar sala, host e
-visão privada após Broadcast perdido. Comandos agora usam ACK, retry e deduplicação por versão, sem
-polling na partida saudável; a coleta do handover também é repetida durante a promoção. O deploy e a
-revalidação desses caminhos continuam pendentes.
+recuperação autenticada por `state_sync_request` foi implantada em `0ea96f9`
+para reparar sala, host e visão privada após Broadcast perdido. Comandos usam
+ACK, retry e deduplicação por versão, sem polling na partida saudável; a coleta
+do handover também é repetida durante a promoção. Todas as migrations foram
+aplicadas e o sintoma terminal deixou de ocorrer no uso manual. Permanecem
+pendentes a injeção automatizada de perdas e a cobertura ponta a ponta desses
+caminhos.
 
 A mesma auditoria já entregou, de graça, duas coisas que o plano precisava:
 
 - **A forma da extração.** As fronteiras sugeridas para desmontar `app.js` — `RoomTransport`,
   `OnlineSessionController`, `GameController`, `UIController` — são o desenho do runtime de sala com
   adaptador por stack. É mais concreto do que "núcleo puro + adaptador".
-- **O portão da fase 3.** O primeiro fluxo manual com duas sessões encontrou divergência terminal;
-  ainda faltam revalidar a correção, automatizar o cenário, cobrir reconexão e troca de host ponta a
-  ponta, payloads malformados, tentativa de impersonação e CI rodando tudo. Essa é precisamente a
+- **O portão da fase 3.** O primeiro fluxo manual com duas sessões encontrou
+  divergência terminal; a correção foi implantada e o sintoma cessou, mas ainda
+  faltam automatizar o cenário, cobrir reconexão e troca de host ponta a ponta,
+  payloads malformados, tentativa de impersonação e CI rodando tudo. Essa é precisamente a
   suíte que o motor precisa para merecer publicação. Nenhum desses testes é sobre Coup.
 
 ## Manutenção

@@ -266,7 +266,7 @@ export async function mountTableExperiment({
   const endCardFocus = () => {
     clearTimeout(cardFocusTimer);
     cardFocusTimer = null;
-    if (scene?.cameraName !== 'card') return;
+    if (!['card', 'influence-card'].includes(scene?.cameraName)) return;
     scene.setCamera('auto');
     root.dataset.camera = 'auto';
   };
@@ -570,9 +570,10 @@ export async function mountTableExperiment({
     gameplay.querySelector('#tabletop-again')?.addEventListener('click', restart);
     scene?.sync(projectCoupTableView(game, currentState.myId, { exchangePicks: currentState.exchangePicks }));
     playPendingReactions();
-    // A carta saiu da mesa enquanto o cinemático a enquadrava: o Auto retoma
-    // imediatamente, sem esperar o temporizador.
+    // A carta focalizada saiu da cena: o Auto retoma imediatamente, sem
+    // esperar o temporizador do plano de leitura.
     if (scene?.cameraName === 'card' && !scene.hasActionCard()) endCardFocus();
+    if (scene?.cameraName === 'influence-card' && !scene.hasFocusedInfluenceCard()) endCardFocus();
     // O diretor Auto decide o ato dentro da cena; o atributo só espelha a
     // escolha para a composição CSS quando não há override manual.
     if (scene && !scene.cameraOverridden) root.dataset.camera = scene.cameraName === 'player' ? 'player' : 'auto';
@@ -699,16 +700,23 @@ export async function mountTableExperiment({
         const pointer = pointerFromEvent(event);
         const exchangeId = scene.pickExchangeCard(pointer);
         const influenceId = !exchangeId ? scene.pickInfluenceCard(pointer) : null;
-        const actionHit = !exchangeId && !influenceId && scene.pickActionCard(pointer);
+        const privateInfluenceId = !exchangeId && !influenceId ? scene.pickPrivateInfluence(pointer) : null;
+        const coinsHit = !exchangeId && !influenceId && !privateInfluenceId && scene.pickPrivateCoins(pointer);
+        const actionHit =
+          !exchangeId && !influenceId && !privateInfluenceId && !coinsHit && scene.pickActionCard(pointer);
         scene.setExchangeCardHover(exchangeId);
         scene.setInfluenceCardHover(influenceId);
+        scene.setPrivateInfluenceHover(privateInfluenceId);
+        scene.setPrivateCoinsHover(coinsHit);
         scene.setActionCardHover(actionHit);
-        canvas.style.cursor = exchangeId || influenceId || actionHit ? 'pointer' : '';
+        canvas.style.cursor = exchangeId || influenceId || privateInfluenceId || coinsHit || actionHit ? 'pointer' : '';
       });
     });
     canvas.addEventListener('pointerleave', () => {
       scene?.setExchangeCardHover(null);
       scene?.setInfluenceCardHover(null);
+      scene?.setPrivateInfluenceHover(null);
+      scene?.setPrivateCoinsHover(false);
       scene?.setActionCardHover(false);
       canvas.style.cursor = '';
     });
@@ -732,6 +740,18 @@ export async function mountTableExperiment({
       if (influenceId) {
         const command = tabletopInfluenceCommand(currentState.game, currentState.myId, influenceId);
         if (command) dispatch(command);
+        return;
+      }
+      const privateInfluenceId = scene.pickPrivateInfluence(pointer);
+      if (privateInfluenceId) {
+        if (scene.cameraName === 'influence-card' && scene.focusedInfluenceId === privateInfluenceId) {
+          endCardFocus();
+          return;
+        }
+        if (!scene.focusPrivateInfluence(privateInfluenceId)) return;
+        root.dataset.camera = 'influence-card';
+        clearTimeout(cardFocusTimer);
+        cardFocusTimer = setTimeout(endCardFocus, 6000);
         return;
       }
       if (!scene.pickActionCard(pointer)) return;

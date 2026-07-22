@@ -14,6 +14,7 @@ import {
   influenceRevealCamera,
   throneCameraForSeat,
 } from './camera-director.js';
+import { coinStackBounds, coinStackLayout } from './coin-layout.js';
 import { createCoupEnvironment } from './coup-environment.js';
 import { createTabletopFoley } from './foley.js';
 import { HOURGLASS_GLASS_PROFILE, hourglassSand } from './hourglass-sand.js';
@@ -145,6 +146,116 @@ function createEmojiSprite(emoji) {
   return sprite;
 }
 
+function coinMaterials() {
+  return {
+    body: standardMaterial(COLORS.gold, {
+      emissive: COLORS.gold,
+      emissiveIntensity: 0.1,
+      metalness: 0.82,
+      roughness: 0.24,
+    }),
+    relief: standardMaterial(COLORS.bronze, {
+      metalness: 0.68,
+      roughness: 0.32,
+    }),
+  };
+}
+
+/** Uma moeda da corte; o nome da reação não altera a identidade da peça. */
+function createCourtCoin({ radius = 0.22, thickness = 0.055, upright = false } = {}) {
+  const group = new THREE.Group();
+  group.name = 'court-coin';
+  const materials = coinMaterials();
+  group.add(mesh(new THREE.CylinderGeometry(radius, radius, thickness, 20), materials.body, { cast: false }));
+  group.add(
+    mesh(new THREE.TorusGeometry(radius * 0.7, radius * 0.055, 5, 20), materials.relief, {
+      position: [0, thickness / 2 + 0.003, 0],
+      rotation: [Math.PI / 2, 0, 0],
+      cast: false,
+    }),
+  );
+  group.add(
+    mesh(new THREE.BoxGeometry(radius * 0.44, thickness * 0.18, radius * 0.44), materials.relief, {
+      position: [0, thickness / 2 + 0.006, 0],
+      rotation: [0, Math.PI / 4, 0],
+      cast: false,
+    }),
+  );
+  if (upright) group.rotation.x = Math.PI / 2;
+  return group;
+}
+
+function setInstanceTransform(instances, index, position, rotation) {
+  const matrix = new THREE.Matrix4();
+  const quaternion = new THREE.Quaternion().setFromEuler(rotation);
+  matrix.compose(position, quaternion, new THREE.Vector3(1, 1, 1));
+  instances.setMatrixAt(index, matrix);
+}
+
+function createCoinTreasury(count) {
+  const group = new THREE.Group();
+  group.name = 'court-treasury';
+  const layout = coinStackLayout(count);
+  const radius = 0.12;
+  const bounds = coinStackBounds(layout, radius);
+
+  if (layout.length) {
+    const thickness = 0.035;
+    const materials = coinMaterials();
+    const bodies = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(radius, radius, thickness, 16),
+      materials.body,
+      layout.length,
+    );
+    const rims = new THREE.InstancedMesh(
+      new THREE.TorusGeometry(radius * 0.7, radius * 0.055, 5, 16),
+      materials.relief,
+      layout.length,
+    );
+    const seals = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(radius * 0.44, thickness * 0.18, radius * 0.44),
+      materials.relief.clone(),
+      layout.length,
+    );
+
+    layout.forEach((coin, index) => {
+      setInstanceTransform(
+        bodies,
+        index,
+        new THREE.Vector3(coin.x, coin.y, coin.z),
+        new THREE.Euler(0, coin.rotationY, 0),
+      );
+      setInstanceTransform(
+        rims,
+        index,
+        new THREE.Vector3(coin.x, coin.y + thickness / 2 + 0.003, coin.z),
+        new THREE.Euler(Math.PI / 2, 0, 0),
+      );
+      setInstanceTransform(
+        seals,
+        index,
+        new THREE.Vector3(coin.x, coin.y + thickness / 2 + 0.006, coin.z),
+        new THREE.Euler(0, coin.rotationY + Math.PI / 4, 0),
+      );
+    });
+    for (const instances of [bodies, rims, seals]) {
+      instances.instanceMatrix.needsUpdate = true;
+      instances.castShadow = true;
+      instances.receiveShadow = true;
+      group.add(instances);
+    }
+  }
+
+  const hitArea = mesh(
+    new THREE.BoxGeometry(Math.max(0.42, bounds.width), bounds.height, Math.max(0.42, bounds.depth)),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+    { position: [bounds.centerX, bounds.centerY, bounds.centerZ], cast: false, receive: false },
+  );
+  hitArea.name = 'private-coin-hit-area';
+  group.add(hitArea);
+  return group;
+}
+
 function createThrowable(type) {
   const group = new THREE.Group();
   group.name = `court-throwable-${type}`;
@@ -209,24 +320,7 @@ function createThrowable(type) {
     group.add(mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.25, 7), grip, { position: [0, -0.21, 0], cast: false }));
     group.add(mesh(new THREE.BoxGeometry(0.28, 0.045, 0.06), guard, { position: [0, -0.08, 0], cast: false }));
   } else if (type === 'duke_coin') {
-    const coin = standardMaterial(COLORS.gold, {
-      emissive: COLORS.gold,
-      emissiveIntensity: 0.12,
-      metalness: 0.82,
-      roughness: 0.22,
-    });
-    group.add(
-      mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.055, 16), coin, {
-        rotation: [Math.PI / 2, 0, 0],
-        cast: false,
-      }),
-    );
-    group.add(
-      mesh(new THREE.TorusGeometry(0.15, 0.012, 5, 16), standardMaterial(COLORS.bronze), {
-        position: [0, 0, 0.031],
-        cast: false,
-      }),
-    );
+    group.add(createCourtCoin({ upright: true }));
   } else if (type === 'hourglass') {
     // "Seu tempo acabou": a mesma peça do relógio de decisão, reduzida ao
     // tamanho dos outros arremessos e centrada no próprio eixo para girar.
@@ -819,6 +913,61 @@ function createRoleFigure(role) {
   return figure;
 }
 
+function createInfluenceFrame(material, height = 0.032) {
+  const frame = new THREE.Group();
+  for (const [width, depth, x, z] of [
+    [0.7, 0.035, 0, -0.46],
+    [0.7, 0.035, 0, 0.46],
+    [0.035, 0.94, -0.34, 0],
+    [0.035, 0.94, 0.34, 0],
+  ]) {
+    frame.add(
+      mesh(new THREE.BoxGeometry(width, 0.012, depth), material, {
+        position: [x, height, z],
+        cast: false,
+        receive: false,
+      }),
+    );
+  }
+  return frame;
+}
+
+function createTreasureLabel(coins) {
+  const texture = canvasTexture(
+    (context, canvas) => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = 'rgba(12, 9, 7, .94)';
+      context.beginPath();
+      context.roundRect(8, 8, canvas.width - 16, canvas.height - 16, 18);
+      context.fill();
+      context.strokeStyle = '#d9b56b';
+      context.lineWidth = 5;
+      context.stroke();
+      context.textAlign = 'center';
+      context.fillStyle = '#d9b56b';
+      context.font = "700 18px 'DM Sans', sans-serif";
+      context.fillText('SEU TESOURO', canvas.width / 2, 42);
+      context.fillStyle = '#eee6d6';
+      context.font = "600 38px 'Cormorant Garamond', serif";
+      context.fillText(`◆ ${coins} ${coins === 1 ? 'MOEDA' : 'MOEDAS'}`, canvas.width / 2, 88);
+    },
+    { width: 384, height: 112 },
+  );
+  const label = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      toneMapped: false,
+    }),
+  );
+  label.name = 'private-treasure-label';
+  label.scale.set(1.4, 0.41, 1);
+  label.renderOrder = 20;
+  label.visible = false;
+  return label;
+}
+
 function createInfluenceCard(influence) {
   const geometry = new THREE.BoxGeometry(0.58, 0.035, 0.82);
   const edge = standardMaterial(influence.revealed ? 0x5f574e : COLORS.gold, {
@@ -839,27 +988,27 @@ function createInfluenceCard(influence) {
       depthWrite: false,
       toneMapped: false,
     });
-    const selectionFrame = new THREE.Group();
-    for (const [width, depth, x, z] of [
-      [0.7, 0.035, 0, -0.46],
-      [0.7, 0.035, 0, 0.46],
-      [0.035, 0.94, -0.34, 0],
-      [0.035, 0.94, 0.34, 0],
-    ]) {
-      selectionFrame.add(
-        mesh(new THREE.BoxGeometry(width, 0.012, depth), selectionMaterial, {
-          position: [x, 0.032, z],
-          cast: false,
-          receive: false,
-        }),
-      );
-    }
+    const selectionFrame = createInfluenceFrame(selectionMaterial);
     card.add(selectionFrame);
     card.userData.selectionFrame = selectionFrame;
     card.userData.selectionMaterial = selectionMaterial;
   }
+  if (influence.focusable) {
+    const focusMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const focusFrame = createInfluenceFrame(focusMaterial, 0.047);
+    focusFrame.visible = false;
+    card.add(focusFrame);
+    card.userData.focusFrame = focusFrame;
+  }
   card.userData.influenceId = influence.id;
   card.userData.selectable = influence.selectable;
+  card.userData.focusable = influence.focusable;
   card.userData.selected = influence.selected;
   if (influence.role) {
     card.add(
@@ -1010,6 +1159,10 @@ export class CoupTableScene {
     this.influenceReveals = [];
     this.selectableInfluences = [];
     this.hoveredInfluenceId = null;
+    this.focusableInfluences = [];
+    this.hoveredPrivateInfluenceId = null;
+    this.focusedInfluenceId = null;
+    this.privateCoinsHovered = false;
     this.exchangeGroup = null;
     this.exchangeCards = [];
     this.exchangeSignature = '';
@@ -1099,6 +1252,10 @@ export class CoupTableScene {
     this.influenceReveals = [];
     this.selectableInfluences = [];
     this.hoveredInfluenceId = null;
+    this.focusableInfluences = [];
+    this.hoveredPrivateInfluenceId = null;
+    this.focusedInfluenceId = null;
+    this.privateCoinsHovered = false;
     const count = view.seats.length;
     for (const seatView of view.seats) {
       const angle = seatView.azimuthRad;
@@ -1133,6 +1290,7 @@ export class CoupTableScene {
         ...noble,
         plaque,
         coinGroup,
+        treasureLabel: null,
         influenceGroup,
         influenceSignature: '',
         influenceStates: [],
@@ -1155,6 +1313,7 @@ export class CoupTableScene {
     const seat =
       seats.find((candidate) => candidate.id === seatId) ?? seats.find((candidate) => candidate.isSelf) ?? seats[0];
     if (!seat) return null;
+    this.focusedInfluenceId = null;
     this.currentPovSeatId = seat.id;
     this.stage.defineCameraAct('pov', povCameraForSeat(seat, seats.length));
     this.cameraOverridden = true;
@@ -1174,6 +1333,7 @@ export class CoupTableScene {
     const seats = this.view?.seats ?? [];
     const self = seats.find((seat) => seat.isSelf);
     if (!self) return null;
+    this.focusedInfluenceId = null;
     this.stage.defineCameraAct('player', playerCameraForSeat(self, seats.length));
     this.cameraOverridden = true;
     this.cameraName = 'player';
@@ -1185,6 +1345,7 @@ export class CoupTableScene {
     const seats = this.view?.seats ?? [];
     const seat = seats.find((candidate) => candidate.id === seatId);
     if (!seat) return null;
+    this.focusedInfluenceId = null;
     this.currentFocusSeatId = seat.id;
     this.stage.defineCameraAct('inspect', playerCameraForSeat(seat, seats.length));
     this.cameraOverridden = true;
@@ -1216,33 +1377,29 @@ export class CoupTableScene {
       // não é movimento de tesouro e não deve soar.
       const hadCoins = seat.coinCount >= 0;
       disposeObject3D(seat.coinGroup);
-      seat.coinGroup = new THREE.Group();
+      seat.coinGroup = createCoinTreasury(seatView.coins);
       seat.coinGroup.position.set(-1, 1.34, -1.2);
       seat.group.add(seat.coinGroup);
-      const visibleCoins = Math.min(seatView.coins, 7);
-      for (let index = 0; index < visibleCoins; index += 1) {
-        const coin = mesh(
-          new THREE.CylinderGeometry(0.14, 0.14, 0.035, 12),
-          standardMaterial(COLORS.gold, { metalness: 0.8, roughness: 0.25 }),
-          {
-            position: [(index % 3) * 0.19, Math.floor(index / 3) * 0.045, (index % 2) * 0.08],
-            rotation: [0, index * 0.31, 0],
-          },
-        );
-        seat.coinGroup.add(coin);
+      if (seat.treasureLabel) disposeObject3D(seat.treasureLabel);
+      seat.treasureLabel = seatView.isSelf ? createTreasureLabel(seatView.coins) : null;
+      if (seat.treasureLabel) {
+        seat.treasureLabel.position.set(-0.78, 2.05, -1.12);
+        seat.treasureLabel.visible = this.privateCoinsHovered;
+        seat.group.add(seat.treasureLabel);
       }
       if (hadCoins) this.foley?.play(seatView.coins > seat.coinCount ? 'coins-gain' : 'coins-loss');
       seat.coinCount = seatView.coins;
     }
 
     const influenceSignature = seatView.influences
-      .map((card) => `${card.id}:${card.role}:${card.revealed}:${card.selectable}`)
+      .map((card) => `${card.id}:${card.role}:${card.revealed}:${card.selectable}:${card.focusable}`)
       .join('|');
     if (influenceSignature !== seat.influenceSignature) {
       const previousInfluences = seat.influenceStates;
       const hadInfluences = seat.influenceSignature !== '';
       this.influenceReveals = this.influenceReveals.filter((reveal) => reveal.seatId !== seatView.id);
       this.selectableInfluences = this.selectableInfluences.filter((entry) => entry.seatId !== seatView.id);
+      this.focusableInfluences = this.focusableInfluences.filter((entry) => entry.seatId !== seatView.id);
       disposeObject3D(seat.influenceGroup);
       seat.influenceGroup = new THREE.Group();
       seat.influenceGroup.position.set(0.05, 1.28, -1.14);
@@ -1263,6 +1420,14 @@ export class CoupTableScene {
             card,
             frame: card.userData.selectionFrame,
             material: card.userData.selectionMaterial,
+          });
+        }
+        if (influence.focusable) {
+          this.focusableInfluences.push({
+            seatId: seatView.id,
+            influenceId: influence.id,
+            card,
+            frame: card.userData.focusFrame,
           });
         }
         if (newlyRevealed) {
@@ -1616,6 +1781,79 @@ export class CoupTableScene {
     return closest?.id ?? null;
   }
 
+  setPrivateInfluenceHover(influenceId) {
+    const next = this.focusableInfluences.some((entry) => entry.influenceId === influenceId) ? influenceId : null;
+    this.hoveredPrivateInfluenceId = next;
+    for (const entry of this.focusableInfluences) entry.frame.visible = entry.influenceId === next;
+    return Boolean(next);
+  }
+
+  pickPrivateInfluence(pointer) {
+    if (!this.focusableInfluences.length || this.view?.exchange) return null;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(pointer.x, pointer.y), this.stage.camera);
+    let closest = null;
+    for (const entry of this.focusableInfluences) {
+      const hit = raycaster.intersectObject(entry.card, true)[0];
+      if (hit && (!closest || hit.distance < closest.distance))
+        closest = { id: entry.influenceId, distance: hit.distance };
+    }
+    return closest?.id ?? null;
+  }
+
+  setPrivateCoinsHover(hovered) {
+    this.privateCoinsHovered = Boolean(hovered);
+    const selfView = this.view?.seats.find((seat) => seat.isSelf);
+    const selfSeat = selfView ? this.seats.get(selfView.id) : null;
+    if (selfSeat?.treasureLabel) selfSeat.treasureLabel.visible = this.privateCoinsHovered;
+    return this.privateCoinsHovered;
+  }
+
+  pickPrivateCoins(pointer) {
+    const selfView = this.view?.seats.find((seat) => seat.isSelf);
+    const selfSeat = selfView ? this.seats.get(selfView.id) : null;
+    if (!selfSeat?.coinGroup?.visible) return false;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(pointer.x, pointer.y), this.stage.camera);
+    return raycaster.intersectObject(selfSeat.coinGroup, true).length > 0;
+  }
+
+  hasFocusedInfluenceCard() {
+    return Boolean(
+      !this.view?.exchange &&
+      this.focusedInfluenceId &&
+      this.focusableInfluences.some((entry) => entry.influenceId === this.focusedInfluenceId),
+    );
+  }
+
+  focusPrivateInfluence(influenceId) {
+    const entry = this.focusableInfluences.find((candidate) => candidate.influenceId === influenceId);
+    if (!entry || this.view?.exchange) return false;
+    const card = entry.card.getWorldPosition(new THREE.Vector3());
+    const camera = this.stage.camera.position;
+    const toCameraX = camera.x - card.x;
+    const toCameraZ = camera.z - card.z;
+    const length = Math.hypot(toCameraX, toCameraZ) || 1;
+    const directionX = toCameraX / length;
+    const directionZ = toCameraZ / length;
+    const target = [card.x, card.y, card.z];
+    this.stage.defineCameraAct('influence-card', {
+      position: [card.x + directionX * 0.75, card.y + 1.5, card.z + directionZ * 0.75],
+      target,
+      fov: 39,
+      portrait: {
+        position: [card.x + directionX * 0.62, card.y + 1.82, card.z + directionZ * 0.62],
+        target,
+        fov: 47,
+      },
+    });
+    this.focusedInfluenceId = influenceId;
+    this.cameraOverridden = true;
+    this.cameraName = 'influence-card';
+    this.stage.setCameraAct('influence-card');
+    return true;
+  }
+
   setExchangeCardHover(cardId) {
     const next = this.exchangeCards.some((entry) => entry.id === cardId) ? cardId : null;
     this.hoveredExchangeId = next;
@@ -1663,6 +1901,7 @@ export class CoupTableScene {
         fov: 52,
       },
     });
+    this.focusedInfluenceId = null;
     this.cameraOverridden = true;
     this.cameraName = 'card';
     this.stage.setCameraAct('card');
@@ -1700,6 +1939,7 @@ export class CoupTableScene {
   }
 
   setCamera(name) {
+    this.focusedInfluenceId = null;
     if (name === 'pov') return this.setPovSeat(this.currentPovSeatId);
     if (name === 'player') return this.setPlayerCamera();
     if (name === 'auto') {
@@ -1901,6 +2141,7 @@ export class CoupTableScene {
     this.emojiReactions = [];
     this.flyingReactions = [];
     this.selectableInfluences = [];
+    this.focusableInfluences = [];
     this.exchangeCards = [];
     this.actionTexture?.dispose();
     this.actionCaptionTexture?.dispose();
