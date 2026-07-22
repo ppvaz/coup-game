@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/sala/(.*)", "destination": "/index.html" },
-    { "source": "/3d", "destination": "/index.html" }
+    { "source": "/lab", "destination": "/index.html" },
+    { "source": "/lab/(.*)", "destination": "/index.html" }
   ]
 }

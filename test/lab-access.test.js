@@ -13,13 +13,13 @@ const makeStorage = (entries = {}) => {
 test('uma chave válida na URL libera o laboratório e é removida do endereço', () => {
   const storage = makeStorage();
   const result = consumeLabAccess({
-    href: 'https://corte.test/3d/lab?theme=dark&labKey=convite#mesa',
+    href: 'https://corte.test/lab?theme=dark&labKey=convite#mesa',
     secret: 'convite',
     storage,
   });
 
   assert.equal(result.allowed, true);
-  assert.equal(result.cleanPath, '/3d/lab?theme=dark#mesa');
+  assert.equal(result.cleanPath, '/lab?theme=dark#mesa');
   assert.equal(storage.getItem(LAB_ACCESS_STORAGE_KEY), 'granted');
 });
 
@@ -37,7 +37,7 @@ test('uma chave inválida não concede acesso', () => {
 
 test('a permissão persiste em acessos seguintes sem parâmetro', () => {
   const result = consumeLabAccess({
-    href: 'https://corte.test/3d',
+    href: 'https://corte.test/lab',
     secret: 'convite',
     storage: makeStorage({ [LAB_ACCESS_STORAGE_KEY]: 'granted' }),
   });

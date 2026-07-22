@@ -37,9 +37,7 @@ Abra [http://localhost:5173](http://localhost:5173), ou use o endereço exibido 
 
 ### La Corte 3D
 
-Partidas novas e retomadas abrem na mesa 3D. A rota
-[http://localhost:5173/3d](http://localhost:5173/3d) mantém uma partida isolada
-para validação. O salão usa o mesmo motor de regras e a mesma partida da mesa
+Partidas novas e retomadas abrem na mesa 3D. O salão usa o mesmo motor de regras e a mesma partida da mesa
 2D; o WebGL apenas projeta e encena o estado já decidido. O painel da Corte
 permite alternar para a mesa 2D sem perder sala, crônica ou relógio. A HUD
 oferece ações, decisões, crônica, chat multiplayer e reações efêmeras sem
@@ -51,7 +49,7 @@ não inicializa o salão. Depois de carregada, a cena é preservada entre
 atualizações da partida e descartada ao voltar ao 2D. Dia e noite usam a mesma
 preferência da interface 2D.
 
-O laboratório técnico fica em `/3d/lab` e não avança uma partida. Para liberar
+O laboratório técnico fica em `/lab` e não avança uma partida. Para liberar
 seu botão, configure `VITE_CORTE_3D_LAB_KEY` e visite uma vez:
 
 ```text

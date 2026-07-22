@@ -134,7 +134,7 @@ export function tabletopRosterHTML(state, context) {
     })
     .join(
       '',
-    )}<small class="tabletop-roster-hint">CLIQUE EM UM NOME PARA FOCAR</small><section class="tabletop-roster-settings" aria-label="Preferências da experiência">${context.canSwitchTo2D ? '<button class="tabletop-2d" id="tabletop-2d" type="button" title="Usar a mesa 2D" aria-label="Alternar para a mesa 2D, mantendo a partida"><span>▦</span><small>Mesa 2D</small></button>' : ''}<button class="tabletop-theme" id="tabletop-theme" type="button" title="Alternar ambiente"><span>☀</span><small>Modo diurno</small></button>${audioTogglesHTML(context)}${context.labAccess ? '<a class="tabletop-lab-link" href="/3d/lab" aria-label="Abrir laboratório 3D" title="Abrir laboratório 3D"><span>◇</span><small>Abrir laboratório 3D</small></a>' : ''}</section></aside>`;
+    )}<small class="tabletop-roster-hint">CLIQUE EM UM NOME PARA FOCAR</small><section class="tabletop-roster-settings" aria-label="Preferências da experiência">${context.canSwitchTo2D ? '<button class="tabletop-2d" id="tabletop-2d" type="button" title="Usar a mesa 2D" aria-label="Alternar para a mesa 2D, mantendo a partida"><span>▦</span><small>Mesa 2D</small></button>' : ''}<button class="tabletop-theme" id="tabletop-theme" type="button" title="Alternar ambiente"><span>☀</span><small>Modo diurno</small></button>${audioTogglesHTML(context)}${context.labAccess ? '<a class="tabletop-lab-link" href="/lab" aria-label="Abrir laboratório 3D" title="Abrir laboratório 3D"><span>◇</span><small>Abrir laboratório 3D</small></a>' : ''}</section></aside>`;
 }
 
 function tabletopBenchDecisionHTML(state, context, { fallbackOpen = false } = {}) {
@@ -256,7 +256,7 @@ export function tableExperimentHTML({ testMode = false } = {}) {
     <canvas id="tabletop-canvas" aria-label="Mesa 3D jogável da La Corte"></canvas>
     <div class="tabletop-loading" id="tabletop-loading"><i></i><span>Convocando a corte…</span></div>
     <nav class="tabletop-topbar">
-      ${testMode ? '<a class="tabletop-brand" href="/3d" aria-label="Voltar ao jogo 3D">LA <span>CORTE</span><small>LABORATÓRIO 3D</small></a>' : ''}
+      ${testMode ? '<a class="tabletop-brand" href="/" aria-label="Voltar ao jogo">LA <span>CORTE</span><small>LABORATÓRIO 3D</small></a>' : ''}
       ${testMode ? '<div class="tabletop-engine-badge"><i></i><span>TABLETOP STAGE</span><small>MOTOR AUTORITATIVO · INSTRUMENTAÇÃO</small></div>' : ''}
       <div class="tabletop-top-actions">
         ${testMode ? '<button class="tabletop-benchmark" id="tabletop-benchmark" type="button"><span>◷</span><small>Medir FPS</small></button>' : ''}
@@ -265,7 +265,7 @@ export function tableExperimentHTML({ testMode = false } = {}) {
         <button class="tabletop-roster-toggle" id="tabletop-roster-toggle" type="button" aria-controls="tabletop-roster" aria-expanded="false"><span>${rosterBookIcon(false)}</span><small>A corte</small></button>
         <span class="tabletop-chat-slot" id="tabletop-chat-slot"></span>
         ${testMode ? '<button class="tabletop-theme" id="tabletop-theme" type="button"><span>☀</span><small>Modo diurno</small></button>' : ''}
-        ${testMode ? '<a class="tabletop-exit" href="/3d" aria-label="Voltar ao jogo 3D"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao jogo 3D</span></a>' : '<button class="tabletop-exit" id="tabletop-exit-request" type="button" aria-expanded="false" aria-controls="tabletop-exit-confirm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao salão</span></button>'}
+        ${testMode ? '<a class="tabletop-exit" href="/" aria-label="Voltar ao jogo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao jogo</span></a>' : '<button class="tabletop-exit" id="tabletop-exit-request" type="button" aria-expanded="false" aria-controls="tabletop-exit-confirm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h10v18H10M14 12H3m4-4-4 4 4 4"/></svg><span>Voltar ao salão</span></button>'}
       </div>
     </nav>
     ${testMode ? '' : '<aside class="tabletop-exit-confirm" id="tabletop-exit-confirm" hidden><span>ABANDONAR A PARTIDA?</span><p>O progresso desta mesa será encerrado.</p><div><button type="button" id="tabletop-exit-cancel">Continuar jogando</button><button type="button" class="exit-leave" id="tabletop-exit-leave">Sair da partida</button></div></aside>'}

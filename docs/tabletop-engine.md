@@ -1,6 +1,6 @@
 # Tabletop Stage — motor gráfico comum
 
-O experimento em `/3d` separa a mesa em três camadas. Essa é a fronteira que
+A mesa 3D é separada em três camadas. Essa é a fronteira que
 permite reaproveitar a técnica do Sem Perdão sem misturar as regras dos jogos.
 
 ```text
@@ -68,21 +68,20 @@ o palco representa um resultado; nunca decide um resultado.
 npm run dev
 ```
 
-O 3D é a apresentação padrão das partidas novas e retomadas;
-`http://localhost:5173/3d` mantém uma partida isolada para validação. A mesa
+O 3D é a apresentação padrão das partidas novas e retomadas. A mesa
 real contra bots ou multiplayer reutiliza o mesmo `dispatchGame()` do 2D e pode
 alternar de apresentação sem perder estado. O compositor WebGL é carregado sob
 demanda quando uma partida 3D começa, preservado entre renders e descartado ao
 voltar para a mesa 2D.
 
-`http://localhost:5173/3d/lab` é o laboratório técnico. Ele mantém uma cena
+`http://localhost:5173/lab` é o laboratório técnico. Ele mantém uma cena
 estática para testar ambiente e câmeras sem bots avançando a partida. Benchmark,
 qualidade e seleção manual dos atos ficam restritos a essa rota.
 
 O laboratório só aparece após o navegador consumir `?labKey=...`, comparando-o
 com `VITE_CORTE_3D_LAB_KEY` e persistindo a permissão em
 `la-corte-3d-lab-access`. A URL é limpa logo após a validação. Sem permissão,
-uma tentativa de abrir `/3d/lab` retorna para `/3d`.
+uma tentativa de abrir `/lab` retorna para `/`.
 
 ### Interface jogável
 
@@ -136,7 +135,7 @@ em `localStorage` sob `la-corte-3d-benchmarks` e o último também é publicado 
 Para automação no navegador, abra:
 
 ```text
-/3d/lab?benchmark=1&duration=8000
+/lab?benchmark=1&duration=8000
 ```
 
 O parâmetro `duration` aceita de 2 a 60 segundos. A aba precisa permanecer
@@ -153,7 +152,7 @@ cena, as luzes e os materiais permanecem idênticos para permitir comparação:
 - `performance`: `pixelScale 4`, DPR de saída 1.
 
 A preferência fica em `la-corte-3d-quality`. Para fixar uma run automatizada,
-use, por exemplo, `/3d/lab?quality=performance&benchmark=1&duration=8000`.
+use, por exemplo, `/lab?quality=performance&benchmark=1&duration=8000`.
 Os dois perfis inferiores são diagnósticos: não devem substituir o Cinemático
 quando cartas, nomes ou estados deixarem de ser inequívocos.
 

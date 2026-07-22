@@ -1,5 +1,5 @@
 // Capturas de referência da mesa 3D: sobe o dev server, percorre a matriz
-// shots × viewports × temas no /3d/lab (cena congelada) e salva PNGs em
+// shots × viewports × temas no /lab (cena congelada) e salva PNGs em
 // captures/. Usa o Chrome instalado via playwright-core, sem download.
 //
 //   npm run capture:3d                       — matriz completa
@@ -89,7 +89,7 @@ try {
           const label = `${composition}/${theme}/${viewportName}/${shot}`;
           try {
             const search = new URLSearchParams({ shot, theme, composition });
-            await page.goto(`${BASE}/3d/lab?${search}`);
+            await page.goto(`${BASE}/lab?${search}`);
             await page.waitForSelector('.tabletop-loading.hidden', { timeout: 30_000 });
             await page.waitForTimeout(700);
             const path = `${directory}/${shot.replaceAll(':', '-')}.png`;

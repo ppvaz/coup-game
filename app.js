@@ -6,6 +6,7 @@ import { createEncryptionIdentity, decryptFrom, encryptFor } from './src/lib/sec
 import { RECONNECT_GIVE_UP_MS, trackPresence } from './src/lib/realtime.js';
 import { createSoundManager } from './src/lib/sounds.js';
 import { consumeLabAccess } from './src/lib/lab-access.js';
+import { isLabRoute, routeFromPath } from './src/lib/routes.js';
 import { botDelayMs } from './src/lib/bot-timing.js';
 import { decisionClockKey } from './src/lib/decision-clock.js';
 import { warmupPlan } from './src/lib/asset-warmup.js';
@@ -119,16 +120,15 @@ const labAccess = consumeLabAccess({
   storage: localStorage,
 });
 if (labAccess.consumed) history.replaceState(history.state, '', labAccess.cleanPath);
-const requestedTabletopLab = /^\/3d\/lab\/?$/.test(location.pathname);
-if (requestedTabletopLab && !labAccess.allowed) history.replaceState(history.state, '', '/3d');
-const isTabletopExperiment = /^\/3d(?:\/lab)?\/?$/.test(location.pathname);
-const isTabletopLab = labAccess.allowed && /^\/3d\/lab\/?$/.test(location.pathname);
-const roomPathMatch = location.pathname.match(/^\/sala\/([A-Z2-9]{5})\/?$/i);
-const inviteCode = (roomPathMatch?.[1] || new URLSearchParams(location.search).get('room') || '')
+const requestedRoute = routeFromPath(location.pathname);
+if (isLabRoute(requestedRoute) && !labAccess.allowed) history.replaceState(history.state, '', '/');
+const route = isLabRoute(requestedRoute) && !labAccess.allowed ? routeFromPath('/') : requestedRoute;
+const isTabletopLab = route.name === 'lab';
+const inviteCode = (route.code || new URLSearchParams(location.search).get('room') || '')
   .toUpperCase()
   .replace(/[^A-Z2-9]/g, '')
   .slice(0, 5);
-const resumeSnapshot = isTabletopExperiment ? null : loadOnlineSession(sessionStorage, inviteCode);
+const resumeSnapshot = isLabRoute(route) ? null : loadOnlineSession(sessionStorage, inviteCode);
 
 let state = {
   screen: 'lobby',
@@ -198,8 +198,9 @@ let reconnectingSince = 0;
 let lastTabletopReactionAt = 0;
 let tableExperimentController = null;
 let tableExperimentMount = null;
-// A sessão de validação de /3d senta seis cadeiras; a revanche precisa saber
-// qual mesa local recriar quando a partida foi aberta pelo fluxo comum.
+// A sessão de validação do laboratório senta seis cadeiras; a revanche
+// precisa saber qual mesa local recriar quando a partida foi aberta pelo
+// fluxo comum.
 let localGameKind = 'standard';
 if (resumeSnapshot?.game) {
   clock = {
@@ -1777,6 +1778,5 @@ function bindChat(restoreFocus = false) {
   });
 }
 
-if (isTabletopExperiment && !isTabletopLab) startTabletopLocal();
-else render();
-if (resumeSnapshot && !isTabletopExperiment) connectRoom('resume');
+render();
+if (resumeSnapshot && !isLabRoute(route)) connectRoom('resume');
