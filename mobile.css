@@ -1381,39 +1381,53 @@ html[data-theme='light'] .chat-taunts button {
     font-size: clamp(30px, 9vw, 40px);
   }
   .tabletop-experiment[data-interface='game'] .tabletop-roster {
-    top: 168px;
+    top: auto;
     right: 8px;
-    width: 142px;
-    padding: 4px;
+    bottom: max(122px, calc(env(safe-area-inset-bottom) + 114px));
+    left: 8px;
+    width: auto;
+    max-height: none;
+    padding: 3px;
   }
   .tabletop-roster-title {
     padding: 1px 3px 5px;
     font-size: 6px;
   }
   .tabletop-roster-player {
-    gap: 3px;
-    min-height: 22px;
-    padding: 1px 2px;
+    gap: 1px 3px;
+    min-height: 44px;
+    flex-basis: 72px;
+    padding: 2px 3px 4px;
   }
   .tabletop-roster-name {
-    padding: 3px 0;
+    min-height: 25px;
+    padding: 4px 0;
   }
   .tabletop-roster-name span {
     font-size: 7px;
   }
-  .tabletop-roster-name small,
   .tabletop-roster-hint {
     display: none;
   }
+  .tabletop-roster-name small {
+    display: inline;
+    font-size: 5px;
+  }
   .tabletop-roster-coins {
+    gap: 2px;
+  }
+  .tabletop-roster-coins i {
+    font-size: 5px;
+  }
+  .tabletop-roster-coins b {
     font-size: 7px;
   }
   .tabletop-roster-influences {
     gap: 2px;
   }
   .tabletop-roster-influences i {
-    width: 8px;
-    height: 12px;
+    width: 7px;
+    height: 11px;
   }
   .tabletop-roster-influences i.hidden::after {
     inset: 1px;
@@ -1422,21 +1436,26 @@ html[data-theme='light'] .chat-taunts button {
     font-size: 9px;
   }
   .tabletop-roster-settings {
+    display: flex;
+    flex-wrap: nowrap;
     gap: 4px;
-    margin-top: 5px;
-    padding: 6px 2px 1px;
+    margin: 0 0 0 3px;
+    padding: 4px 0 4px 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
   .tabletop-roster-settings .tabletop-theme,
+  .tabletop-roster-settings .tabletop-2d,
   .tabletop-roster-settings .audio-toggle,
   .tabletop-lab-link {
-    width: 30px;
-    min-height: 30px;
-    flex-basis: 30px;
+    width: 32px;
+    min-height: 32px;
+    flex-basis: 32px;
     padding: 0;
   }
   .tabletop-experiment[data-interface='game'] .tabletop-roster-settings .tabletop-theme {
-    width: 30px;
-    min-height: 30px;
+    width: 32px;
+    min-height: 32px;
     padding: 0;
   }
   .tabletop-roster-settings .tabletop-theme small,

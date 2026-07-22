@@ -6,9 +6,11 @@ import {
   cameraDecisionKey,
   claimCameraForSeat,
   coinTransferCameraForSeats,
+  confirmationCameraForElements,
   directCamera,
   duelCameraForSeats,
   influenceRevealCamera,
+  interventionCameraForElements,
   throneCameraForSeat,
 } from '../src/lib/tabletop/camera-director.js';
 
@@ -32,18 +34,20 @@ test('escolha de alvo começa geral e focaliza o rival pré-selecionado', () => 
   assert.deepEqual(directCamera(selected), { act: 'targeting-seat', seatIds: ['c'] });
 });
 
-test('alegação sem alvo enquadra o ator; com alvo, o duelo entre os dois', () => {
+test('a intervenção local prioriza o tríptico; observadores continuam vendo alegação e duelo', () => {
   const tax = dispatchGame(newGame(), { type: 'declare_action', actorId: 'a', action: 'tax' });
-  assert.deepEqual(directCamera(projectCoupTableView(tax, 'b')), { act: 'claim', seatIds: ['a'] });
+  assert.deepEqual(directCamera(projectCoupTableView(tax, 'b')), { act: 'intervention', seatIds: ['b'] });
+  assert.deepEqual(directCamera(projectCoupTableView(tax, 'c')), { act: 'claim', seatIds: ['a'] });
   const steal = dispatchGame(newGame(), { type: 'declare_action', actorId: 'a', action: 'steal', targetId: 'b' });
   assert.deepEqual(directCamera(projectCoupTableView(steal, 'c')), { act: 'duel', seatIds: ['a', 'b'] });
 });
 
-test('a chave da decisão não muda enquanto as respostas coletivas chegam', () => {
+test('a câmera só vai à bancada quando a resposta chega ao observador', () => {
   let game = dispatchGame(newGame(), { type: 'declare_action', actorId: 'a', action: 'tax' });
   const before = cameraDecisionKey(directCamera(projectCoupTableView(game, 'c')));
+  assert.equal(before, 'claim:a');
   game = dispatchGame(game, { type: 'pass', actorId: 'b' });
-  assert.equal(cameraDecisionKey(directCamera(projectCoupTableView(game, 'c'))), before);
+  assert.equal(cameraDecisionKey(directCamera(projectCoupTableView(game, 'c'))), 'intervention:c');
 });
 
 test('janela de bloqueio e contestação do bloqueio dirigem o duelo certo', () => {
@@ -99,6 +103,27 @@ test('vitória corta para o trono do vencedor', () => {
   const game = dispatchGame(duo, { type: 'declare_action', actorId: 'a', action: 'coup', targetId: 'b' });
   assert.equal(game.status, 'finished');
   assert.deepEqual(directCamera(projectCoupTableView(game, 'b')), { act: 'throne', seatIds: ['a'] });
+});
+
+test('foco de elementos acompanha posição e abertura do tríptico', () => {
+  const points = [
+    { x: -1.75, y: 2.3, z: 0 },
+    { x: 0, y: 2.35, z: 0 },
+    { x: 1.75, y: 2.3, z: 0 },
+  ];
+  const base = interventionCameraForElements(points);
+  const shifted = interventionCameraForElements(points.map((point) => ({ ...point, x: point.x + 2, z: point.z - 1 })));
+  assert.equal(shifted.target[0], base.target[0] + 2);
+  assert.equal(shifted.target[2], base.target[2] - 1);
+  assert.equal(shifted.position[0], base.position[0] + 2);
+  const wider = interventionCameraForElements([
+    { x: -3, y: 2.3, z: 0 },
+    { x: 3, y: 2.3, z: 0 },
+  ]);
+  assert.ok(wider.position[2] > base.position[2]);
+  const confirmation = confirmationCameraForElements(points.slice(0, 2));
+  assert.ok(confirmation.position[2] < base.position[2]);
+  assert.ok(confirmation.fov < base.fov);
 });
 
 test('a geometria dirigida evita o centro da mesa e as paredes em mesas de 2 a 6 assentos', () => {

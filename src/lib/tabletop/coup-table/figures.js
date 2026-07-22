@@ -294,3 +294,66 @@ export function createRoleFigure(role) {
   );
   return figure;
 }
+
+/** Figura neutra de intervenção: não insinua nenhuma carta privada. */
+export function createInterventionFigure(kind) {
+  const challenge = kind === 'challenge';
+  const figure = new THREE.Group();
+  figure.name = challenge ? 'intervention-challenge' : 'intervention-allow';
+  const accentColor = challenge ? COLORS.danger : COLORS.gold;
+  const stone = standardMaterial(challenge ? 0x372126 : 0x3b352b, {
+    roughness: 0.78,
+    emissive: challenge ? 0x2a0c10 : 0x302814,
+    emissiveIntensity: 0.12,
+  });
+  const accent = standardMaterial(accentColor, {
+    metalness: 0.72,
+    roughness: 0.28,
+    emissive: accentColor,
+    emissiveIntensity: 0.12,
+  });
+  const dark = standardMaterial(0x171411, { roughness: 0.9 });
+
+  figure.add(mesh(new THREE.CylinderGeometry(0.56, 0.7, 0.2, 18), dark, { position: [0, 0.1, 0] }));
+  figure.add(mesh(new THREE.CylinderGeometry(0.43, 0.62, 1.22, 10), stone, { position: [0, 0.78, 0] }));
+  figure.add(mesh(new THREE.SphereGeometry(0.3, 14, 9), stone, { position: [0, 1.58, 0.02] }));
+  figure.add(
+    mesh(new THREE.BoxGeometry(0.68, 0.16, 0.1), accent, {
+      position: [0, 1.02, 0.4],
+      rotation: [0.08, 0, challenge ? -0.17 : 0],
+    }),
+  );
+
+  if (challenge) {
+    for (const direction of [-1, 1]) {
+      figure.add(
+        mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.05, 7), accent, {
+          position: [direction * 0.16, 1.18, 0.42],
+          rotation: [0, 0, direction * 0.72],
+        }),
+      );
+    }
+  } else {
+    figure.add(
+      mesh(new THREE.TorusGeometry(0.33, 0.045, 8, 22, Math.PI * 1.55), accent, {
+        position: [0, 1.25, 0.38],
+        rotation: [0, 0, -Math.PI * 0.78],
+      }),
+    );
+  }
+
+  figure.add(
+    mesh(
+      new THREE.RingGeometry(0.54, 0.69, 28),
+      new THREE.MeshBasicMaterial({
+        color: accentColor,
+        transparent: true,
+        opacity: 0.48,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+      { position: [0, 0.22, 0], rotation: [-Math.PI / 2, 0, 0], cast: false, receive: false },
+    ),
+  );
+  return figure;
+}

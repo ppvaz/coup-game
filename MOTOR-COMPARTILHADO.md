@@ -51,7 +51,7 @@ commit da mudança.
 | Módulo                                | Máquina (motor)                                                                                        | Amarra a Coup                                                              |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | `src/lib/tabletop/camera-director.js` | Beat da partida → ato de câmera; chave de corte que evita recortes repetidos; geometria de duelo/trono | O vocabulário de beats (`claim`, `block-window`, `influence-loss`…)        |
-| `src/lib/tabletop/foley.js`           | Síntese no `AudioContext` da mesa, intervalo mínimo por evento                                         | Nomes dos eventos (moeda, carta revelada, arremesso)                       |
+| `src/lib/tabletop/foley.js`           | Síntese no `AudioContext` da mesa, intervalo mínimo por evento                                         | Nomes dos eventos (alegação, bloqueio, desafio, derrota, vitória e props)  |
 | `src/lib/tabletop/reactions.js`       | Normalização, deduplicação e janela dos últimos N                                                      | Catálogo de arremessáveis (adaga da Assassina, moeda do Duque…)            |
 | `src/lib/tabletop/coin-layout.js`     | Distribuição determinística e limites de pilhas repetidas                                              | Hoje recebe a contagem do tesouro de Coup                                  |
 | `src/lib/tabletop/coin-transfer.js`   | Curva, cascata, duração e variante de movimento reduzido para transferências                           | Hoje anima ganhos, custos, roubos e reembolsos em moedas                   |
@@ -74,6 +74,7 @@ commit da mudança.
 | `src/game/network-schema.js`                                 | Schema de comandos e visões redigidas no vocabulário de Coup                |
 | `src/ui/game-views.js`, `src/ui/screens.js`                  | Telas e views da mesa 2D                                                    |
 | `src/lib/tabletop/coup-view.js`                              | Projeção do estado para o palco                                             |
+| `src/lib/tabletop/coup-intents.js`                           | Projeção de escolhas públicas e conversão de intenção em comando            |
 | `src/lib/tabletop/coup-table.js` + `coup-table/`             | Coordenação da cena, assentos, cartas, figuras, ampulheta, moedas e reações |
 | `src/lib/tabletop/coup-environment.js` + `coup-environment/` | Composição do salão, cidade, texturas procedurais, luz e paletas            |
 | `app.js`                                                     | Orquestração da aplicação                                                   |
@@ -113,6 +114,7 @@ arranjo, é o produto; os jogos são a prova dele.
 | 20–21/07   | Os dois evoluem em separado: PiP, diretor de câmera e ampulheta de um lado; provas, veredito, martelada e pipeline ElevenLabs do outro |
 | 22/07/2026 | La Corte torna o 3D padrão, leva decisões privadas ao palco e endurece a entrega multiplayer                                           |
 | 22/07/2026 | O tesouro 3D passa a refletir a contagem exata com layout puro e geometria instanciada                                                 |
+| 22/07/2026 | Intervenções ganham efígies clicáveis, foco derivado dos objetos e foley/gestos públicos                                               |
 | Agora      | Intenção de combinar os dois num motor genérico                                                                                        |
 
 ### Onde as duas bases se encostam

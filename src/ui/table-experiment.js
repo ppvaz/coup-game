@@ -2,6 +2,11 @@ import { awaitedPlayerId } from '../game/ai.js';
 import { ACTIONS, responseProgress, validActionTargets } from '../game/coup.js';
 import { projectCoupTableView } from '../lib/tabletop/coup-view.js';
 import {
+  nextTabletopIntentConfirmation,
+  projectTabletopDecision,
+  tabletopIntentOutcome,
+} from '../lib/tabletop/coup-intents.js';
+import {
   TABLETOP_BENCHMARK_DEFAULTS,
   TabletopBenchmarkKit,
   benchmarkOptionsFromSearch,
@@ -115,12 +120,12 @@ export function tabletopRosterHTML(state, context) {
     .map((seat) => {
       const connected = state.room?.seats.find((candidate) => candidate.id === seat.id)?.connected ?? true;
       const alive = seat.cards.some((card) => !card.revealed);
-      return `<article class="tabletop-roster-player ${decisionPlayerId === seat.id ? 'active' : ''} ${alive ? '' : 'eliminated'} ${connected ? '' : 'offline'}"><button type="button" class="tabletop-roster-name" data-tabletop-focus-seat="${escapeHTML(seat.id)}" title="Focar ${escapeHTML(seat.name)}" aria-label="Focar a câmera em ${escapeHTML(seat.name)}"><span>${escapeHTML(seat.name)}</span>${seat.id === state.myId ? '<small>VOCÊ</small>' : ''}</button><span class="tabletop-roster-coins" aria-label="${seat.coins} moedas">◆ ${seat.coins}</span><span class="tabletop-roster-influences">${seat.cards
+      return `<button type="button" class="tabletop-roster-player ${decisionPlayerId === seat.id ? 'active' : ''} ${alive ? '' : 'eliminated'} ${connected ? '' : 'offline'}" data-tabletop-focus-seat="${escapeHTML(seat.id)}" title="Focar ${escapeHTML(seat.name)}" aria-label="Focar a câmera em ${escapeHTML(seat.name)}, ${seat.coins} moedas"><span class="tabletop-roster-name"><span>${escapeHTML(seat.name)}</span>${seat.id === state.myId ? '<small>(VOCÊ)</small>' : ''}</span><span class="tabletop-roster-coins" aria-label="${seat.coins} moedas"><i aria-hidden="true">◆</i><b>${seat.coins}</b></span><span class="tabletop-roster-influences">${seat.cards
         .map(
           (card) =>
             `<i class="${card.revealed ? 'lost' : 'hidden'}" ${card.revealed ? `style="--portrait:url('${context.portraits[card.role]}')"` : ''} aria-label="${card.revealed ? `${card.role}, influência perdida` : 'Influência ativa'}">${card.revealed ? '<b>×</b>' : ''}</i>`,
         )
-        .join('')}</span></article>`;
+        .join('')}</span></button>`;
     })
     .join(
       '',
@@ -170,10 +175,27 @@ function tabletopTargetDecisionHTML(state, context, selectedTargetId = null) {
   return `<aside class="tabletop-bench-decision tabletop-target-decision" aria-label="Escolha um alvo para ${escapeHTML(action.label)}"><div><span>Escolha de alvo</span><strong>Toque no assento de um rival para ${escapeHTML(action.label.toLowerCase())}</strong><small>Os assentos iluminados são alvos válidos.</small></div>${timerHTML(state.game, context.clock)}<div class="tabletop-bench-decision-actions"><button type="button" class="ghost" id="tabletop-target-fallback-open">Escolher por lista</button><button type="button" class="ghost" id="tabletop-target-cancel">Cancelar</button></div></aside>`;
 }
 
+function tabletopStageDecisionHTML(decision, game, context, armedDecisionId = null) {
+  const armed = decision.options.find((option) => option.id === armedDecisionId) ?? null;
+  const copy = armed
+    ? 'Toque novamente na mesma efígie para confirmar. Toque fora para cancelar.'
+    : decision.kind === 'block'
+      ? 'Toque em uma efígie para preparar o bloqueio ou permitir a ação.'
+      : 'Toque em uma efígie para preparar a contestação ou permissão.';
+  const title = armed ? `Confirmar ${armed.label}?` : decision.title;
+  return `<aside class="tabletop-bench-decision tabletop-stage-decision ${armed ? 'armed' : ''}" aria-label="${escapeHTML(title)}"><div><span>${armed ? 'Confirmar no palco' : 'Decisão no palco'}</span><strong>${escapeHTML(title)}</strong><small>${escapeHTML(copy)}</small></div>${timerHTML(game, context.clock)}<div class="tabletop-bench-decision-actions"><button type="button" class="ghost" id="tabletop-decision-fallback-open">Ver contexto</button></div></aside>`;
+}
+
 export function gameplayHTML(
   state,
   context,
-  { benchFallbackOpen = false, targetFallbackOpen = false, selectedTargetId = null } = {},
+  {
+    benchFallbackOpen = false,
+    targetFallbackOpen = false,
+    selectedTargetId = null,
+    decisionFallbackOpen = false,
+    armedDecisionId = null,
+  } = {},
 ) {
   const game = state.game;
   const roster = tabletopRosterHTML(state, context);
@@ -182,6 +204,13 @@ export function gameplayHTML(
       return roster + tabletopTargetDecisionHTML(state, context, selectedTargetId);
     const benchDecision = tabletopBenchDecisionHTML(state, context, { fallbackOpen: benchFallbackOpen });
     if (benchDecision) return roster + benchDecision;
+    const decision = projectTabletopDecision(game, state.myId, { targeting: Boolean(state.targetAction) });
+    if (decision?.kind === 'action') return roster + handHTML(state, context.portraits) + modalHTML(state, context);
+    if (decision && !decisionFallbackOpen)
+      return roster + tabletopStageDecisionHTML(decision, game, context, armedDecisionId);
+    if (decisionFallbackOpen) {
+      return roster + handHTML(state, context.portraits) + modalHTML(state, context);
+    }
     return roster + handHTML(state, context.portraits) + modalHTML(state, context);
   }
   const winner = player(game, game.winnerId);
@@ -311,7 +340,7 @@ export async function mountTableExperiment({
   let benchmarkKit = null;
   let currentState = initialState;
   let currentContext = context;
-  let rosterOpen = !matchMedia('(max-width: 820px)').matches;
+  let rosterOpen = false;
   let focusedSeat = null;
   let reactionOpen = false;
   let reactionThrowable = null;
@@ -320,9 +349,13 @@ export async function mountTableExperiment({
   let targetFallbackOpen = false;
   let targetDecisionKey = '';
   let selectedTargetId = null;
+  let decisionFallbackOpen = false;
+  let stageDecisionKey = '';
+  let armedDecisionId = null;
   const portraitViewport = () => window.innerWidth / Math.max(1, window.innerHeight) < 0.82;
   const processedReactions = new Set();
   const requestedTheme = new URLSearchParams(location.search).get('theme');
+  const labShot = testMode ? new URLSearchParams(location.search).get('shot') : null;
   let theme = ['light', 'dark'].includes(requestedTheme)
     ? requestedTheme
     : document.documentElement.dataset.theme === 'light'
@@ -531,6 +564,8 @@ export async function mountTableExperiment({
       winner: null,
       action: null,
       block: null,
+      decision: null,
+      stageEvents: [],
       influenceLoser: null,
       latestInfluenceLoss: null,
       responsePlayer: null,
@@ -557,6 +592,7 @@ export async function mountTableExperiment({
       root.dataset.decision = 'other';
       gameplay.replaceChildren();
       scene?.sync(frozenLabView(game));
+      if (labShot) scene?.applyLabShot(labShot);
       playPendingReactions();
       scene?.setDecisionClock({ visible: false });
       paintPovControl(scene?.povSelection());
@@ -605,10 +641,22 @@ export async function mountTableExperiment({
       benchDecisionKey = nextBenchDecisionKey;
       benchFallbackOpen = false;
     }
+    const stageDecision = projectTabletopDecision(game, currentState.myId, {
+      targeting: Boolean(currentState.targetAction),
+    });
+    const nextStageDecisionKey = stageDecision?.key ?? '';
+    if (nextStageDecisionKey !== stageDecisionKey) {
+      stageDecisionKey = nextStageDecisionKey;
+      decisionFallbackOpen = false;
+      armedDecisionId = null;
+      scene?.setDecisionOptionArmed(null);
+    }
     gameplay.innerHTML = gameplayHTML(currentState, currentContext, {
       benchFallbackOpen,
       targetFallbackOpen,
       selectedTargetId,
+      decisionFallbackOpen,
+      armedDecisionId,
     });
     bindGameDecisionControls(gameplay, {
       state: currentState,
@@ -628,6 +676,16 @@ export async function mountTableExperiment({
     gameplay.querySelector('#tabletop-target-fallback-open')?.addEventListener('click', () => {
       targetFallbackOpen = true;
       selectedTargetId = null;
+      paintState();
+    });
+    gameplay.querySelector('#tabletop-decision-fallback-open')?.addEventListener('click', () => {
+      decisionFallbackOpen = true;
+      armedDecisionId = null;
+      scene?.setDecisionOptionArmed(null);
+      paintState();
+    });
+    gameplay.querySelector('#tabletop-decision-fallback-close')?.addEventListener('click', () => {
+      decisionFallbackOpen = false;
       paintState();
     });
     if (targetFallbackOpen) {
@@ -778,11 +836,8 @@ export async function mountTableExperiment({
     applyTheme(theme, { persist: false });
     applyQuality(quality, { persist: false });
     paintState();
-    if (testMode) {
-      const labShot = new URLSearchParams(location.search).get('shot');
-      if (labShot && scene.applyLabShot(labShot)) {
-        root.querySelectorAll('[data-tabletop-camera]').forEach((button) => button.classList.remove('active'));
-      }
+    if (testMode && labShot) {
+      root.querySelectorAll('[data-tabletop-camera]').forEach((button) => button.classList.remove('active'));
     }
     const pointerFromEvent = (event) => {
       const rect = canvas.getBoundingClientRect();
@@ -812,6 +867,17 @@ export async function mountTableExperiment({
           return;
         }
         scene.setTargetSeatHover(null);
+        const decisionId = scene.pickDecisionOption(pointer);
+        scene.setDecisionOptionHover(decisionId);
+        if (decisionId) {
+          scene.setExchangeCardHover(null);
+          scene.setInfluenceCardHover(null);
+          scene.setPrivateInfluenceHover(null);
+          scene.setPrivateCoinsHover(false);
+          scene.setActionCardHover(false);
+          canvas.style.cursor = 'pointer';
+          return;
+        }
         const exchangeId = scene.pickExchangeCard(pointer);
         const influenceId = !exchangeId ? scene.pickInfluenceCard(pointer) : null;
         const privateInfluenceId = !exchangeId && !influenceId ? scene.pickPrivateInfluence(pointer) : null;
@@ -833,6 +899,7 @@ export async function mountTableExperiment({
       scene?.setPrivateCoinsHover(false);
       scene?.setActionCardHover(false);
       scene?.setTargetSeatHover(null);
+      scene?.setDecisionOptionHover(null);
       canvas.style.cursor = '';
     });
     // Clique/toque na carta de ação abre um cinemático de leitura; o Auto
@@ -847,6 +914,31 @@ export async function mountTableExperiment({
           targetFallbackOpen = false;
           paintState();
         }
+        return;
+      }
+      const decisionId = scene.pickDecisionOption(pointer);
+      if (decisionId) {
+        const confirmation = nextTabletopIntentConfirmation(armedDecisionId, decisionId);
+        if (confirmation.kind === 'arm') {
+          armedDecisionId = confirmation.intentId;
+          scene.setDecisionOptionArmed(armedDecisionId);
+          paintState();
+          return;
+        }
+        const outcome = tabletopIntentOutcome(currentState.game, currentState.myId, decisionId);
+        armedDecisionId = null;
+        if (outcome?.kind === 'target') {
+          currentState.targetAction = outcome.actionId;
+          decisionFallbackOpen = false;
+          requestRender();
+        } else if (outcome?.kind === 'command') dispatch(outcome.command);
+        else scene.setDecisionOptionArmed(null);
+        return;
+      }
+      if (armedDecisionId) {
+        armedDecisionId = null;
+        scene.setDecisionOptionArmed(null);
+        paintState();
         return;
       }
       const exchangeId = scene.pickExchangeCard(pointer);

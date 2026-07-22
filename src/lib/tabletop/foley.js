@@ -76,6 +76,27 @@ export const FOLEY_EVENTS = {
   throw: (context, at) => {
     rustle(context, at, { frequency: 620, sweepTo: 2450, q: 1.6, volume: 0.026, duration: 0.34 });
   },
+  declare: (context, at) => {
+    rustle(context, at, { frequency: 1280, sweepTo: 620, q: 1.05, volume: 0.028, duration: 0.14 });
+    clink(context, at + 0.07, 760, 0.018);
+  },
+  block: (context, at) => {
+    clink(context, at, 540, 0.032);
+    clink(context, at + 0.07, 430, 0.024);
+  },
+  challenge: (context, at) => {
+    rustle(context, at, { frequency: 740, sweepTo: 3100, q: 1.8, volume: 0.03, duration: 0.2 });
+    clink(context, at + 0.04, 1720, 0.021);
+  },
+  defeat: (context, at) => {
+    clink(context, at, 820, 0.026);
+    clink(context, at + 0.08, 390, 0.022);
+  },
+  victory: (context, at) => {
+    clink(context, at, 880, 0.024);
+    clink(context, at + 0.08, 1110, 0.026);
+    clink(context, at + 0.16, 1480, 0.028);
+  },
 };
 
 export function createTabletopFoley({ sounds, now = () => performance.now() } = {}) {

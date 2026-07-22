@@ -70,12 +70,23 @@ test('cada evento sintetiza a própria voz, sem baixar assets', async () => {
   assert.deepEqual(sounds.context.started, ['oscillator', 'oscillator', 'noise', 'noise']);
 });
 
-test('um evento sem voz definida não toca nada', async () => {
+test('um evento desconhecido não toca nada', async () => {
   const sounds = makeSounds();
   const foley = createTabletopFoley({ sounds, now: () => 0 });
 
-  assert.equal(await foley.play('victory'), false);
+  assert.equal(await foley.play('unknown'), false);
   assert.deepEqual(sounds.context.started, []);
+});
+
+test('alegação, bloqueio, contestação, derrota e vitória têm foley próprio', async () => {
+  const sounds = makeSounds();
+  let clock = 0;
+  const foley = createTabletopFoley({ sounds, now: () => clock });
+  for (const event of ['declare', 'block', 'challenge', 'defeat', 'victory']) {
+    assert.equal(await foley.play(event), true);
+    clock += 500;
+  }
+  assert.ok(sounds.context.started.length >= 10);
 });
 
 test('um snapshot que move vários assentos soa como um gesto só', async () => {

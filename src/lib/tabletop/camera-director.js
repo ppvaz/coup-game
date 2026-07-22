@@ -17,6 +17,10 @@ export function directCamera(view) {
       ? { act: 'targeting-seat', seatIds: [selected.id] }
       : { act: 'targeting', seatIds: view.targeting.targetIds };
   }
+  // Quando a decisão pertence ao observador, a bancada é o próprio palco de
+  // escolha. O duelo volta ao quadro assim que a intenção for enviada.
+  if (view?.decision && self)
+    return { act: view.decision.kind === 'action' ? 'player' : 'intervention', seatIds: [self.id] };
   switch (view?.beat) {
     case 'claim':
     case 'block-window': {
@@ -57,6 +61,40 @@ export function targetingCameraAct() {
     portrait: { position: [0, 6.85, 11.25], target: [0, 1.35, -0.35], fov: 70 },
   };
 }
+
+function cameraForElements(elements, { tight = false } = {}) {
+  const points = (elements ?? []).filter(
+    (point) => point && Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z),
+  );
+  if (!points.length) return null;
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const zs = points.map((point) => point.z);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
+  const centerX = (minX + maxX) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  const centerY = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const spread = Math.max(tight ? 1.6 : 3.2, maxX - minX + (maxZ - minZ) * 0.45);
+  return {
+    position: [centerX, centerY + (tight ? 2.25 : 2.85), maxZ + (tight ? 5.3 : 7.7) + spread * 0.18],
+    target: [centerX, centerY, centerZ],
+    fov: tight ? 40 : 46,
+    portrait: {
+      position: [centerX, centerY + (tight ? 3.1 : 4.05), maxZ + (tight ? 7.2 : 9.8) + spread * 0.32],
+      target: [centerX, centerY - 0.08, centerZ],
+      fov: tight ? 54 : 61,
+    },
+  };
+}
+
+/** Enquadra objetos móveis sem assumir que o tríptico continua no centro. */
+export const interventionCameraForElements = (elements) => cameraForElements(elements);
+
+/** Aproxima a efígie armada sem perder a carta que ela está respondendo. */
+export const confirmationCameraForElements = (elements) => cameraForElements(elements, { tight: true });
 
 export function influenceRevealCamera(view) {
   const playerId = view?.latestInfluenceLoss?.player?.id;

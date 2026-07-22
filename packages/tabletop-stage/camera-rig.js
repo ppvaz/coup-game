@@ -91,6 +91,28 @@ export class CameraRig {
     };
   }
 
+  // Atualiza o destino de um ato ativo sem reiniciar o tempo do cinemático.
+  // Depois da chegada, mantém a câmera vinculada ao elemento que continuar
+  // mudando de posição.
+  retargetAct(name, definition) {
+    this.defineAct(name, definition);
+    if (this.activeActName !== name) return false;
+    const stored = this.acts.get(name);
+    const act = this.viewportMode === 'portrait' && stored.portrait ? stored.portrait : stored.landscape;
+    if (this.tween) {
+      this.tween.toPosition.copy(act.position);
+      this.tween.toTarget.copy(act.target);
+      this.tween.toFov = act.fov;
+      return true;
+    }
+    this.camera.position.copy(act.position);
+    this.target.copy(act.target);
+    this.camera.fov = act.fov;
+    this.camera.updateProjectionMatrix();
+    this.camera.lookAt(this.target);
+    return true;
+  }
+
   resize(width, height, viewportMode) {
     const viewportModeChanged = this.viewportMode !== null && viewportMode !== this.viewportMode;
     this.viewportMode = viewportMode;

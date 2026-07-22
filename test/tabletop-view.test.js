@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, dispatchGame } from '../src/game/coup.js';
-import { projectCoinMovements, projectCoupTableView } from '../src/lib/tabletop/coup-view.js';
+import { projectCoinMovements, projectCoupTableView, projectTabletopEvents } from '../src/lib/tabletop/coup-view.js';
 
 const seats = [
   { id: 'a', name: 'Ana' },
@@ -121,6 +121,22 @@ test('alegação pública vira batida visual sem resolver a verdade', () => {
   assert.deepEqual(view.action.actor, { id: 'a', name: 'Ana' });
   assert.equal('truthful' in view.action, false);
   assert.equal(view.responsePlayer.id, 'b');
+  assert.equal(view.decision.kind, 'response');
+  assert.ok(view.decision.options.every((entry) => !('command' in entry)));
+});
+
+test('eventos do palco são públicos, limitados e estáveis em uma janela recortada', () => {
+  let game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  game = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'tax' });
+  const first = projectTabletopEvents(game);
+  const view = projectCoupTableView(game, 'b');
+  assert.deepEqual(view.stageEvents, first);
+  assert.ok(first.length <= 24);
+  assert.ok(first.every((entry) => Object.isFrozen(entry)));
+  assert.doesNotMatch(JSON.stringify(first), /Duque-\d/);
+
+  const recut = projectTabletopEvents({ ...game, log: game.log.slice(-1) });
+  assert.equal(recut[0].id, first.at(-1).id);
 });
 
 test('projeta ganhos, gastos, roubos reais e reembolsos como movimentos de moedas', () => {

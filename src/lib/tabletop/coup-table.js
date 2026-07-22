@@ -11,9 +11,11 @@ import {
   cameraDecisionKey,
   claimCameraForSeat,
   coinTransferCameraForSeats,
+  confirmationCameraForElements,
   directCamera,
   duelCameraForSeats,
   influenceRevealCamera,
+  interventionCameraForElements,
   targetingCameraAct,
   throneCameraForSeat,
 } from './camera-director.js';
@@ -31,6 +33,7 @@ import {
   DECISION_BUBBLE_ANCHOR,
   applyDecisionClock,
   createDecisionBubble,
+  createDecisionEffigy,
   createDecisionHourglass,
 } from './coup-table/decision-props.js';
 import { COLORS, mesh, standardMaterial } from './coup-table/primitives.js';
@@ -82,6 +85,12 @@ export class CoupTableScene {
       target: [0, 1.22, 5.8],
       fov: 46,
       portrait: { position: [0, 6.4, 8.7], target: [0, 1.2, 5.4], fov: 60 },
+    });
+    this.stage.defineCameraAct('intervention', {
+      position: [0, 4.85, 8.7],
+      target: [0, 1.95, -0.05],
+      fov: 46,
+      portrait: { position: [0, 6.15, 10.7], target: [0, 1.85, -0.05], fov: 61 },
     });
     this.stage.defineCameraAct('duel', {
       position: [7.7, 4.3, 8.6],
@@ -199,6 +208,11 @@ export class CoupTableScene {
     this.actionTargetZ = -0.15;
     this.publicRoleTargetX = 0;
     this.publicRoleTargetZ = -0.15;
+    this.actionPresence = 0;
+    this.actionPresenceTarget = 0;
+    this.centerpiecePulseAt = -Infinity;
+    this.actionCardFocusDirection = null;
+    this.actionCardFocusFrameKey = '';
     this.stage.add(this.actionCard);
 
     this.seal = mesh(
@@ -215,6 +229,16 @@ export class CoupTableScene {
     this.stage.add(this.hourglass.group);
     this.decisionBubble = createDecisionBubble();
     this.stage.add(this.decisionBubble.group);
+    this.decisionGroup = null;
+    this.decisionOptions = [];
+    this.decisionSignature = '';
+    this.decisionPresentation = null;
+    this.hoveredDecisionId = null;
+    this.armedDecisionId = null;
+    this.interventionFrameKey = '';
+    this.decisionAppearedAt = -Infinity;
+    this.processedStageEvents = new Set();
+    this.hasSyncedStageEvents = false;
     this.victoryLight = new THREE.SpotLight(0xffd78f, 0, 15, 0.38, 0.55, 1.4);
     this.victoryLight.position.set(0, 8, 4.2);
     this.victoryLight.target.position.set(0, 1.5, 0);
@@ -232,6 +256,7 @@ export class CoupTableScene {
     this.exchangeCards = [];
     this.exchangeSignature = '';
     this.hoveredExchangeId = null;
+    if (this.decisionGroup) disposeObject3D(this.decisionGroup);
     disposeObject3D(this.seatLayer);
     this.seatLayer = this.stage.add(new THREE.Group());
     this.seatLayer.name = 'coup-seats';
@@ -244,6 +269,13 @@ export class CoupTableScene {
     this.focusedInfluenceId = null;
     this.privateCoinsHovered = false;
     this.hoveredTargetSeatId = null;
+    this.decisionGroup = null;
+    this.decisionOptions = [];
+    this.decisionSignature = '';
+    this.decisionPresentation = null;
+    this.hoveredDecisionId = null;
+    this.armedDecisionId = null;
+    this.interventionFrameKey = '';
     const count = view.seats.length;
     for (const seatView of view.seats) {
       const angle = seatView.azimuthRad;
@@ -468,15 +500,16 @@ export class CoupTableScene {
     const action = view.action;
     const block = view.block;
     const visible = Boolean(action && ['claim', 'block-window', 'block-claim', 'influence-loss'].includes(view.beat));
-    this.actionCard.visible = visible;
+    this.actionPresenceTarget = visible ? 1 : 0;
     if (!visible) {
       this.setActionCardHover(false);
-      this.setPublicRole(null);
       this.layoutCenterpiece();
       return;
     }
+    this.actionCard.visible = true;
     const title = block?.role ?? action.claimedRole ?? action.label;
-    this.setPublicRole(ROLE_VISUALS[title] ? title : null);
+    const intervention = view.decision?.kind && view.decision.kind !== 'action';
+    this.setPublicRole(!intervention && ROLE_VISUALS[title] ? title : null);
     this.layoutCenterpiece();
     const kicker = block ? 'BLOQUEIO DECLARADO' : action.claimedRole ? 'INFLUÊNCIA ALEGADA' : 'AÇÃO DA CORTE';
     const footer = block
@@ -496,6 +529,7 @@ export class CoupTableScene {
     this.actionCaptionMaterial.map = this.actionCaptionTexture;
     this.actionCaptionMaterial.needsUpdate = true;
     this.actionSignature = signature;
+    this.centerpiecePulseAt = this.elapsed;
   }
 
   updateExchange(view) {
@@ -546,6 +580,54 @@ export class CoupTableScene {
     }
   }
 
+  updateDecision(view) {
+    // As ações permanecem na faixa 2D compacta; só intervenções ganham
+    // encenação volumétrica no centro da mesa.
+    const decision = view.decision?.kind === 'action' ? null : view.decision;
+    const selfView = view.seats.find((seat) => seat.isSelf);
+    const selfSeat = selfView ? this.seats.get(selfView.id) : null;
+    const signature = decision
+      ? `${decision.key}|${decision.options.map((entry) => `${entry.id}:${entry.enabled}`).join('|')}`
+      : '';
+    if (signature === this.decisionSignature) return;
+    if (this.decisionGroup) disposeObject3D(this.decisionGroup);
+    this.decisionGroup = null;
+    this.decisionOptions = [];
+    this.decisionPresentation = null;
+    this.hoveredDecisionId = null;
+    this.armedDecisionId = null;
+    this.decisionSignature = signature;
+    this.interventionFrameKey = '';
+    this.autoCameraKey = '';
+    if (!decision || !selfSeat) return;
+
+    const group = new THREE.Group();
+    group.name = `tabletop-decision-${decision.kind}`;
+    const interventionOptions = decision.options.filter((entry) => entry.id !== 'response:pass');
+    decision.options.forEach((entry, index) => {
+      const visual = createDecisionEffigy(entry);
+      const interventionIndex = interventionOptions.findIndex((option) => option.id === entry.id);
+      const point = {
+        x:
+          entry.id === 'response:pass'
+            ? 1.75
+            : interventionOptions.length === 1
+              ? -1.75
+              : -2.2 + interventionIndex * 1.08,
+        y: 1.28,
+        z: -0.06,
+      };
+      visual.group.position.set(point.x, point.y, point.z);
+      visual.group.scale.setScalar(this.stage.reducedMotion ? 1 : 0.01);
+      group.add(visual.group);
+      this.decisionOptions.push({ ...visual, baseY: point.y, index, intervention: true });
+    });
+    this.stage.add(group);
+    this.decisionGroup = group;
+    this.decisionPresentation = 'intervention';
+    this.decisionAppearedAt = this.elapsed;
+  }
+
   showEmojiReaction(playerId, emoji) {
     const seat = this.seats.get(playerId);
     if (!seat || !emoji) return false;
@@ -560,6 +642,65 @@ export class CoupTableScene {
     this.stage.add(sprite);
     this.emojiReactions.push({ sprite, origin, startedAt: this.elapsed, duration: 2.2 });
     return true;
+  }
+
+  setSeatGesture(playerId, kind, duration = 0.9) {
+    const seat = this.seats.get(playerId);
+    if (!seat) return false;
+    seat.gesture = { kind, startedAt: this.elapsed, duration };
+    return true;
+  }
+
+  playStageEvent(event) {
+    switch (event.type) {
+      case 'action_declared':
+        this.setSeatGesture(event.actorId, 'assert');
+        this.foley?.play('declare');
+        break;
+      case 'block_declared':
+      case 'action_blocked':
+        this.setSeatGesture(event.actorId, 'block');
+        this.foley?.play('block');
+        break;
+      case 'challenge_resolved':
+        this.setSeatGesture(event.challengerId, 'challenge');
+        this.setSeatGesture(event.challengedId, event.truthful ? 'prove' : 'defeat', event.truthful ? 1 : 1.15);
+        this.foley?.play('challenge');
+        break;
+      case 'influence_lost':
+        this.setSeatGesture(event.actorId, 'defeat', 1.15);
+        this.foley?.play('defeat');
+        break;
+      case 'exchange_resolved':
+        this.setSeatGesture(event.actorId, 'assert');
+        this.foley?.play('card');
+        break;
+      case 'game_finished':
+        this.setSeatGesture(event.winnerId, 'victory', 1.35);
+        this.setSeatGesture(event.loserId, 'defeat', 1.2);
+        this.foley?.play('victory');
+        break;
+      default:
+        break;
+    }
+  }
+
+  syncStageEvents(view) {
+    const events = view.stageEvents ?? [];
+    if (!this.hasSyncedStageEvents) {
+      events.forEach((event) => this.processedStageEvents.add(event.id));
+      this.hasSyncedStageEvents = true;
+      return;
+    }
+    for (const event of events) {
+      if (this.processedStageEvents.has(event.id)) continue;
+      this.processedStageEvents.add(event.id);
+      this.playStageEvent(event);
+    }
+    if (this.processedStageEvents.size > 96) {
+      const visibleIds = new Set(events.map((event) => event.id));
+      for (const id of this.processedStageEvents) if (!visibleIds.has(id)) this.processedStageEvents.delete(id);
+    }
   }
 
   /**
@@ -706,9 +847,11 @@ export class CoupTableScene {
     }
     for (const seat of view.seats) this.updateSeat(seat);
     this.updateExchange(view);
+    this.updateDecision(view);
     this.updateWinnerAvatar(view);
     this.updateActionCard(view);
     this.view = view;
+    this.syncStageEvents(view);
     const coinMovement = this.syncCoinMovements(view, { initial: !hadView });
     if (!this.currentPovSeatId || !view.seats.some((seat) => seat.id === this.currentPovSeatId)) {
       this.currentPovSeatId = view.seats.find((seat) => seat.isSelf)?.id ?? view.seats[0]?.id ?? null;
@@ -768,6 +911,43 @@ export class CoupTableScene {
     };
   }
 
+  interventionFocusPoints(decisionId = null) {
+    if (!this.decisionGroup || this.decisionPresentation !== 'intervention') return [];
+    this.decisionGroup.updateWorldMatrix(true, true);
+    const points = this.decisionOptions
+      .filter((entry) => !decisionId || entry.id === decisionId)
+      .map((entry) => {
+        const point = new THREE.Vector3(entry.group.position.x, entry.baseY + 1.02, entry.group.position.z);
+        return this.decisionGroup.localToWorld(point);
+      });
+    if (this.actionCard.visible || this.actionPresenceTarget > 0) {
+      this.actionCard.updateWorldMatrix(true, false);
+      const actionPoint = this.actionCard.getWorldPosition(new THREE.Vector3());
+      actionPoint.y = 2.35;
+      points.push(actionPoint);
+    }
+    return points;
+  }
+
+  frameInterventionCamera({ immediate = false, force = false } = {}) {
+    const points = this.interventionFocusPoints(this.armedDecisionId);
+    const pose = this.armedDecisionId ? confirmationCameraForElements(points) : interventionCameraForElements(points);
+    if (!pose) return false;
+    const key = `${this.armedDecisionId ?? 'all'}|${points
+      .map((point) => `${point.x.toFixed(1)}:${point.y.toFixed(1)}:${point.z.toFixed(1)}`)
+      .join('|')}`;
+    if (!force && key === this.interventionFrameKey) return false;
+    this.interventionFrameKey = key;
+    if (this.cameraName === 'intervention') {
+      const retargeted = immediate ? false : this.stage.retargetCameraAct('intervention', pose);
+      if (!retargeted) {
+        this.stage.defineCameraAct('intervention', pose);
+        this.stage.setCameraAct('intervention', { immediate });
+      }
+    } else this.stage.defineCameraAct('intervention', pose);
+    return true;
+  }
+
   // Aplica a decisão do diretor: parametriza o ato pelos assentos envolvidos
   // e só corta quando a chave (ato + assentos) muda entre snapshots.
   applyAutoCamera({ immediate = false } = {}) {
@@ -782,6 +962,10 @@ export class CoupTableScene {
     if (act === 'player') {
       const self = seats.find((seat) => seat.isSelf);
       if (self) this.stage.defineCameraAct('player', playerCameraForSeat(self, seats.length));
+      else act = 'table';
+    } else if (act === 'intervention') {
+      const pose = interventionCameraForElements(this.interventionFocusPoints());
+      if (pose) this.stage.defineCameraAct('intervention', pose);
       else act = 'table';
     } else if (act === 'duel' && subjects.length) {
       this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
@@ -862,6 +1046,38 @@ export class CoupTableScene {
     this.hoveredTargetSeatId = next;
     for (const seatView of this.view?.seats ?? []) this.updateSeatFocus(seatView);
     return Boolean(next);
+  }
+
+  setDecisionOptionHover(decisionId) {
+    const next = this.decisionOptions.some((entry) => entry.enabled && entry.id === decisionId) ? decisionId : null;
+    this.hoveredDecisionId = next;
+    for (const entry of this.decisionOptions)
+      entry.hover.visible = entry.id === next || entry.id === this.armedDecisionId;
+    return Boolean(next);
+  }
+
+  setDecisionOptionArmed(decisionId) {
+    const next = this.decisionOptions.some((entry) => entry.enabled && entry.id === decisionId) ? decisionId : null;
+    if (next === this.armedDecisionId) return Boolean(next);
+    this.armedDecisionId = next;
+    this.interventionFrameKey = '';
+    for (const entry of this.decisionOptions)
+      entry.hover.visible = entry.id === this.hoveredDecisionId || entry.id === next;
+    this.frameInterventionCamera({ force: true });
+    return Boolean(next);
+  }
+
+  pickDecisionOption(pointer) {
+    if (!this.decisionOptions.length) return null;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(pointer.x, pointer.y), this.stage.camera);
+    let closest = null;
+    for (const entry of this.decisionOptions) {
+      if (!entry.enabled) continue;
+      const hit = raycaster.intersectObject(entry.group, true)[0];
+      if (hit && (!closest || hit.distance < closest.distance)) closest = { id: entry.id, distance: hit.distance };
+    }
+    return closest?.id ?? null;
   }
 
   pickTargetSeat(pointer) {
@@ -1009,21 +1225,38 @@ export class CoupTableScene {
     const toCameraX = camera.x - card.x;
     const toCameraZ = camera.z - card.z;
     const length = Math.hypot(toCameraX, toCameraZ) || 1;
-    const target = [card.x, 2.35, card.z];
-    this.stage.defineCameraAct('card', {
-      position: [card.x + (toCameraX / length) * 2.9, 2.6, card.z + (toCameraZ / length) * 2.9],
-      target,
-      fov: 44,
-      portrait: {
-        position: [card.x + (toCameraX / length) * 3.4, 2.65, card.z + (toCameraZ / length) * 3.4],
-        target,
-        fov: 52,
-      },
-    });
+    this.actionCardFocusDirection = new THREE.Vector2(toCameraX / length, toCameraZ / length);
+    this.actionCardFocusFrameKey = '';
     this.focusedInfluenceId = null;
     this.cameraOverridden = true;
     this.cameraName = 'card';
-    this.stage.setCameraAct('card');
+    this.refreshActionCardFocus({ start: true });
+    return true;
+  }
+
+  refreshActionCardFocus({ start = false } = {}) {
+    if (!this.actionCard.visible || !this.actionCardFocusDirection) return false;
+    const card = this.actionCard.position;
+    const direction = this.actionCardFocusDirection;
+    const target = [card.x, 2.35, card.z];
+    const pose = {
+      position: [card.x + direction.x * 2.9, 2.6, card.z + direction.y * 2.9],
+      target,
+      fov: 44,
+      portrait: {
+        position: [card.x + direction.x * 3.4, 2.65, card.z + direction.y * 3.4],
+        target,
+        fov: 52,
+      },
+    };
+    const key = `${card.x.toFixed(2)}:${card.z.toFixed(2)}`;
+    if (!start && key === this.actionCardFocusFrameKey) return false;
+    this.actionCardFocusFrameKey = key;
+    const retargeted = !start && this.stage.retargetCameraAct('card', pose);
+    if (!retargeted) {
+      this.stage.defineCameraAct('card', pose);
+      this.stage.setCameraAct('card');
+    }
     return true;
   }
 
@@ -1039,6 +1272,51 @@ export class CoupTableScene {
       .map(Number)
       .filter((index) => Number.isInteger(index) && index >= 0 && index < seats.length)
       .map((index) => seats[index]);
+    if (act === 'decision') {
+      const confirmation = String(indexPart ?? '').endsWith('-confirm');
+      const catalogKey = String(indexPart ?? '').replace('-confirm', '');
+      const catalogs = {
+        challenge: [
+          ['response:challenge', 'Contestar', 'Exigir a prova', 'danger'],
+          ['response:pass', 'Permitir', 'Aceitar a ação', 'gold'],
+        ],
+        block: [
+          ['block:Capitão', 'Capitão', 'Declarar bloqueio', 'danger'],
+          ['block:Embaixadora', 'Embaixadora', 'Declarar bloqueio', 'danger'],
+          ['response:pass', 'Permitir', 'Não bloquear', 'gold'],
+        ],
+      };
+      const catalog = catalogs[catalogKey];
+      if (!catalog) return null;
+      const decisionView = {
+        ...this.view,
+        decision: {
+          key: `lab:${catalogKey}`,
+          kind: catalogKey === 'block' ? 'block' : 'response',
+          options: catalog.map(([id, label, kicker, tone]) => ({ id, label, kicker, tone, enabled: true })),
+        },
+      };
+      const mockActor = seats[1] ?? seats[0];
+      const mockTarget = seats[0];
+      this.updateDecision(decisionView);
+      this.updateActionCard({
+        ...decisionView,
+        beat: catalogKey === 'block' ? 'block-window' : 'claim',
+        action: {
+          id: catalogKey === 'block' ? 'steal' : 'tax',
+          label: catalogKey === 'block' ? 'Roubar' : 'Imposto',
+          claimedRole: catalogKey === 'block' ? 'Capitão' : 'Duque',
+          actor: mockActor,
+          target: catalogKey === 'block' ? mockTarget : null,
+        },
+        block: null,
+      });
+      this.cameraOverridden = true;
+      this.cameraName = 'intervention';
+      this.frameInterventionCamera({ immediate: true, force: true });
+      if (confirmation) this.setDecisionOptionArmed(catalog[0][0]);
+      return `decision-${catalogKey}${confirmation ? '-confirm' : ''}`;
+    }
     if (act === 'coins' && seats.length >= 2) {
       const isSteal = !['gain', 'cost'].includes(indexPart);
       const movement =
@@ -1169,6 +1447,20 @@ export class CoupTableScene {
     this.hourglass.group.visible = this.decisionClock.visible && this.decisionClock.total > 0;
     if (this.hourglass.group.visible) applyDecisionClock(this.hourglass, clockRatio, clockRemaining);
     this.updateDecisionBubble(elapsed, reducedMotion, clockRatio, clockRemaining);
+    if (this.decisionGroup) {
+      const progress = reducedMotion ? 1 : THREE.MathUtils.clamp((elapsed - this.decisionAppearedAt) / 0.42, 0, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      for (const entry of this.decisionOptions) {
+        const hovered = entry.id === this.hoveredDecisionId;
+        const armed = entry.id === this.armedDecisionId;
+        if (entry.intervention) faceCameraYaw(entry.group, this.stage.camera, reducedMotion ? 1 : delta);
+        entry.group.position.y =
+          entry.baseY +
+          (armed ? 0.11 : hovered ? 0.08 : 0) +
+          (reducedMotion ? 0 : Math.sin(elapsed * 2.2 + entry.index) * 0.012);
+        entry.group.scale.setScalar(eased * (armed ? 1.11 : hovered ? 1.08 : 1));
+      }
+    }
     for (const entry of this.selectableInfluences) {
       const hovered = entry.influenceId === this.hoveredInfluenceId;
       entry.material.opacity = hovered
@@ -1230,17 +1522,34 @@ export class CoupTableScene {
     }
     this.layoutCenterpiece();
     const centerEase = reducedMotion ? 1 : 1 - Math.exp(-Math.max(delta, 1 / 120) * 7);
-    if (this.actionCard.visible) {
+    this.actionPresence += (this.actionPresenceTarget - this.actionPresence) * centerEase;
+    if (Math.abs(this.actionPresenceTarget - this.actionPresence) < 0.005)
+      this.actionPresence = this.actionPresenceTarget;
+    if (this.actionCard.visible || this.actionPresenceTarget > 0) {
+      this.actionCard.visible = true;
       this.actionCard.position.x += (this.actionTargetX - this.actionCard.position.x) * centerEase;
       this.actionCard.position.z += (this.actionTargetZ - this.actionCard.position.z) * centerEase;
-      this.actionCard.position.y = 2.35 + (reducedMotion ? 0 : Math.sin(elapsed * 1.7) * 0.055);
+      this.actionCard.position.y =
+        2.35 + (1 - this.actionPresence) * 0.58 + (reducedMotion ? 0 : Math.sin(elapsed * 1.7) * 0.055);
+      const pulseProgress = THREE.MathUtils.clamp((elapsed - this.centerpiecePulseAt) / 0.52, 0, 1);
+      const pulse = reducedMotion ? 1 : 1 + Math.sin(pulseProgress * Math.PI) * 0.09;
+      this.actionCard.scale.setScalar(Math.max(0.001, this.actionPresence * pulse));
+      this.actionCard.rotation.z = reducedMotion ? 0 : (1 - this.actionPresence) * -0.16;
       faceCameraYaw(this.actionCard, this.stage.camera, reducedMotion ? 1 : delta);
+      if (this.cameraName === 'card') this.refreshActionCardFocus();
+      if (this.cameraName === 'intervention') this.frameInterventionCamera();
     }
     if (this.publicRole) {
       this.publicRole.position.x += (this.publicRoleTargetX - this.publicRole.position.x) * centerEase;
       this.publicRole.position.z += (this.publicRoleTargetZ - this.publicRole.position.z) * centerEase;
-      this.publicRole.position.y = 1.26 + (reducedMotion ? 0 : Math.sin(elapsed * 1.45 + 0.8) * 0.035);
+      this.publicRole.position.y =
+        1.26 + (1 - this.actionPresence) * 0.34 + (reducedMotion ? 0 : Math.sin(elapsed * 1.45 + 0.8) * 0.035);
+      this.publicRole.scale.setScalar(Math.max(0.001, 0.84 * this.actionPresence));
       faceCameraYaw(this.publicRole, this.stage.camera, reducedMotion ? 1 : delta, 0.14);
+    }
+    if (this.actionPresence === 0 && this.actionPresenceTarget === 0) {
+      this.actionCard.visible = false;
+      this.setPublicRole(null);
     }
     if (this.winnerAvatar) {
       const winnerScale = reducedMotion ? 1 : this.winnerAvatar.scale.x + (1 - this.winnerAvatar.scale.x) * centerEase;
@@ -1286,12 +1595,42 @@ export class CoupTableScene {
       const state = this.view?.seats.find((candidate) => candidate.id === id);
       if (!state) continue;
       seat.body.visible = !state.isWinner && !(this.cameraName === 'pov' && this.currentPovSeatId === id);
-      if (state.isSelf) continue;
       const emphasis = state.isActor || state.isCurrent || state.isWinner;
-      seat.body.position.y = reducedMotion
+      let bodyY = reducedMotion
         ? 0
         : Math.sin(elapsed * (emphasis ? 2.1 : 1.1) + seat.seed) * (emphasis ? 0.045 : 0.018);
-      seat.body.rotation.z = reducedMotion ? 0 : Math.sin(elapsed * 0.75 + seat.seed) * 0.012;
+      let rotationX = state.eliminated ? -0.2 : 0;
+      let rotationZ = reducedMotion ? 0 : Math.sin(elapsed * 0.75 + seat.seed) * 0.012;
+      let scale = 1;
+      const gesture = seat.gesture;
+      if (gesture && !reducedMotion) {
+        const progress = THREE.MathUtils.clamp((elapsed - gesture.startedAt) / gesture.duration, 0, 1);
+        const wave = Math.sin(progress * Math.PI);
+        if (gesture.kind === 'assert') {
+          bodyY += wave * 0.2;
+          rotationX -= wave * 0.12;
+        } else if (gesture.kind === 'block') {
+          bodyY += wave * 0.1;
+          rotationZ += wave * 0.2;
+        } else if (gesture.kind === 'challenge') {
+          bodyY += wave * 0.14;
+          rotationZ += Math.sin(progress * Math.PI * 2) * 0.13;
+        } else if (gesture.kind === 'prove') {
+          bodyY += wave * 0.12;
+          scale += wave * 0.09;
+        } else if (gesture.kind === 'defeat') {
+          rotationX += Math.sin(Math.min(1, progress * 1.25) * (Math.PI / 2)) * 0.27;
+          bodyY -= wave * 0.08;
+        } else if (gesture.kind === 'victory') {
+          bodyY += wave * 0.28;
+          scale += wave * 0.12;
+        }
+        if (progress >= 1) seat.gesture = null;
+      } else if (gesture) seat.gesture = null;
+      seat.body.position.y = bodyY;
+      seat.body.rotation.x = rotationX;
+      seat.body.rotation.z = rotationZ;
+      seat.body.scale.setScalar(scale);
     }
   }
 

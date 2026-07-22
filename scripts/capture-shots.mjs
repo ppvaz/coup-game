@@ -29,6 +29,10 @@ const SHOTS = [
   'evidence:1',
   'throne:3',
   'coins:steal',
+  'decision:challenge',
+  'decision:challenge-confirm',
+  'decision:block',
+  'decision:block-confirm',
 ];
 const THEMES = ['dark', 'light'];
 
@@ -68,6 +72,7 @@ try {
     const context = await browser.newContext({ viewport: VIEWPORTS[viewportName] });
     await context.addInitScript(() => localStorage.setItem('la-corte-3d-lab-access', 'granted'));
     const page = await context.newPage();
+    page.on('pageerror', (error) => console.error(`Browser: ${error.message}`));
     for (const theme of themes) {
       const directory = `captures/${theme}/${viewportName}`;
       await mkdir(directory, { recursive: true });

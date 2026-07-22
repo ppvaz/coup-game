@@ -77,16 +77,19 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 - Perda de influência e troca da Embaixadora são escolhidas diretamente na
   bancada 3D. Uma doca compacta confirma a troca e a lista HTML permanece como
   fallback acessível; os demais modais preservam a composição compacta.
-- A barra de ações, contestações e bloqueios ainda dependem da camada HTML.
-  Depois de escolher Roubar, Assassinar ou Golpe, a câmera abre a mesa e os
+- A barra de ações permanece deliberadamente em HTML: a faixa 2D é mais
+  compacta e legível do que sete placas volumétricas sobre a bancada. Já
+  contestações e bloqueios usam efígies clicáveis ao redor da carta pública,
+  numa composição efígie–carta–efígie. “Ver contexto” abre o fluxo HTML
+  acessível sem acrescentar um controle flutuante sobre o ambiente. Depois de
+  escolher Roubar, Assassinar ou Golpe, a câmera abre a mesa e os
   assentos válidos recebem destaque e uma área ampla de toque; a lista HTML
   permanece como fallback acessível. O primeiro toque apenas pré-seleciona: a
   doca mostra ação e nome do rival, e uma confirmação explícita envia a
   jogada. Em mobile portrait, um rival é focalizado por vez e “Próximo rival”
   percorre inclusive leste e oeste sem reduzir todos a miniaturas. Alegações
   sem alvo usam um plano radial do ator para o centro, preservando carta
-  pública, efígie e itens da mesa. Levar as demais decisões ao palco é a
-  principal lacuna para uma mesa 3D inteiramente diegética.
+  pública, efígie e itens da mesa.
 - O painel recolhível da Corte mostra moedas, influências ativas, reveladas e
   desconectados; clicar em um nome foca o assento e voltar restaura o Auto.
 - Tema, sons, vozes e acesso ao laboratório vivem no painel da Corte.
@@ -176,6 +179,12 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
   destaque, a doca exige confirmação com o nome do rival e a lista HTML
   continua disponível como fallback. Em portrait, a confirmação focaliza um
   rival por vez e permite avançar circularmente por todos os assentos.
+- [Implementado e validado visualmente] Contestar, permitir e bloquear por
+  efígies clicáveis no centro. Quando há dois papéis de bloqueio, ambos ficam
+  agrupados de um lado da carta e “Permitir” ocupa o outro. O enquadramento é
+  recalculado pelas posições atuais dos objetos, em vez de assumir coordenadas
+  fixas. O primeiro toque arma e aproxima efígie+carta; o segundo toque na
+  mesma efígie confirma. Tocar outra troca a escolha e tocar fora cancela.
 - Nunca exigir precisão de clique em um objeto pequeno para concluir uma ação.
 
 ### 3. Implementar o diretor automático de câmera
@@ -188,12 +197,16 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 - [Concluído] Enquadramento da vítima para assassinato, golpe e perda pública
   (ato `evidence` apontado ao assento) e troca rival testemunhada.
 - [Concluído] Vitória no trono do vencedor.
+- [Concluído] Intervenção central para contestações e bloqueios locais; o foco
+  acompanha posição e abertura do conjunto efígie–carta–efígie. O motor pode
+  redirecionar um cinemático em curso sem reiniciar sua duração, evitando que
+  a câmera termine na antiga posição de uma carta movida pela recomposição.
 - [Concluído] Respeitar override manual e voltar ao Auto pelo painel da Corte;
   o corte só acontece quando a chave ato+assentos muda entre snapshots.
 - Evitar cortes que atravessem teto, porta, cadeiras, personagens ou cartas:
   nenhum plano dirigido entra no miolo da mesa (raio ≥ 6, testado) nem sai do
   salão (raio ≤ 11,5). `npm run capture:3d` captura a matriz completa
-  (12 shots × desktop/portrait/paisagem × dia/noite) via `/3d/lab?shot=`,
+  (incluindo intervenções × desktop/portrait/paisagem × dia/noite) via `/3d/lab?shot=`,
   headless, em `captures/`. Validação de 21/07/2026: Mesa, Jogador, POV,
   Zenital, Portal, vítima e duelos desktop aprovados; em portrait o duelo usa
   over-the-shoulder vertical (o eixo horizontal não cabia no quadro).
@@ -232,21 +245,26 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 
 ### 5. Atuação e feedback da partida
 
-- Virada e revelação de cartas.
-- Entrada e saída da carta/efígie pública no centro.
-- [Parcial] Emojis e objetos arremessáveis entre assentos; faltam reações
-  corporais dos bonecos a alegação, desafio, bloqueio e derrota.
+- [Concluído] Virada e revelação de influência perdida.
+- [Concluído] Entrada e saída da carta/efígie pública no centro, com elevação,
+  escala e pulso curto na troca da alegação.
+- [Concluído] Reações corporais procedurais a alegação, desafio, bloqueio,
+  prova, derrota e vitória; `prefers-reduced-motion` elimina os gestos.
+- [Parcial] Emojis e objetos arremessáveis entre assentos; o repertório ainda
+  pode ganhar reações específicas por objeto.
 - [Concluído] Movimento de moedas ligado ao evento autoritativo já resolvido,
   com quantidade real, cascata curta e plano de câmera preservado.
 - Integrar as falas existentes com os atos visuais, sem repetir áudio em
   snapshots equivalentes.
+- [Concluído] Foley sintetizada e deduplicada para alegação, bloqueio,
+  contestação, derrota, vitória, moedas, cartas e arremessos, ligada aos mesmos
+  eventos públicos das animações e respeitando o mute existente.
 - Som ambiente do salão (velas, lareira, murmúrio da cidade nas janelas, com
-  variação dia/noite) e foley ligada aos mesmos eventos autoritativos das
-  animações: moedas, cartas viradas, arremessos. Regras: os assets de áudio 3D
+  variação dia/noite). Regras: os assets de áudio 3D
   só carregam ao entrar no salão, respeitam os mutes de sons/vozes existentes
   e usam loops curtos para não inflar o orçamento.
-- [Parcial] As moedas usam transferência curta e direta em
-  `prefers-reduced-motion`; ainda faltam variantes para as demais atuações.
+- [Concluído] `prefers-reduced-motion` encurta transferências, torna transições
+  imediatas e remove bobbing e gestos corporais não essenciais.
 
 ### 6. Customização dos cortesãos
 
@@ -264,7 +282,26 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 - Validar portrait em larguras de 320, 360, 390 e 430 px, com safe areas.
 - Validar landscape em celulares baixos, sem cobrir mão ou decisões.
 - Ajustar tamanho mínimo de toque e rolagem das faixas de câmera/atos.
-- Testar texto ampliado, contraste, movimento reduzido e navegação por teclado.
+- [Concluído] A Corte abre como gaveta horizontal no mesmo ancoramento das
+  Reações; as duas são mutuamente exclusivas. Cada jogador ocupa um cartão de
+  duas linhas cujo bloco inteiro — nome, moeda e influências — é um único botão
+  de foco. A segunda linha usa o ícone `◆` e as duas cartas; jogadores e
+  preferências permanecem numa única faixa rolável em todas as resoluções.
+- [Idealização] Oferecer jogabilidade integral por teclado quando o canvas
+  estiver focado: **Setas** percorrem espacialmente apenas objetos válidos do
+  ato atual; **Espaço** inspeciona ou arma a escolha; **Enter** confirma a
+  intenção armada; **Escape** cancela a confirmação, fecha contexto ou retorna
+  ao enquadramento anterior.
+- [Idealização] O foco de teclado deve acompanhar o mesmo objeto durante
+  animações e recomposições da mesa, mostrar um anel persistente e anunciar em
+  região `aria-live` o nome, disponibilidade e instrução seguinte. Nenhuma
+  ação irreversível pode ocorrer apenas ao mover o foco.
+- [Idealização] A ordem deve nascer da posição projetada dos objetos, não da
+  ordem de criação no Three.js: esquerda/direita escolhem o vizinho visual e
+  cima/baixo alternam entre palco, bancada e faixas 2D. Fora do canvas, as
+  teclas preservam o comportamento normal do navegador.
+- Testar texto ampliado, contraste, movimento reduzido e essa navegação por
+  teclado em desktop e dispositivos com teclado externo.
 - Expor estado e ações relevantes a leitores de tela na camada HTML.
 - Não bloquear orientação; oferecer apenas uma recomendação de landscape para
   a visão geral.
@@ -306,9 +343,9 @@ de La Corte fora do núcleo comum.
 1. Validar visualmente em desktop e mobile o foco da mão privada, o indicador
    de tesouro e as pilhas exatas de moedas; ajustar enquadramento e posição se
    necessário.
-2. [Seleção de alvos concluída] Levar contestações e bloqueios para objetos do
-   palco. A camada HTML continua disponível, mas o fluxo principal não deve
-   depender dela.
+2. [Concluído e validado visualmente] Contestações e bloqueios usam efígies
+   clicáveis, confirmação diegética em dois toques, foco vivo e contexto HTML
+   acessível.
 3. [Concluído] Animar gasto, recebimento, roubo, reembolso e transferência de
    moedas a partir dos eventos autoritativos já resolvidos.
 4. Exercitar multiplayer 3D ponta a ponta: troca 2D/3D, chat, reações,

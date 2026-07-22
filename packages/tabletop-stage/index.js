@@ -173,6 +173,10 @@ export class TabletopStage {
     this.cameraRig.setAct(name, options);
   }
 
+  retargetCameraAct(name, definition) {
+    return this.cameraRig.retargetAct(name, definition);
+  }
+
   resize() {
     const width = Math.max(1, this.canvas.clientWidth || window.innerWidth);
     const height = Math.max(1, this.canvas.clientHeight || window.innerHeight);

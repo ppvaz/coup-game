@@ -69,6 +69,9 @@ test('o painel da Corte oferece a volta à mesa 2D quando permitido', () => {
   const allowed = tabletopRosterHTML(stateFor(game), context);
   assert.match(allowed, /id="tabletop-2d"/);
   assert.match(allowed, /aria-label="Alternar para a mesa 2D, mantendo a partida"/);
+  assert.equal((allowed.match(/class="tabletop-roster-player/g) ?? []).length, seats.length);
+  assert.match(allowed, /<i aria-hidden="true">◆<\/i><b>2<\/b>/);
+  assert.match(allowed, /<small>\(VOCÊ\)<\/small>/);
   const lab = tabletopRosterHTML(stateFor(game), { ...context, canSwitchTo2D: false });
   assert.doesNotMatch(lab, /id="tabletop-2d"/);
 });
@@ -138,6 +141,31 @@ test('seleção de alvo usa assentos 3D e conserva a lista como fallback', () =>
   game.players.find((player) => player.id === 'c').coins = 1;
   assert.equal(nextTabletopTargetId(game, 'a', 'steal', 'b'), 'c');
   assert.equal(nextTabletopTargetId(game, 'a', 'steal', 'c'), 'b');
+});
+
+test('ações ficam na faixa 2D e intervenções usam efígies com fallback HTML', () => {
+  let game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  const actionBar = gameplayHTML(stateFor(game), context);
+  assert.match(actionBar, /data-action="income"/);
+  assert.doesNotMatch(actionBar, /Decisão no palco/);
+  assert.doesNotMatch(actionBar, /tabletop-decision-fallback/);
+
+  game = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'tax' });
+  const responseStage = gameplayHTML(stateFor(game, { myId: 'b' }), context);
+  assert.match(responseStage, /Responder à alegação de Duque/);
+  assert.match(responseStage, /preparar a contestação/);
+  assert.doesNotMatch(responseStage, /id="challenge"/);
+  const armedStage = gameplayHTML(stateFor(game, { myId: 'b' }), context, {
+    armedDecisionId: 'response:challenge',
+  });
+  assert.match(armedStage, /Confirmar Contestar\?/);
+  assert.match(armedStage, /Toque novamente na mesma efígie/);
+  const responseFallback = gameplayHTML(stateFor(game, { myId: 'b' }), context, {
+    decisionFallbackOpen: true,
+  });
+  assert.match(responseFallback, /id="challenge"/);
+  assert.match(responseFallback, /id="allow"/);
+  assert.doesNotMatch(responseFallback, /tabletop-decision-fallback-close/);
 });
 
 test('a Embaixadora usa bancada 3D com confirmação e lista acessível como fallback', () => {

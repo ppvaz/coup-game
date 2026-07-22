@@ -1,4 +1,5 @@
 import { ACTIONS, isAlive, validActionTargets } from '../../game/coup.js';
+import { projectTabletopDecision } from './coup-intents.js';
 
 const FULL_TURN = Math.PI * 2;
 
@@ -71,6 +72,29 @@ export function projectCoinMovements(game) {
   );
 }
 
+export function projectTabletopEvents(game) {
+  const gameId = game?.gameId ?? 'local';
+  const log = game?.log ?? [];
+  const firstIndex = Math.max(0, log.length - 24);
+  return Object.freeze(
+    log.slice(firstIndex).map((event) => {
+      const at = Math.max(0, Number(event.at) || 0);
+      const actorId = event.actorId ?? event.playerId ?? null;
+      return Object.freeze({
+        id: `${gameId}:${at}:${event.type}:${actorId ?? ''}:${event.targetId ?? ''}:${event.challengerId ?? ''}:${event.challengedId ?? ''}`,
+        type: event.type,
+        actorId,
+        targetId: event.targetId ?? null,
+        challengerId: event.challengerId ?? null,
+        challengedId: event.challengedId ?? null,
+        winnerId: event.winnerId ?? null,
+        loserId: event.loserId ?? null,
+        truthful: typeof event.truthful === 'boolean' ? event.truthful : null,
+      });
+    }),
+  );
+}
+
 /**
  * Barreira de dados entre Coup e o palco. Aceita até o estado completo do
  * host, mas remove papéis ocultos dos rivais antes de chegar ao WebGL.
@@ -99,6 +123,7 @@ export function projectCoupTableView(
   const targetableIds = new Set(validActionTargets(game, myId, targetAction).map((player) => player.id));
   const targetingAction = targetableIds.size ? ACTIONS[targetAction] : null;
   const selectedTarget = targetableIds.has(selectedTargetId) ? selectedTargetId : null;
+  const decision = projectTabletopDecision(game, myId, { targeting: Boolean(targetingAction) });
 
   const seats = ordered.map((player, index) => {
     const self = player.id === myId;
@@ -161,7 +186,9 @@ export function projectCoupTableView(
         })
       : null,
     responsePlayer: playerSummary(players.get(game.responseQueue?.[0])),
+    decision,
     coinMovements: projectCoinMovements(game),
+    stageEvents: projectTabletopEvents(game),
     targeting: targetingAction
       ? Object.freeze({
           id: targetAction,
