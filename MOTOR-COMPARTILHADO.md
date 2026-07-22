@@ -30,6 +30,7 @@ commit da mudança.
 | `packages/tabletop-stage/`                  | Palco coordenador, câmera, pipeline CRT, PiP, arraste/zoom, resize, ciclo de animação e descarte |
 | `packages/tabletop-stage/performance.js`    | Amostragem de quadros e resumo de FPS                                                            |
 | `packages/tabletop-stage/projectile-cam.js` | Parábola do voo, saída do quadro, pose da câmera de perseguição e ancoragem do PiP na borda      |
+| `packages/tabletop-stage/gesture-track.js`  | Duração, prioridade de atropelo e pose aditiva por encaixe nomeado                               |
 | `src/lib/tabletop/quality-profiles.js`      | Perfis de qualidade 3D e persistência da escolha                                                 |
 | `src/lib/tabletop/benchmark-kit.js`         | Execução e histórico de benchmark pela URL                                                       |
 | `src/lib/realtime.js`                       | Tradução de status de canal Supabase em reação do app; presença com ACK                          |
@@ -122,6 +123,7 @@ arranjo, é o produto; os jogos são a prova dele.
 | Problema            | La Corte                                                                  | Sem Perdão                                           |
 | ------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Arremesso           | `throwReaction` (coup-table.js)                                           | `arremessarEntre` (retroMesa.ts)                     |
+| Gestos do boneco    | `gesture-track.js` + `COURT_GESTURES` (8 gestos)                          | `acao()`, `PRIORIDADE`, `DURACAO` (reus.ts, 8 ações) |
 | Barreira de dados   | `projectCoupTableView` (coup-view.js)                                     | `mesaView.ts`, também puro e testado no Node         |
 | Atos de câmera      | `defineCameraAct` / `setCameraAct`                                        | `Ato`, `CONFIG_ATO`, `setAto`                        |
 | Pós-processo        | Render target + quad CRT + `pixelScale`                                   | Render target + `blitScene` + `pixelSize`            |

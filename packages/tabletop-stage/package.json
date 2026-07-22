@@ -6,6 +6,7 @@
   "description": "Framework-neutral Three.js runtime for tabletop game scenes",
   "exports": {
     ".": "./index.js",
+    "./gesture-track": "./gesture-track.js",
     "./performance": "./performance.js",
     "./projectile-cam": "./projectile-cam.js"
   },
