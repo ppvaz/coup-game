@@ -343,6 +343,18 @@ export class CoupTableScene {
     return seat ? { id: seat.id, name: seat.name } : null;
   }
 
+  povCameraForSeat(seat, seatCount) {
+    return povCameraForSeat(seat, seatCount);
+  }
+
+  playerCameraForSeat(seat, seatCount) {
+    return playerCameraForSeat(seat, seatCount);
+  }
+
+  localCameraForSeat(seat, seatCount) {
+    return this.playerCameraForSeat(seat, seatCount);
+  }
+
   setPovSeat(seatId, { immediate = false } = {}) {
     const seats = this.view?.seats ?? [];
     const seat =
@@ -350,7 +362,8 @@ export class CoupTableScene {
     if (!seat) return null;
     this.focusedInfluenceId = null;
     this.currentPovSeatId = seat.id;
-    this.stage.defineCameraAct('pov', povCameraForSeat(seat, seats.length));
+    this.stage.defineCameraAct('pov', this.povCameraForSeat(seat, seats.length));
+    this.stage.setCameraNavigation('orbit');
     this.cameraOverridden = true;
     this.cameraName = 'pov';
     this.stage.setCameraAct('pov', { immediate });
@@ -369,7 +382,8 @@ export class CoupTableScene {
     const self = seats.find((seat) => seat.isSelf);
     if (!self) return null;
     this.focusedInfluenceId = null;
-    this.stage.defineCameraAct('player', playerCameraForSeat(self, seats.length));
+    this.stage.defineCameraAct('player', this.localCameraForSeat(self, seats.length));
+    this.stage.setCameraNavigation('orbit');
     this.cameraOverridden = true;
     this.cameraName = 'player';
     this.stage.setCameraAct('player', { immediate });
@@ -382,7 +396,8 @@ export class CoupTableScene {
     if (!seat) return null;
     this.focusedInfluenceId = null;
     this.currentFocusSeatId = seat.id;
-    this.stage.defineCameraAct('inspect', playerCameraForSeat(seat, seats.length));
+    this.stage.defineCameraAct('inspect', this.playerCameraForSeat(seat, seats.length));
+    this.stage.setCameraNavigation('orbit');
     this.cameraOverridden = true;
     this.cameraName = 'inspect';
     this.stage.setCameraAct('inspect', { immediate });
@@ -890,7 +905,7 @@ export class CoupTableScene {
     const seats = this.view.seats;
     const subject = seats.find((seat) => seat.id === decision.seatIds[0]);
     if (!subject) return false;
-    this.stage.defineCameraAct(decision.act, playerCameraForSeat(subject, seats.length));
+    this.stage.defineCameraAct(decision.act, this.playerCameraForSeat(subject, seats.length));
     this.cameraName = decision.act;
     this.autoCameraKey = cameraDecisionKey(decision);
     this.autoCameraHold = {
@@ -975,7 +990,7 @@ export class CoupTableScene {
     let act = decision.act;
     if (act === 'player') {
       const self = seats.find((seat) => seat.isSelf);
-      if (self) this.stage.defineCameraAct('player', playerCameraForSeat(self, seats.length));
+      if (self) this.stage.defineCameraAct('player', this.localCameraForSeat(self, seats.length));
       else act = 'table';
     } else if (act === 'intervention') {
       const pose = interventionCameraForElements(this.interventionFocusPoints());
@@ -986,9 +1001,9 @@ export class CoupTableScene {
     } else if (act === 'claim' && subjects.length) {
       this.stage.defineCameraAct('claim', claimCameraForSeat(subjects[0], seats.length));
     } else if (act === 'targeting-seat' && subjects.length) {
-      this.stage.defineCameraAct('targeting-seat', playerCameraForSeat(subjects[0], seats.length));
+      this.stage.defineCameraAct('targeting-seat', this.playerCameraForSeat(subjects[0], seats.length));
     } else if (act === 'evidence' && subjects.length) {
-      this.stage.defineCameraAct('evidence', playerCameraForSeat(subjects[0], seats.length));
+      this.stage.defineCameraAct('evidence', this.playerCameraForSeat(subjects[0], seats.length));
     } else if (act === 'throne' && subjects.length) {
       this.stage.defineCameraAct('throne', throneCameraForSeat(subjects[0], seats.length));
     }
@@ -1381,8 +1396,9 @@ export class CoupTableScene {
     if (act === 'duel') this.stage.defineCameraAct('duel', duelCameraForSeats(subjects, seats.length));
     else if (act === 'claim') this.stage.defineCameraAct('claim', claimCameraForSeat(subjects[0], seats.length));
     else if (act === 'targeting-seat')
-      this.stage.defineCameraAct('targeting-seat', playerCameraForSeat(subjects[0], seats.length));
-    else if (act === 'evidence') this.stage.defineCameraAct('evidence', playerCameraForSeat(subjects[0], seats.length));
+      this.stage.defineCameraAct('targeting-seat', this.playerCameraForSeat(subjects[0], seats.length));
+    else if (act === 'evidence')
+      this.stage.defineCameraAct('evidence', this.playerCameraForSeat(subjects[0], seats.length));
     else if (act === 'throne') this.stage.defineCameraAct('throne', throneCameraForSeat(subjects[0], seats.length));
     else return null;
     this.cameraOverridden = true;
