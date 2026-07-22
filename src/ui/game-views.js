@@ -203,21 +203,26 @@ function blockClaimModal(state, context) {
   return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">${eyebrow}</div><h2>${modalPlayerHTML(game, block.playerId)} diz ser ${block.role}</h2>${otherPlayersHTML(game, [block.playerId, pending.actorId])}<p class="modal-copy">${playerName(game, block.playerId)} bloqueou ${ACTIONS[pending.action].label.toLowerCase()}. Você pode aceitar ou contestar a alegação.</p>${timerHTML(game, context.clock)}${responseProgressHTML(state)}<div class="response-actions"><button class="danger" id="contest-block">Contestar bloqueio</button><button class="primary" id="accept-block">Aceitar bloqueio</button></div></div>${modalContext(game, { omitCurrent: true })}</div></div>`;
 }
 
-function revealModal(state, context) {
+const tabletopFallbackClose = (enabled) =>
+  enabled
+    ? '<button type="button" class="tabletop-bench-fallback-close" id="tabletop-bench-fallback-close">← Voltar à mesa 3D</button>'
+    : '';
+
+function revealModal(state, context, { tabletopFallback = false } = {}) {
   const game = state.game;
   const self = game.players.find((player) => player.id === state.myId);
   const options = self.cards.filter((card) => !card.revealed);
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Influência perdida</div><h2>Escolha qual carta revelar</h2>${otherPlayersHTML(game, [state.myId])}<p class="modal-copy">A carta escolhida fica virada para cima e deixa de valer.</p>${timerHTML(game, context.clock)}<div class="card-grid">${options.map((card) => `<button class="role-card" data-reveal="${card.id}" style="--portrait:url('${context.portraits[card.role]}')"><h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div></div>${modalContext(game)}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main">${tabletopFallbackClose(tabletopFallback)}<div class="eyebrow">Influência perdida</div><h2>Escolha qual carta revelar</h2>${otherPlayersHTML(game, [state.myId])}<p class="modal-copy">A carta escolhida fica virada para cima e deixa de valer.</p>${timerHTML(game, context.clock)}<div class="card-grid">${options.map((card) => `<button class="role-card" data-reveal="${card.id}" style="--portrait:url('${context.portraits[card.role]}')"><h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div></div>${modalContext(game)}</div></div>`;
 }
 
-function exchangeModal(state, context) {
+function exchangeModal(state, context, { tabletopFallback = false } = {}) {
   const game = state.game;
   const count = game.pending.exchangeCount;
   const picks = state.exchangePicks;
-  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main"><div class="eyebrow">Troca da Embaixadora</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2>${otherPlayersHTML(game, [state.myId])}<p class="modal-copy">As demais voltam para o baralho da corte.</p>${timerHTML(game, context.clock)}<div class="card-grid">${game.exchangeOptions.map((card) => `<button class="role-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${context.portraits[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext(game)}</div></div>`;
+  return `<div class="modal-wrap"><div class="modal modal-with-context"><div class="modal-main">${tabletopFallbackClose(tabletopFallback)}<div class="eyebrow">Troca da Embaixadora</div><h2>Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`}</h2>${otherPlayersHTML(game, [state.myId])}<p class="modal-copy">As demais voltam para o baralho da corte.</p>${timerHTML(game, context.clock)}<div class="card-grid">${game.exchangeOptions.map((card) => `<button class="role-card" data-pick="${card.id}" aria-pressed="${picks.includes(card.id)}" style="--portrait:url('${context.portraits[card.role]}')">${picks.includes(card.id) ? '<span class="pick-mark">✓</span>' : ''}<h3>${card.role}</h3><p>${ROLE_HINTS[card.role]}</p></button>`).join('')}</div><div class="response-actions"><button class="primary" id="confirm-exchange" ${picks.length === count ? '' : 'disabled'}>Confirmar troca</button></div></div>${modalContext(game)}</div></div>`;
 }
 
-export function modalHTML(state, context) {
+export function modalHTML(state, context, { tabletopFallback = false } = {}) {
   const game = state.game;
   if (state.targetAction) return targetModal(state);
   if (game.status !== 'playing') return '';
@@ -241,7 +246,7 @@ export function modalHTML(state, context) {
       : '';
   }
   if (game.phase === 'choose_influence') {
-    if (game.pending.lossPlayerId === state.myId) return revealModal(state, context);
+    if (game.pending.lossPlayerId === state.myId) return revealModal(state, context, { tabletopFallback });
     return state.online
       ? waitingModal(
           state,
@@ -252,7 +257,7 @@ export function modalHTML(state, context) {
       : '';
   }
   if (game.phase === 'exchange') {
-    if (game.pending.actorId === state.myId) return exchangeModal(state, context);
+    if (game.pending.actorId === state.myId) return exchangeModal(state, context, { tabletopFallback });
     return state.online
       ? waitingModal(
           state,
@@ -263,6 +268,16 @@ export function modalHTML(state, context) {
       : '';
   }
   return '';
+}
+
+export function nextExchangePicks(game, myId, picks, cardId) {
+  if (game?.status !== 'playing' || game.phase !== 'exchange' || game.pending?.actorId !== myId) return picks;
+  const count = game.pending.exchangeCount;
+  const optionIds = new Set(game.exchangeOptions.map((card) => card.id));
+  const current = picks.filter((id, index) => optionIds.has(id) && picks.indexOf(id) === index).slice(0, count);
+  if (!optionIds.has(cardId)) return current;
+  if (current.includes(cardId)) return current.filter((id) => id !== cardId);
+  return current.length < count ? [...current, cardId] : current;
 }
 
 export function bindGameDecisionControls(root, { state, dispatch, render }) {
@@ -308,12 +323,7 @@ export function bindGameDecisionControls(root, { state, dispatch, render }) {
   root.querySelectorAll('[data-pick]').forEach((button) => {
     button.onclick = () => {
       const id = button.dataset.pick;
-      const count = state.game.pending.exchangeCount;
-      if (state.exchangePicks.includes(id)) {
-        state.exchangePicks = state.exchangePicks.filter((pick) => pick !== id);
-      } else if (state.exchangePicks.length < count) {
-        state.exchangePicks = [...state.exchangePicks, id];
-      }
+      state.exchangePicks = nextExchangePicks(state.game, state.myId, state.exchangePicks, id);
       render();
     };
   });

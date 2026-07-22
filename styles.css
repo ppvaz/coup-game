@@ -1269,6 +1269,73 @@ body.is-tabletop-lab > .theme-toggle {
   opacity: 0;
   pointer-events: none;
 }
+.tabletop-bench-decision {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  bottom: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  align-items: center;
+  gap: 18px;
+  width: min(760px, calc(100vw - 48px));
+  padding: 14px 16px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(217, 181, 107, 0.48);
+  background: rgba(11, 9, 8, 0.9);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+}
+.tabletop-bench-decision > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.tabletop-bench-decision > div:first-child > span {
+  color: #d9b56b;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.tabletop-bench-decision strong {
+  overflow: hidden;
+  color: #eee6d6;
+  font:
+    600 19px/1.05 'Cormorant Garamond',
+    serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tabletop-bench-decision small {
+  color: #91887b;
+  font-size: 9px;
+}
+.tabletop-bench-decision .turn-timer {
+  margin: 0;
+}
+.tabletop-bench-decision-actions {
+  display: flex;
+  gap: 7px;
+}
+.tabletop-bench-decision-actions button {
+  min-height: 42px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+.tabletop-bench-fallback-close {
+  display: block;
+  min-height: 32px;
+  margin: 0 0 10px auto;
+  padding: 6px 9px;
+  border: 1px solid rgba(217, 181, 107, 0.3);
+  color: #d9b56b;
+  background: rgba(217, 181, 107, 0.06);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 /* Câmera de arremesso: acompanha o próprio objeto quando ele sai do quadro.
    Fica acima de toda a interface da mesa — só o overlay de conexão perdida
    (z-index 40) passa por cima, porque aí não há partida para assistir. */
@@ -1378,7 +1445,8 @@ body.is-tabletop-lab > .theme-toggle {
 .tabletop-reaction-back {
   width: 100%;
 }
-.tabletop-experiment:has(.tabletop-gameplay .modal-wrap) .tabletop-reactions {
+.tabletop-experiment:has(.tabletop-gameplay .modal-wrap) .tabletop-reactions,
+.tabletop-experiment:has(.tabletop-bench-decision) .tabletop-reactions {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -2079,6 +2147,17 @@ html[data-theme='light'] .tabletop-gameplay .modal-wrap {
 }
 html[data-theme='light'] .tabletop-gameplay .modal {
   background: rgba(248, 242, 231, 0.92);
+}
+html[data-theme='light'] .tabletop-bench-decision {
+  border-color: rgba(82, 59, 29, 0.38);
+  background: rgba(240, 229, 208, 0.92);
+  box-shadow: 0 18px 54px rgba(58, 42, 20, 0.24);
+}
+html[data-theme='light'] .tabletop-bench-decision strong {
+  color: #2d2218;
+}
+html[data-theme='light'] .tabletop-bench-decision small {
+  color: #6c5d49;
 }
 html[data-theme='light'] .tabletop-gameplay .actions,
 html[data-theme='light'] .tabletop-result {

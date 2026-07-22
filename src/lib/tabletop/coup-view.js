@@ -18,7 +18,7 @@ const playerSummary = (player) => (player ? Object.freeze({ id: player.id, name:
  * Barreira de dados entre Coup e o palco. Aceita até o estado completo do
  * host, mas remove papéis ocultos dos rivais antes de chegar ao WebGL.
  */
-export function projectCoupTableView(game, myId) {
+export function projectCoupTableView(game, myId, { exchangePicks = [] } = {}) {
   if (!game) throw new Error('A mesa 3D precisa de uma partida.');
   // A geografia da sala é pública e compartilhada. O jogador local pode estar
   // em qualquer cadeira; as câmeras procuram `isSelf` sem girar os demais
@@ -32,6 +32,9 @@ export function projectCoupTableView(game, myId) {
   const loser = players.get(pending.lossPlayerId) ?? null;
   const action = pending.action ? ACTIONS[pending.action] : null;
   const phase = game.status === 'finished' ? 'finished' : game.phase;
+  const selfChoosesInfluence = phase === 'choose_influence' && pending.lossPlayerId === myId;
+  const selfExchanges = phase === 'exchange' && pending.actorId === myId;
+  const selectedExchangeIds = new Set(exchangePicks);
 
   const seats = ordered.map((player, index) => {
     const self = player.id === myId;
@@ -55,6 +58,7 @@ export function projectCoupTableView(game, myId) {
             id: self ? card.id : `seat:${index}:influence:${cardIndex}`,
             revealed: Boolean(card.revealed),
             role: self || card.revealed ? card.role : null,
+            selectable: Boolean(self && selfChoosesInfluence && !card.revealed),
           }),
         ),
       ),
@@ -95,6 +99,20 @@ export function projectCoupTableView(game, myId) {
           type: latest.type,
           truthful: typeof latest.truthful === 'boolean' ? latest.truthful : null,
           role: latest.role ?? latest.claimedRole ?? null,
+        })
+      : null,
+    exchange: selfExchanges
+      ? Object.freeze({
+          requiredCount: Math.max(1, Number(pending.exchangeCount) || 1),
+          options: Object.freeze(
+            game.exchangeOptions.map((card) =>
+              Object.freeze({
+                id: card.id,
+                role: card.role,
+                selected: selectedExchangeIds.has(card.id),
+              }),
+            ),
+          ),
         })
       : null,
     seats: Object.freeze(seats),

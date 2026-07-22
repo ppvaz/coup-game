@@ -5,6 +5,7 @@ import {
   gameplayHTML,
   shouldFocusDecisionHourglass,
   tableExperimentHTML,
+  tabletopInfluenceCommand,
   tabletopRosterHTML,
 } from '../src/ui/table-experiment.js';
 
@@ -77,4 +78,47 @@ test('a revanche 3D é do anfitrião; convidados aguardam', () => {
   const guest = gameplayHTML(stateFor(finished, { online: true, isHost: false }), context);
   assert.doesNotMatch(guest, /id="tabletop-again"/);
   assert.match(guest, /Aguardando o anfitrião/);
+});
+
+test('clique 3D só produz comando para influência local selecionável', () => {
+  let game = createGame(seats, { random: () => 0.42, startingPlayerId: 'b' });
+  game.players.find((player) => player.id === 'b').coins = 7;
+  game = dispatchGame(game, { type: 'declare_action', actorId: 'b', action: 'coup', targetId: 'a' });
+  const ownCard = game.players.find((player) => player.id === 'a').cards[0];
+  const rivalCard = game.players.find((player) => player.id === 'b').cards[0];
+
+  assert.deepEqual(tabletopInfluenceCommand(game, 'a', ownCard.id), {
+    type: 'reveal_influence',
+    actorId: 'a',
+    cardId: ownCard.id,
+  });
+  assert.equal(tabletopInfluenceCommand(game, 'a', rivalCard.id), null);
+  assert.equal(tabletopInfluenceCommand(game, 'b', rivalCard.id), null);
+  ownCard.revealed = true;
+  assert.equal(tabletopInfluenceCommand(game, 'a', ownCard.id), null);
+});
+
+test('a Embaixadora usa bancada 3D com confirmação e lista acessível como fallback', () => {
+  let game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  game = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'exchange' });
+  game = dispatchGame(game, { type: 'pass', actorId: 'b' });
+  game = dispatchGame(game, { type: 'pass', actorId: 'c' });
+  const optionIds = game.exchangeOptions.map((card) => card.id);
+
+  const empty = gameplayHTML(stateFor(game), context);
+  assert.match(empty, /tabletop-bench-decision/);
+  assert.match(empty, /0 de 2 cartas selecionadas/);
+  assert.match(empty, /id="confirm-exchange" disabled/);
+  assert.match(empty, /id="tabletop-bench-fallback-open"/);
+  assert.doesNotMatch(empty, /modal-wrap/);
+
+  const readyState = stateFor(game, { exchangePicks: optionIds.slice(0, 2) });
+  const ready = gameplayHTML(readyState, context);
+  assert.match(ready, /2 de 2 cartas selecionadas/);
+  assert.match(ready, /id="confirm-exchange" >/);
+
+  const fallback = gameplayHTML(readyState, context, { benchFallbackOpen: true });
+  assert.match(fallback, /modal-wrap/);
+  assert.match(fallback, /id="tabletop-bench-fallback-close"/);
+  assert.match(fallback, new RegExp(`data-pick="${optionIds[0]}" aria-pressed="true"`));
 });

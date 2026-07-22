@@ -1439,6 +1439,38 @@ html[data-theme='light'] .chat-taunts button {
     padding: 0 8px max(8px, env(safe-area-inset-bottom));
     background: linear-gradient(180deg, transparent 50%, rgba(4, 3, 3, 0.24));
   }
+  .tabletop-bench-decision {
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    width: auto;
+    padding: 10px;
+    transform: none;
+  }
+  .tabletop-bench-decision strong {
+    font-size: 17px;
+    white-space: normal;
+  }
+  .tabletop-bench-decision .turn-timer {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .tabletop-bench-decision-actions {
+    grid-column: 2;
+    grid-row: 1;
+    flex-direction: column;
+  }
+  .tabletop-bench-decision-actions button {
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 8px;
+  }
+  .tabletop-bench-fallback-close {
+    min-height: 28px;
+    margin-bottom: 7px;
+  }
   .tabletop-reactions {
     right: 8px;
     bottom: max(76px, calc(env(safe-area-inset-bottom) + 68px));

@@ -7,6 +7,7 @@ import {
   gameHTML,
   handHTML,
   modalHTML,
+  nextExchangePicks,
   playerHTML,
   timerHTML,
 } from '../src/ui/game-views.js';
@@ -146,6 +147,22 @@ test('revelação e troca mostram as cartas certas para o jogador certo', () => 
   assert.match(picker, /Troca da Embaixadora/);
   assert.match(picker, new RegExp(`data-pick="${firstOption}" aria-pressed="true"`));
   assert.match(picker, /id="confirm-exchange" disabled/);
+});
+
+test('seleção da Embaixadora aceita apenas opções privadas e respeita a quantidade', () => {
+  let game = createGame(seats, { random: () => 0.42 });
+  game = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'exchange' });
+  game = dispatchGame(game, { type: 'pass', actorId: 'b' });
+  game = dispatchGame(game, { type: 'pass', actorId: 'c' });
+  const [first, second, third] = game.exchangeOptions.map((card) => card.id);
+
+  let picks = nextExchangePicks(game, 'a', [], first);
+  picks = nextExchangePicks(game, 'a', picks, second);
+  assert.deepEqual(picks, [first, second]);
+  assert.deepEqual(nextExchangePicks(game, 'a', picks, third), picks);
+  assert.deepEqual(nextExchangePicks(game, 'a', picks, first), [second]);
+  assert.deepEqual(nextExchangePicks(game, 'a', [first], 'injetada'), [first]);
+  assert.deepEqual(nextExchangePicks(game, 'b', [], first), []);
 });
 
 test('modal de alvo desabilita roubo de rival sem moedas', () => {

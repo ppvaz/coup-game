@@ -37,6 +37,47 @@ test('papel rival só chega ao palco depois de revelado', () => {
   assert.notEqual(revealed.id, game.players[1].cards[0].id);
 });
 
+test('somente a própria influência fica selecionável na decisão de perda', () => {
+  let game = createGame(seats, { random: () => 0.42, startingPlayerId: 'b' });
+  game.players.find((player) => player.id === 'b').coins = 7;
+  game = dispatchGame(game, { type: 'declare_action', actorId: 'b', action: 'coup', targetId: 'a' });
+  assert.equal(game.phase, 'choose_influence');
+
+  const victimView = projectCoupTableView(game, 'a');
+  const victim = victimView.seats.find((seat) => seat.id === 'a');
+  const attacker = victimView.seats.find((seat) => seat.id === 'b');
+  assert.deepEqual(
+    victim.influences.map((card) => card.selectable),
+    [true, true],
+  );
+  assert.ok(attacker.influences.every((card) => card.selectable === false));
+
+  const observerView = projectCoupTableView(game, 'c');
+  assert.ok(observerView.seats.flatMap((seat) => seat.influences).every((card) => card.selectable === false));
+});
+
+test('opções e escolhas da Embaixadora chegam somente ao palco do ator', () => {
+  let game = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  game = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'exchange' });
+  game = dispatchGame(game, { type: 'pass', actorId: 'b' });
+  game = dispatchGame(game, { type: 'pass', actorId: 'c' });
+  assert.equal(game.phase, 'exchange');
+  const selectedId = game.exchangeOptions[1].id;
+
+  const actorView = projectCoupTableView(game, 'a', { exchangePicks: [selectedId, 'injetada'] });
+  assert.equal(actorView.exchange.requiredCount, 2);
+  assert.equal(actorView.exchange.options.length, 4);
+  assert.deepEqual(
+    actorView.exchange.options.map((card) => card.selected),
+    [false, true, false, false],
+  );
+  assert.ok(actorView.exchange.options.every((card) => card.role));
+
+  const observerView = projectCoupTableView(game, 'b', { exchangePicks: [selectedId] });
+  assert.equal(observerView.exchange, null);
+  assert.doesNotMatch(JSON.stringify(observerView), new RegExp(selectedId));
+});
+
 test('alegação pública vira batida visual sem resolver a verdade', () => {
   let game = createGame(seats, { random: () => 0.42 });
   game = dispatchGame(game, { type: 'declare_action', actorId: 'a', action: 'tax' });

@@ -831,6 +831,36 @@ function createInfluenceCard(influence) {
   });
   const card = new THREE.Group();
   card.add(mesh(geometry, [edge, edge, face, edge, edge, edge]));
+  if (influence.selectable) {
+    const selectionMaterial = new THREE.MeshBasicMaterial({
+      color: influence.selected ? 0x9ed5a7 : 0xffdda0,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const selectionFrame = new THREE.Group();
+    for (const [width, depth, x, z] of [
+      [0.7, 0.035, 0, -0.46],
+      [0.7, 0.035, 0, 0.46],
+      [0.035, 0.94, -0.34, 0],
+      [0.035, 0.94, 0.34, 0],
+    ]) {
+      selectionFrame.add(
+        mesh(new THREE.BoxGeometry(width, 0.012, depth), selectionMaterial, {
+          position: [x, 0.032, z],
+          cast: false,
+          receive: false,
+        }),
+      );
+    }
+    card.add(selectionFrame);
+    card.userData.selectionFrame = selectionFrame;
+    card.userData.selectionMaterial = selectionMaterial;
+  }
+  card.userData.influenceId = influence.id;
+  card.userData.selectable = influence.selectable;
+  card.userData.selected = influence.selected;
   if (influence.role) {
     card.add(
       mesh(
@@ -978,6 +1008,12 @@ export class CoupTableScene {
     this.flyingReactions = [];
     this.throwCam = { element: null, allowed: () => true, onChange: () => {}, open: false };
     this.influenceReveals = [];
+    this.selectableInfluences = [];
+    this.hoveredInfluenceId = null;
+    this.exchangeGroup = null;
+    this.exchangeCards = [];
+    this.exchangeSignature = '';
+    this.hoveredExchangeId = null;
     this.foley = options.sounds ? createTabletopFoley({ sounds: options.sounds }) : null;
 
     this.actionCard = new THREE.Group();
@@ -1052,11 +1088,17 @@ export class CoupTableScene {
     this.winnerAvatar?.removeFromParent();
     this.winnerAvatar = null;
     this.winnerAvatarId = null;
+    this.exchangeGroup = null;
+    this.exchangeCards = [];
+    this.exchangeSignature = '';
+    this.hoveredExchangeId = null;
     disposeObject3D(this.seatLayer);
     this.seatLayer = this.stage.add(new THREE.Group());
     this.seatLayer.name = 'coup-seats';
     this.seats.clear();
     this.influenceReveals = [];
+    this.selectableInfluences = [];
+    this.hoveredInfluenceId = null;
     const count = view.seats.length;
     for (const seatView of view.seats) {
       const angle = seatView.azimuthRad;
@@ -1084,7 +1126,7 @@ export class CoupTableScene {
       coinGroup.position.set(-1, 1.34, -1.2);
       noble.group.add(coinGroup);
       const influenceGroup = new THREE.Group();
-      influenceGroup.position.set(1.25, 1.28, -1.14);
+      influenceGroup.position.set(0.05, 1.28, -1.14);
       noble.group.add(influenceGroup);
       this.seatLayer.add(noble.group);
       this.seats.set(seatView.id, {
@@ -1193,14 +1235,17 @@ export class CoupTableScene {
       seat.coinCount = seatView.coins;
     }
 
-    const influenceSignature = seatView.influences.map((card) => `${card.role}:${card.revealed}`).join('|');
+    const influenceSignature = seatView.influences
+      .map((card) => `${card.id}:${card.role}:${card.revealed}:${card.selectable}`)
+      .join('|');
     if (influenceSignature !== seat.influenceSignature) {
       const previousInfluences = seat.influenceStates;
       const hadInfluences = seat.influenceSignature !== '';
       this.influenceReveals = this.influenceReveals.filter((reveal) => reveal.seatId !== seatView.id);
+      this.selectableInfluences = this.selectableInfluences.filter((entry) => entry.seatId !== seatView.id);
       disposeObject3D(seat.influenceGroup);
       seat.influenceGroup = new THREE.Group();
-      seat.influenceGroup.position.set(1.25, 1.28, -1.14);
+      seat.influenceGroup.position.set(0.05, 1.28, -1.14);
       seat.group.add(seat.influenceGroup);
       seatView.influences.forEach((influence, index) => {
         const card = createInfluenceCard(influence);
@@ -1211,6 +1256,15 @@ export class CoupTableScene {
         card.rotation.y = Math.PI + (index ? -0.12 : 0.1);
         card.rotation.z = influence.revealed ? 0.04 : 0;
         seat.influenceGroup.add(card);
+        if (influence.selectable) {
+          this.selectableInfluences.push({
+            seatId: seatView.id,
+            influenceId: influence.id,
+            card,
+            frame: card.userData.selectionFrame,
+            material: card.userData.selectionMaterial,
+          });
+        }
         if (newlyRevealed) {
           this.foley?.play('card');
           this.influenceReveals.push({
@@ -1259,6 +1313,54 @@ export class CoupTableScene {
     this.actionCaptionMaterial.map = this.actionCaptionTexture;
     this.actionCaptionMaterial.needsUpdate = true;
     this.actionSignature = signature;
+  }
+
+  updateExchange(view) {
+    const exchange = view.exchange;
+    const selfView = view.seats.find((seat) => seat.isSelf);
+    const selfSeat = selfView ? this.seats.get(selfView.id) : null;
+    if (selfSeat) selfSeat.influenceGroup.visible = !exchange;
+    const signature = exchange
+      ? `${selfView?.id ?? ''}|${exchange.requiredCount}|${exchange.options.map((card) => `${card.id}:${card.role}`).join('|')}`
+      : '';
+    if (signature !== this.exchangeSignature) {
+      if (this.exchangeGroup) disposeObject3D(this.exchangeGroup);
+      this.exchangeGroup = null;
+      this.exchangeCards = [];
+      this.hoveredExchangeId = null;
+      this.exchangeSignature = signature;
+      if (!exchange || !selfSeat) return;
+
+      const group = new THREE.Group();
+      group.name = 'exchange-options';
+      // A troca ocupa a borda privada do jogador: à frente do corpo e alguns
+      // centímetros acima das fichas, para o leque não atravessar nenhum dos dois.
+      group.position.set(0, 1.43, -1.12);
+      const count = exchange.options.length;
+      exchange.options.forEach((option, index) => {
+        const card = createInfluenceCard({
+          ...option,
+          revealed: false,
+          selectable: true,
+        });
+        card.position.set((index - (count - 1) / 2) * 0.72, option.selected ? 0.16 : 0, (index % 2) * 0.025);
+        card.rotation.y = Math.PI + (index - (count - 1) / 2) * -0.035;
+        group.add(card);
+        this.exchangeCards.push({
+          id: option.id,
+          card,
+          selected: option.selected,
+          material: card.userData.selectionMaterial,
+        });
+      });
+      selfSeat.group.add(group);
+      this.exchangeGroup = group;
+    }
+
+    for (const entry of this.exchangeCards) {
+      entry.selected = Boolean(exchange?.options.find((option) => option.id === entry.id)?.selected);
+      entry.material.color.setHex(entry.selected ? 0x9ed5a7 : 0xffdda0);
+    }
   }
 
   showEmojiReaction(playerId, emoji) {
@@ -1417,6 +1519,7 @@ export class CoupTableScene {
       this.seatSignature = signature;
     }
     for (const seat of view.seats) this.updateSeat(seat);
+    this.updateExchange(view);
     this.updateWinnerAvatar(view);
     this.updateActionCard(view);
     this.view = view;
@@ -1492,6 +1595,43 @@ export class CoupTableScene {
 
   setActionCardHover(hovered) {
     this.actionHoverFrame.visible = Boolean(hovered) && this.actionCard.visible;
+  }
+
+  setInfluenceCardHover(influenceId) {
+    const next = this.selectableInfluences.some((entry) => entry.influenceId === influenceId) ? influenceId : null;
+    this.hoveredInfluenceId = next;
+    return Boolean(next);
+  }
+
+  pickInfluenceCard(pointer) {
+    if (!this.selectableInfluences.length) return null;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(pointer.x, pointer.y), this.stage.camera);
+    let closest = null;
+    for (const entry of this.selectableInfluences) {
+      const hit = raycaster.intersectObject(entry.card, true)[0];
+      if (hit && (!closest || hit.distance < closest.distance))
+        closest = { id: entry.influenceId, distance: hit.distance };
+    }
+    return closest?.id ?? null;
+  }
+
+  setExchangeCardHover(cardId) {
+    const next = this.exchangeCards.some((entry) => entry.id === cardId) ? cardId : null;
+    this.hoveredExchangeId = next;
+    return Boolean(next);
+  }
+
+  pickExchangeCard(pointer) {
+    if (!this.exchangeCards.length) return null;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(pointer.x, pointer.y), this.stage.camera);
+    let closest = null;
+    for (const entry of this.exchangeCards) {
+      const hit = raycaster.intersectObject(entry.card, true)[0];
+      if (hit && (!closest || hit.distance < closest.distance)) closest = { id: entry.id, distance: hit.distance };
+    }
+    return closest?.id ?? null;
   }
 
   // Cinemático de leitura: verdadeiro se o ponteiro (em NDC) tocou a carta de
@@ -1649,6 +1789,29 @@ export class CoupTableScene {
     this.hourglass.group.visible = this.decisionClock.visible && this.decisionClock.total > 0;
     if (this.hourglass.group.visible) applyDecisionClock(this.hourglass, clockRatio, clockRemaining);
     this.updateDecisionBubble(elapsed, reducedMotion, clockRatio, clockRemaining);
+    for (const entry of this.selectableInfluences) {
+      const hovered = entry.influenceId === this.hoveredInfluenceId;
+      entry.material.opacity = hovered
+        ? 0.95
+        : reducedMotion
+          ? 0.48
+          : 0.42 + Math.sin(elapsed * 3.2 + entry.card.position.x) * 0.12;
+      entry.card.scale.setScalar(hovered ? 1.07 : 1);
+    }
+    for (const entry of this.exchangeCards) {
+      const hovered = entry.id === this.hoveredExchangeId;
+      entry.material.opacity = hovered
+        ? 0.95
+        : entry.selected
+          ? 0.82
+          : reducedMotion
+            ? 0.48
+            : 0.42 + Math.sin(elapsed * 3.2 + entry.card.position.x) * 0.12;
+      const targetY = (entry.selected ? 0.16 : 0) + (hovered ? 0.07 : 0);
+      const exchangeEase = reducedMotion ? 1 : 1 - Math.exp(-Math.max(delta, 1 / 120) * 12);
+      entry.card.position.y += (targetY - entry.card.position.y) * exchangeEase;
+      entry.card.scale.setScalar(hovered ? 1.07 : entry.selected ? 1.035 : 1);
+    }
     for (let index = this.influenceReveals.length - 1; index >= 0; index -= 1) {
       const reveal = this.influenceReveals[index];
       const progress = reducedMotion ? 1 : THREE.MathUtils.clamp((elapsed - reveal.startedAt) / reveal.duration, 0, 1);
@@ -1722,11 +1885,6 @@ export class CoupTableScene {
       const state = this.view?.seats.find((candidate) => candidate.id === id);
       if (!state) continue;
       seat.body.visible = !state.isWinner && !(this.cameraName === 'pov' && this.currentPovSeatId === id);
-      const inspectedSeat = this.cameraName === 'inspect' && this.currentFocusSeatId === id;
-      const compactPrivateHand =
-        this.stage.viewportMode === 'portrait' && ((state.isSelf && this.cameraName === 'player') || inspectedSeat);
-      const influenceTargetX = compactPrivateHand ? 0.05 : 1.25;
-      seat.influenceGroup.position.x += (influenceTargetX - seat.influenceGroup.position.x) * centerEase;
       if (state.isSelf) continue;
       const emphasis = state.isActor || state.isCurrent || state.isWinner;
       seat.body.position.y = reducedMotion
@@ -1742,6 +1900,8 @@ export class CoupTableScene {
     for (const reaction of this.flyingReactions) disposeObject3D(reaction.group);
     this.emojiReactions = [];
     this.flyingReactions = [];
+    this.selectableInfluences = [];
+    this.exchangeCards = [];
     this.actionTexture?.dispose();
     this.actionCaptionTexture?.dispose();
     this.stage.dispose();

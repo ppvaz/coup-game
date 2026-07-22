@@ -8,13 +8,28 @@ import {
 } from '../lib/tabletop/benchmark-kit.js';
 import { TABLETOP_QUALITY_KEY, initialTabletopQuality, nextTabletopQuality } from '../lib/tabletop/quality-profiles.js';
 import { TABLETOP_EMOJIS, TABLETOP_THROWABLES } from '../lib/tabletop/reactions.js';
-import { audioTogglesHTML, bindGameDecisionControls, describeLog, handHTML, modalHTML } from './game-views.js';
+import {
+  audioTogglesHTML,
+  bindGameDecisionControls,
+  describeLog,
+  handHTML,
+  modalHTML,
+  nextExchangePicks,
+  timerHTML,
+} from './game-views.js';
 import { chatPanelHTML, chatToggleHTML, escapeHTML } from './screens.js';
 
 const player = (game, id) => game.players.find((candidate) => candidate.id === id);
 
 export const shouldFocusDecisionHourglass = (game, myId) =>
   game?.status === 'playing' && game.phase === 'turn' && awaitedPlayerId(game) === myId;
+
+export function tabletopInfluenceCommand(game, myId, cardId) {
+  if (game?.status !== 'playing' || game.phase !== 'choose_influence' || game.pending?.lossPlayerId !== myId)
+    return null;
+  const influence = player(game, myId)?.cards.find((card) => card.id === cardId && !card.revealed);
+  return influence ? { type: 'reveal_influence', actorId: myId, cardId: influence.id } : null;
+}
 
 const rosterBookIcon = (open) =>
   open
@@ -100,10 +115,38 @@ export function tabletopRosterHTML(state, context) {
     )}<small class="tabletop-roster-hint">CLIQUE EM UM NOME PARA FOCAR</small><section class="tabletop-roster-settings" aria-label="Preferências da experiência">${context.canSwitchTo2D ? '<button class="tabletop-2d" id="tabletop-2d" type="button" title="Voltar à mesa 2D" aria-label="Voltar à mesa 2D, mantendo a partida"><span>▦</span><small>Mesa 2D</small></button>' : ''}<button class="tabletop-theme" id="tabletop-theme" type="button" title="Alternar ambiente"><span>☀</span><small>Modo diurno</small></button>${audioTogglesHTML(context)}${context.labAccess ? '<a class="tabletop-lab-link" href="/3d/lab" aria-label="Abrir laboratório 3D" title="Abrir laboratório 3D"><span>◇</span><small>Abrir laboratório 3D</small></a>' : ''}</section></aside>`;
 }
 
-export function gameplayHTML(state, context) {
+function tabletopBenchDecisionHTML(state, context, { fallbackOpen = false } = {}) {
+  const game = state.game;
+  const choosesInfluence =
+    game.status === 'playing' && game.phase === 'choose_influence' && game.pending.lossPlayerId === state.myId;
+  const exchanges = game.status === 'playing' && game.phase === 'exchange' && game.pending.actorId === state.myId;
+  if (!choosesInfluence && !exchanges) return '';
+  if (fallbackOpen) return modalHTML(state, context, { tabletopFallback: true });
+
+  const count = exchanges ? Math.max(1, Number(game.pending.exchangeCount) || 1) : 1;
+  const optionIds = exchanges ? new Set(game.exchangeOptions.map((card) => card.id)) : new Set();
+  const selected = exchanges ? new Set(state.exchangePicks.filter((id) => optionIds.has(id))).size : 0;
+  const eyebrow = exchanges ? 'Troca da Embaixadora' : 'Influência perdida';
+  const title = exchanges
+    ? `Escolha ${count === 1 ? 'a carta que fica' : `as ${count} cartas que ficam`} na mesa`
+    : 'Toque na influência que será revelada';
+  const status = exchanges
+    ? `<small aria-live="polite">${selected} de ${count} ${count === 1 ? 'carta selecionada' : 'cartas selecionadas'}</small>`
+    : '<small>A escolha é concluída ao tocar na carta.</small>';
+  const confirm = exchanges
+    ? `<button type="button" class="primary" id="confirm-exchange" ${selected === count ? '' : 'disabled'}>Confirmar troca</button>`
+    : '';
+  return `<aside class="tabletop-bench-decision" aria-label="${eyebrow}"><div><span>${eyebrow}</span><strong>${title}</strong>${status}</div>${timerHTML(game, context.clock)}<div class="tabletop-bench-decision-actions">${confirm}<button type="button" class="ghost" id="tabletop-bench-fallback-open">Escolher por lista</button></div></aside>`;
+}
+
+export function gameplayHTML(state, context, { benchFallbackOpen = false } = {}) {
   const game = state.game;
   const roster = tabletopRosterHTML(state, context);
-  if (game.status !== 'finished') return roster + handHTML(state, context.portraits) + modalHTML(state, context);
+  if (game.status !== 'finished') {
+    const benchDecision = tabletopBenchDecisionHTML(state, context, { fallbackOpen: benchFallbackOpen });
+    if (benchDecision) return roster + benchDecision;
+    return roster + handHTML(state, context.portraits) + modalHTML(state, context);
+  }
   const winner = player(game, game.winnerId);
   const defeated = game.finishReason === 'humans_eliminated';
   const again =
@@ -235,6 +278,8 @@ export async function mountTableExperiment({
   let focusedSeat = null;
   let reactionOpen = false;
   let reactionThrowable = null;
+  let benchFallbackOpen = false;
+  let benchDecisionKey = '';
   const processedReactions = new Set();
   const requestedTheme = new URLSearchParams(location.search).get('theme');
   let theme = ['light', 'dark'].includes(requestedTheme)
@@ -495,7 +540,17 @@ export async function mountTableExperiment({
             ? 'Sua decisão'
             : `Aguardando ${decisionPlayer?.name ?? 'a corte'}`;
     root.dataset.decision = awaited === currentState.myId || currentState.targetAction ? 'self' : 'other';
-    gameplay.innerHTML = gameplayHTML(currentState, currentContext);
+    const nextBenchDecisionKey =
+      game.status === 'playing' &&
+      ((game.phase === 'choose_influence' && game.pending.lossPlayerId === currentState.myId) ||
+        (game.phase === 'exchange' && game.pending.actorId === currentState.myId))
+        ? `${game.id}:${game.turn}:${game.phase}`
+        : '';
+    if (nextBenchDecisionKey !== benchDecisionKey) {
+      benchDecisionKey = nextBenchDecisionKey;
+      benchFallbackOpen = false;
+    }
+    gameplay.innerHTML = gameplayHTML(currentState, currentContext, { benchFallbackOpen });
     bindGameDecisionControls(gameplay, {
       state: currentState,
       dispatch,
@@ -503,9 +558,17 @@ export async function mountTableExperiment({
     });
     bindRosterFocus(gameplay);
     bindRosterSettings(gameplay);
+    gameplay.querySelector('#tabletop-bench-fallback-open')?.addEventListener('click', () => {
+      benchFallbackOpen = true;
+      paintState();
+    });
+    gameplay.querySelector('#tabletop-bench-fallback-close')?.addEventListener('click', () => {
+      benchFallbackOpen = false;
+      paintState();
+    });
     paintThemeControl();
     gameplay.querySelector('#tabletop-again')?.addEventListener('click', restart);
-    scene?.sync(projectCoupTableView(game, currentState.myId));
+    scene?.sync(projectCoupTableView(game, currentState.myId, { exchangePicks: currentState.exchangePicks }));
     playPendingReactions();
     // A carta saiu da mesa enquanto o cinemático a enquadrava: o Auto retoma
     // imediatamente, sem esperar o temporizador.
@@ -618,31 +681,59 @@ export async function mountTableExperiment({
         root.querySelectorAll('[data-tabletop-camera]').forEach((button) => button.classList.remove('active'));
       }
     }
-    // Moldura branca ao passar o mouse: a carta de ação aceita interação.
+    const pointerFromEvent = (event) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        y: -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      };
+    };
+    // Molduras ao passar o mouse sinalizam a leitura da carta pública e as
+    // decisões que podem ser tomadas diretamente na bancada local.
     let hoverFrame = 0;
     canvas.addEventListener('pointermove', (event) => {
       if (hoverFrame) return;
       hoverFrame = requestAnimationFrame(() => {
         hoverFrame = 0;
         if (!scene) return;
-        const rect = canvas.getBoundingClientRect();
-        const hit = scene.pickActionCard({
-          x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
-          y: -((event.clientY - rect.top) / rect.height) * 2 + 1,
-        });
-        scene.setActionCardHover(hit);
-        canvas.style.cursor = hit ? 'pointer' : '';
+        const pointer = pointerFromEvent(event);
+        const exchangeId = scene.pickExchangeCard(pointer);
+        const influenceId = !exchangeId ? scene.pickInfluenceCard(pointer) : null;
+        const actionHit = !exchangeId && !influenceId && scene.pickActionCard(pointer);
+        scene.setExchangeCardHover(exchangeId);
+        scene.setInfluenceCardHover(influenceId);
+        scene.setActionCardHover(actionHit);
+        canvas.style.cursor = exchangeId || influenceId || actionHit ? 'pointer' : '';
       });
+    });
+    canvas.addEventListener('pointerleave', () => {
+      scene?.setExchangeCardHover(null);
+      scene?.setInfluenceCardHover(null);
+      scene?.setActionCardHover(false);
+      canvas.style.cursor = '';
     });
     // Clique/toque na carta de ação abre um cinemático de leitura; o Auto
     // retoma sozinho depois de alguns segundos ou com um segundo toque.
     canvas.addEventListener('click', (event) => {
       if (!scene) return;
-      const rect = canvas.getBoundingClientRect();
-      const pointer = {
-        x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        y: -((event.clientY - rect.top) / rect.height) * 2 + 1,
-      };
+      const pointer = pointerFromEvent(event);
+      const exchangeId = scene.pickExchangeCard(pointer);
+      if (exchangeId) {
+        currentState.exchangePicks = nextExchangePicks(
+          currentState.game,
+          currentState.myId,
+          currentState.exchangePicks,
+          exchangeId,
+        );
+        requestRender();
+        return;
+      }
+      const influenceId = scene.pickInfluenceCard(pointer);
+      if (influenceId) {
+        const command = tabletopInfluenceCommand(currentState.game, currentState.myId, influenceId);
+        if (command) dispatch(command);
+        return;
+      }
       if (!scene.pickActionCard(pointer)) return;
       if (scene.cameraName === 'card') {
         endCardFocus();
