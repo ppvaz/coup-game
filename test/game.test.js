@@ -128,6 +128,7 @@ test('contestação bem-sucedida devolve o custo da ação blefada', () => {
 
   state = dispatchGame(state, { type: 'challenge', actorId: 'b' });
   assert.equal(state.players[0].coins, 3);
+  assert.equal(state.log.findLast((event) => event.type === 'challenge_resolved')?.refundedCost, 3);
   state = dispatchGame(state, { type: 'reveal_influence', actorId: 'a', cardId: 'a-Duque-0' });
   assert.equal(state.players[0].coins, 3);
   assert.equal(state.currentPlayerId, 'b');
@@ -215,6 +216,7 @@ test('roubo leva no máximo as moedas do alvo', () => {
   state = passAll(state, ['b']);
   assert.equal(state.players[0].coins, 3);
   assert.equal(state.players[1].coins, 0);
+  assert.equal(state.log.findLast((event) => event.type === 'action_resolved')?.amount, 1);
 });
 
 test('não permite roubar alvo sem moedas', () => {

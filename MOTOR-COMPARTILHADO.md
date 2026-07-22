@@ -54,6 +54,7 @@ commit da mudança.
 | `src/lib/tabletop/foley.js`           | Síntese no `AudioContext` da mesa, intervalo mínimo por evento                                         | Nomes dos eventos (moeda, carta revelada, arremesso)                       |
 | `src/lib/tabletop/reactions.js`       | Normalização, deduplicação e janela dos últimos N                                                      | Catálogo de arremessáveis (adaga da Assassina, moeda do Duque…)            |
 | `src/lib/tabletop/coin-layout.js`     | Distribuição determinística e limites de pilhas repetidas                                              | Hoje recebe a contagem do tesouro de Coup                                  |
+| `src/lib/tabletop/coin-transfer.js`   | Curva, cascata, duração e variante de movimento reduzido para transferências                           | Hoje anima ganhos, custos, roubos e reembolsos em moedas                   |
 | `src/lib/tabletop/hourglass-sand.js`  | Perfil e volume de areia dentro de um vidro de revolução                                               | Nasceu do relógio de decisão, mas serve a qualquer timer diegético         |
 | `src/lib/sounds.js`                   | Síntese de padrões curtos + mudo persistido                                                            | Chaves `la-corte-*` no `localStorage` e os nomes dos eventos               |
 | `src/lib/voice-announcer.js`          | Banco de falas por evento com sorteio sem repetição                                                    | O banco em si é 100% de Coup                                               |
@@ -160,7 +161,7 @@ regras, e nada que meça render.
 - **Rótulo do resultado**: o motor mede, o jogo carimba. Tema, perfil de qualidade, ato de câmera,
   assento em POV e beat entram como metadados — é o formato certo, porque a única palavra de Coup na
   medição é o rótulo que Coup injeta.
-- **Matriz de capturas** (`scripts/capture-shots.mjs`): sobe o dev server, percorre 11 planos × 3
+- **Matriz de capturas** (`scripts/capture-shots.mjs`): sobe o dev server, percorre 12 planos × 3
   viewports × 2 temas na rota de laboratório e grava PNGs, headless, com o Chrome do `playwright-core`
   e sem baixar navegador. Filtra por `--shots`, `--themes` e `--viewports`.
 

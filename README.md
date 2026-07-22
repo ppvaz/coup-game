@@ -6,7 +6,7 @@ La Corte é uma experiência premium de blefe e influência inspirada nas mecân
 
 ## O que já existe
 
-- Partidas de 2 a 6 jogadores, com três bots na partida solo.
+- Partidas de 2 a 6 jogadores; na home, a partida local permite escolher de um a cinco bots.
 - Salas multiplayer por código curto e links no formato `/sala/SW8X4`.
 - Salas privadas sincronizadas por Supabase Realtime, com cadeiras vinculadas ao Supabase Auth.
 - Renda, Ajuda Externa, Imposto, Roubo, Troca, Assassinato e Golpe.

@@ -612,6 +612,22 @@ html[data-theme='light'] .mode strong {
 html[data-theme='light'] .mode small {
   color: #70675c;
 }
+html[data-theme='light'] .bot-count-option {
+  background: rgba(255, 253, 248, 0.72);
+  border-color: rgba(88, 65, 32, 0.28);
+  color: #4b3d2d;
+}
+html[data-theme='light'] .bot-count-option:hover {
+  background: rgba(155, 116, 46, 0.16);
+  border-color: #9b742e;
+  color: #5f4217;
+}
+html[data-theme='light'] .bot-count-option.active {
+  background: #9b742e;
+  border-color: #805c20;
+  box-shadow: 0 4px 12px rgba(85, 57, 19, 0.2);
+  color: #fffaf0;
+}
 html[data-theme='light'] .field input {
   background: rgba(255, 253, 248, 0.82);
   border-color: rgba(88, 65, 32, 0.25);

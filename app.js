@@ -60,6 +60,7 @@ import {
   isStateSyncRequest,
 } from './src/rooms/network-schema.js';
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
+import { DEFAULT_LOCAL_BOT_COUNT, localBotSeats, normalizeLocalBotCount } from './src/game/local-bots.js';
 import { mountTableExperiment, tableExperimentHTML } from './src/ui/table-experiment.js';
 import duquePortrait from './assets/characters/duque.webp';
 import assassinaPortrait from './assets/characters/assassina.webp';
@@ -99,7 +100,6 @@ const warmIdleAssets = () => warmup.idle.forEach((source) => preloadImage(source
 if ('requestIdleCallback' in window) requestIdleCallback(warmIdleAssets, { timeout: 4000 });
 else setTimeout(warmIdleAssets, 1500);
 
-const NAMES = ['Lorenzo', 'Beatrice', 'Vittorio'];
 const DEFAULT_GAME_PRESENTATION = '3d';
 // Relógio por fase, em segundos: estourou, a autoridade joga o padrão conservador.
 const PHASE_SECONDS = {
@@ -135,6 +135,7 @@ let state = {
   // Apresentação da partida: o estado e as regras não mudam entre 2D e 3D.
   presentation: DEFAULT_GAME_PRESENTATION,
   mode: inviteCode.length === 5 ? 'join' : 'bots',
+  botCount: DEFAULT_LOCAL_BOT_COUNT,
   joinCode: inviteCode,
   name: '',
   error: null,
@@ -688,10 +689,7 @@ function startLocal() {
   localGameKind = 'standard';
   warnedClockKey = '';
   const previousWinnerId = state.game?.winnerId;
-  const seats = [
-    { id: 'me', name: state.name, kind: 'human' },
-    ...NAMES.map((name, index) => ({ id: `bot-${index}`, name, kind: 'bot' })),
-  ];
+  const seats = localBotSeats(state.name, state.botCount);
   state.myId = 'me';
   state.tabletopReactions = [];
   state.game = createGame(seats, { stopWhenHumansEliminated: true, startingPlayerId: previousWinnerId });
@@ -1636,6 +1634,13 @@ function bindLobby() {
       (button.onclick = () => {
         state.mode = button.dataset.mode;
         state.error = null;
+        render();
+      }),
+  );
+  document.querySelectorAll('[data-bot-count]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        state.botCount = normalizeLocalBotCount(button.dataset.botCount);
         render();
       }),
   );

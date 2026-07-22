@@ -14,6 +14,63 @@ const PHASE_BEATS = {
 
 const playerSummary = (player) => (player ? Object.freeze({ id: player.id, name: player.name }) : null);
 
+export function projectCoinMovements(game) {
+  const gameId = game?.gameId ?? 'local';
+  return Object.freeze(
+    (game?.log ?? [])
+      .flatMap((event) => {
+        const action = ACTIONS[event.action];
+        if (event.type === 'action_declared' && action?.cost) {
+          return [
+            Object.freeze({
+              id: `${gameId}:${event.at}:cost:${event.actorId}:${event.action}`,
+              fromId: event.actorId,
+              toId: null,
+              amount: action.cost,
+              reason: 'cost',
+            }),
+          ];
+        }
+        if (event.type === 'action_resolved' && event.action === 'steal') {
+          const amount = Math.max(1, Math.min(2, Number(event.amount) || 2));
+          return [
+            Object.freeze({
+              id: `${gameId}:${event.at}:steal:${event.actorId}:${event.targetId}`,
+              fromId: event.targetId,
+              toId: event.actorId,
+              amount,
+              reason: 'steal',
+            }),
+          ];
+        }
+        if (event.type === 'action_resolved' && action?.coins) {
+          return [
+            Object.freeze({
+              id: `${gameId}:${event.at}:gain:${event.actorId}:${event.action}`,
+              fromId: null,
+              toId: event.actorId,
+              amount: action.coins,
+              reason: 'gain',
+            }),
+          ];
+        }
+        if (event.type === 'challenge_resolved' && Number(event.refundedCost) > 0) {
+          return [
+            Object.freeze({
+              id: `${gameId}:${event.at}:refund:${event.challengedId}`,
+              fromId: null,
+              toId: event.challengedId,
+              amount: Math.min(7, Math.floor(event.refundedCost)),
+              reason: 'refund',
+            }),
+          ];
+        }
+        return [];
+      })
+      .slice(-24),
+  );
+}
+
 /**
  * Barreira de dados entre Coup e o palco. Aceita até o estado completo do
  * host, mas remove papéis ocultos dos rivais antes de chegar ao WebGL.
@@ -104,6 +161,7 @@ export function projectCoupTableView(
         })
       : null,
     responsePlayer: playerSummary(players.get(game.responseQueue?.[0])),
+    coinMovements: projectCoinMovements(game),
     targeting: targetingAction
       ? Object.freeze({
           id: targetAction,

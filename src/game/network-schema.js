@@ -133,6 +133,8 @@ function isLogEntry(value, playerIds) {
     'winnerId',
     'reason',
     'loserId',
+    'amount',
+    'refundedCost',
   ];
   if (!hasOnlyKeys(value, allowed)) return false;
   if (value.action !== undefined && !ACTION_IDS.has(value.action)) return false;
@@ -156,7 +158,6 @@ function isLogEntry(value, playerIds) {
           : value.winnerId === null && isMember(value.loserId, playerIds))
       );
     case 'action_declared':
-    case 'action_resolved':
     case 'action_fizzled': {
       if (!hasOnlyKeys(value, ['type', 'action', 'actorId', 'targetId', 'at'])) return false;
       if (!ACTION_IDS.has(value.action) || !isMember(value.actorId, playerIds)) return false;
@@ -164,14 +165,25 @@ function isLogEntry(value, playerIds) {
         ? isMember(value.targetId, playerIds) && value.targetId !== value.actorId
         : value.targetId === undefined;
     }
+    case 'action_resolved': {
+      if (!hasOnlyKeys(value, ['type', 'action', 'actorId', 'targetId', 'amount', 'at'])) return false;
+      if (!ACTION_IDS.has(value.action) || !isMember(value.actorId, playerIds)) return false;
+      const targetValid = ACTIONS[value.action].targeted
+        ? isMember(value.targetId, playerIds) && value.targetId !== value.actorId
+        : value.targetId === undefined;
+      if (!targetValid || value.amount === undefined) return targetValid;
+      if (!isSafeInteger(value.amount, 1, 3)) return false;
+      return value.action === 'steal' ? value.amount <= 2 : value.amount === ACTIONS[value.action].coins;
+    }
     case 'challenge_resolved':
       return (
-        hasOnlyKeys(value, ['type', 'challengerId', 'challengedId', 'claimedRole', 'truthful', 'at']) &&
+        hasOnlyKeys(value, ['type', 'challengerId', 'challengedId', 'claimedRole', 'truthful', 'refundedCost', 'at']) &&
         isMember(value.challengerId, playerIds) &&
         isMember(value.challengedId, playerIds) &&
         value.challengerId !== value.challengedId &&
         ROLE_IDS.has(value.claimedRole) &&
-        typeof value.truthful === 'boolean'
+        typeof value.truthful === 'boolean' &&
+        (value.refundedCost === undefined || isSafeInteger(value.refundedCost, 0, 7))
       );
     case 'block_declared':
     case 'action_blocked':

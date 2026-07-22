@@ -168,6 +168,37 @@ h1 em {
 .field input:focus {
   border-color: var(--gold);
 }
+.bot-count {
+  margin-bottom: 18px;
+}
+.bot-count-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.bot-count-option {
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--ivory);
+  font-weight: 700;
+}
+.bot-count-option:hover,
+.bot-count-option.active {
+  border-color: var(--gold);
+  background: rgba(217, 181, 107, 0.14);
+  color: var(--gold);
+}
+.bot-count-option:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.bot-count > small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
 .primary {
   width: 100%;
   border: 0;

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, dispatchGame } from '../src/game/coup.js';
-import { projectCoupTableView } from '../src/lib/tabletop/coup-view.js';
+import { projectCoinMovements, projectCoupTableView } from '../src/lib/tabletop/coup-view.js';
 
 const seats = [
   { id: 'a', name: 'Ana' },
@@ -121,6 +121,56 @@ test('alegação pública vira batida visual sem resolver a verdade', () => {
   assert.deepEqual(view.action.actor, { id: 'a', name: 'Ana' });
   assert.equal('truthful' in view.action, false);
   assert.equal(view.responsePlayer.id, 'b');
+});
+
+test('projeta ganhos, gastos, roubos reais e reembolsos como movimentos de moedas', () => {
+  let income = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  income = dispatchGame(income, { type: 'declare_action', actorId: 'a', action: 'income' });
+  assert.deepEqual(projectCoinMovements(income).at(-1), {
+    id: `${income.gameId ?? 'local'}:${income.log.findLast((event) => event.type === 'action_resolved').at}:gain:a:income`,
+    fromId: null,
+    toId: 'a',
+    amount: 1,
+    reason: 'gain',
+  });
+
+  let coup = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  coup.players[0].coins = 7;
+  coup = dispatchGame(coup, { type: 'declare_action', actorId: 'a', action: 'coup', targetId: 'b' });
+  assert.deepEqual(projectCoinMovements(coup).at(-1), {
+    id: `${coup.gameId ?? 'local'}:${coup.log.findLast((event) => event.type === 'action_declared').at}:cost:a:coup`,
+    fromId: 'a',
+    toId: null,
+    amount: 7,
+    reason: 'cost',
+  });
+
+  let steal = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  steal.players[1].coins = 1;
+  steal = dispatchGame(steal, { type: 'declare_action', actorId: 'a', action: 'steal', targetId: 'b' });
+  steal = dispatchGame(steal, { type: 'pass', actorId: 'b' });
+  steal = dispatchGame(steal, { type: 'pass', actorId: 'c' });
+  steal = dispatchGame(steal, { type: 'pass', actorId: 'b' });
+  assert.deepEqual(projectCoinMovements(steal).at(-1), {
+    id: `${steal.gameId ?? 'local'}:${steal.log.findLast((event) => event.type === 'action_resolved').at}:steal:a:b`,
+    fromId: 'b',
+    toId: 'a',
+    amount: 1,
+    reason: 'steal',
+  });
+
+  let refund = createGame(seats, { random: () => 0.42, startingPlayerId: 'a' });
+  refund.players[0].coins = 3;
+  for (const card of refund.players[0].cards) card.role = 'Duque';
+  refund = dispatchGame(refund, { type: 'declare_action', actorId: 'a', action: 'assassinate', targetId: 'b' });
+  refund = dispatchGame(refund, { type: 'challenge', actorId: 'b' }, () => 0.42);
+  assert.deepEqual(projectCoinMovements(refund).at(-1), {
+    id: `${refund.gameId ?? 'local'}:${refund.log.findLast((event) => event.type === 'challenge_resolved').at}:refund:a`,
+    fromId: null,
+    toId: 'a',
+    amount: 3,
+    reason: 'refund',
+  });
 });
 
 test('projeta seis jogadores com a mesma geografia para todos os observadores', () => {

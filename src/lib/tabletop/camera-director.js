@@ -76,10 +76,10 @@ const seatPoint = (seat, seatCount) => {
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 // Empurra a posição radialmente para fora do miolo da mesa quando preciso.
-const ensureRadius = ([x, y, z], min) => {
+const ensureRadius = ([x, y, z], min, max = Number.POSITIVE_INFINITY) => {
   const radius = Math.hypot(x, z);
-  if (radius >= min) return [x, y, z];
-  const scale = min / (radius || 1);
+  if (radius >= min && radius <= max) return [x, y, z];
+  const scale = clamp(radius, min, max) / (radius || 1);
   return [x * scale, y, z * scale];
 };
 
@@ -170,6 +170,32 @@ export function duelCameraForSeats(subjects, seatCount) {
       position: overShoulder,
       target: [second.x * 0.9, 1.5, second.z * 0.9],
       fov: 54,
+    },
+  };
+}
+
+// Resultado financeiro: conserva as duas bancadas no quadro e inclina o
+// portrait para enxergar a trajetória sobre a mesa, sem usar um personagem
+// em primeiro plano como acontece no duelo dramático.
+export function coinTransferCameraForSeats(subjects, seatCount) {
+  if (subjects.length < 2) return claimCameraForSeat(subjects[0], seatCount);
+  const [first, second] = subjects.map((seat) => seatPoint(seat, seatCount));
+  const mid = { x: (first.x + second.x) / 2, z: (first.z + second.z) / 2 };
+  const separation = Math.hypot(second.x - first.x, second.z - first.z) || 1;
+  const axis = { x: (second.x - first.x) / separation, z: (second.z - first.z) / separation };
+  // Recuo longo reduz a perspectiva do assento próximo: ele deixa de cobrir
+  // a bancada distante, mas ambos continuam alinhados verticalmente.
+  const portraitPosition = ensureRadius([first.x - axis.x * 7, 7.3, first.z - axis.z * 7], 7.2, 11.2);
+  const duel = duelCameraForSeats(subjects, seatCount);
+  const target = [mid.x * 0.9, 1.15, mid.z * 0.9];
+  return {
+    ...duel,
+    target,
+    fov: Math.max(duel.fov, 48),
+    portrait: {
+      position: portraitPosition,
+      target,
+      fov: 61,
     },
   };
 }

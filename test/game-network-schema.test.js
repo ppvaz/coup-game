@@ -108,6 +108,30 @@ test('rejeita enums, versões, arrays e relações entre IDs inválidos', () => 
   assert.equal(isGameView({ ...view, injected: '<img onerror=alert(1)>' }, { viewerId: IDS.ana }), false);
 });
 
+test('valida os valores autoritativos de moedas nos eventos públicos', () => {
+  const income = dispatchGame(makeGame(), { type: 'declare_action', actorId: IDS.ana, action: 'income' });
+  const view = networkView(income, IDS.ana);
+  const resolvedIndex = view.log.findIndex((event) => event.type === 'action_resolved');
+  assert.equal(view.log[resolvedIndex].amount, 1);
+  assert.equal(isGameView(view, { viewerId: IDS.ana }), true);
+
+  const invalidAmount = structuredClone(view);
+  invalidAmount.log[resolvedIndex].amount = 99;
+  assert.equal(isGameView(invalidAmount, { viewerId: IDS.ana }), false);
+
+  const invalidRefund = structuredClone(view);
+  invalidRefund.log.push({
+    type: 'challenge_resolved',
+    challengerId: IDS.bia,
+    challengedId: IDS.ana,
+    claimedRole: 'Duque',
+    truthful: false,
+    refundedCost: 8,
+    at: Date.now(),
+  });
+  assert.equal(isGameView(invalidRefund, { viewerId: IDS.ana }), false);
+});
+
 test('valida comandos e vincula o ator ao envelope', () => {
   const playerIds = seats.map((seat) => seat.id);
   const command = { type: 'declare_action', actorId: IDS.ana, action: 'tax' };

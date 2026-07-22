@@ -5,6 +5,7 @@ import { chatPanelHTML, chatToggleHTML, connectionUIHTML, escapeHTML, lobbyHTML,
 const baseState = {
   screen: 'lobby',
   mode: 'bots',
+  botCount: 3,
   joinCode: '',
   name: '',
   error: null,
@@ -90,8 +91,11 @@ test('falha de confirmação da jogada aparece sem aceitar HTML', () => {
 
 test('salão alterna os campos conforme o modo e mostra erros', () => {
   assert.doesNotMatch(lobbyHTML(baseState), /id="room-code"/);
+  assert.match(lobbyHTML(baseState), /data-bot-count="3" aria-pressed="true"/);
+  assert.match(lobbyHTML({ ...baseState, botCount: 5 }), /5 bots \+ você · 6 jogadores/);
   const joining = lobbyHTML({ ...baseState, mode: 'join', joinCode: 'DM9HH', error: 'Sala não encontrada.' });
   assert.match(joining, /id="room-code"/);
+  assert.doesNotMatch(joining, /data-bot-count/);
   assert.match(joining, /value="DM9HH"/);
   assert.match(joining, /Sala não encontrada\./);
 });

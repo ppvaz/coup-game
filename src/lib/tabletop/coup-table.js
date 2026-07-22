@@ -10,6 +10,7 @@ import {
 import {
   cameraDecisionKey,
   claimCameraForSeat,
+  coinTransferCameraForSeats,
   directCamera,
   duelCameraForSeats,
   influenceRevealCamera,
@@ -17,6 +18,7 @@ import {
   throneCameraForSeat,
 } from './camera-director.js';
 import { coinStackBounds, coinStackLayout } from './coin-layout.js';
+import { coinTransferDuration, coinTransferPoint, coinTransferProgress } from './coin-transfer.js';
 import { createCoupEnvironment } from './coup-environment.js';
 import { createTabletopFoley } from './foley.js';
 import { HOURGLASS_GLASS_PROFILE, hourglassSand } from './hourglass-sand.js';
@@ -1159,6 +1161,8 @@ export class CoupTableScene {
     this.elapsed = 0;
     this.emojiReactions = [];
     this.flyingReactions = [];
+    this.coinTransfers = [];
+    this.processedCoinMovements = new Set();
     this.throwCam = { element: null, allowed: () => true, onChange: () => {}, open: false };
     this.influenceReveals = [];
     this.selectableInfluences = [];
@@ -1727,6 +1731,7 @@ export class CoupTableScene {
     this.updateWinnerAvatar(view);
     this.updateActionCard(view);
     this.view = view;
+    const coinMovement = this.syncCoinMovements(view, { initial: !hadView });
     if (!this.currentPovSeatId || !view.seats.some((seat) => seat.id === this.currentPovSeatId)) {
       this.currentPovSeatId = view.seats.find((seat) => seat.isSelf)?.id ?? view.seats[0]?.id ?? null;
     }
@@ -1746,6 +1751,7 @@ export class CoupTableScene {
     if (seatsChanged) this.autoCameraKey = '';
     if (!this.cameraOverridden) {
       if (hadView && newInfluenceLoss) this.holdInfluenceReveal();
+      else if (coinMovement) this.holdCoinTransfer(coinMovement);
       if (!this.autoCameraHold) this.applyAutoCamera();
     }
   }
@@ -1765,6 +1771,23 @@ export class CoupTableScene {
     };
     this.stage.setCameraAct(decision.act);
     return true;
+  }
+
+  holdCoinTransfer(movement) {
+    const subjects = [movement.toId, movement.fromId]
+      .filter(Boolean)
+      .map((id) => this.view.seats.find((seat) => seat.id === id))
+      .filter(Boolean);
+    if (subjects.length) {
+      this.stage.defineCameraAct('coin-transfer', coinTransferCameraForSeats(subjects, this.view.seats.length));
+      this.cameraName = 'coin-transfer';
+      this.stage.setCameraAct('coin-transfer');
+    }
+    const duration = coinTransferDuration(movement.amount, { reducedMotion: this.stage.reducedMotion });
+    this.autoCameraHold = {
+      decision: null,
+      until: performance.now() + duration * 1000 + 120,
+    };
   }
 
   // Aplica a decisão do diretor: parametriza o ato pelos assentos envolvidos
@@ -1799,6 +1822,60 @@ export class CoupTableScene {
 
   hasActionCard() {
     return this.actionCard.visible;
+  }
+
+  coinAnchor(playerId) {
+    if (!playerId) return new THREE.Vector3(0, 1.5, 0);
+    const seat = this.seats.get(playerId);
+    if (!seat) return null;
+    const anchor = new THREE.Vector3(-1, 1.52, -1.2);
+    seat.group.localToWorld(anchor);
+    return anchor;
+  }
+
+  syncCoinMovements(view, { initial = false } = {}) {
+    const movements = view.coinMovements ?? [];
+    if (initial) {
+      for (const movement of movements) this.processedCoinMovements.add(movement.id);
+      return null;
+    }
+    let featuredMovement = null;
+    for (const movement of movements) {
+      if (this.processedCoinMovements.has(movement.id)) continue;
+      this.processedCoinMovements.add(movement.id);
+      if (this.playCoinMovement(movement)) featuredMovement = movement;
+    }
+    if (this.processedCoinMovements.size > 96) {
+      const visibleIds = new Set(movements.map((movement) => movement.id));
+      for (const id of this.processedCoinMovements) if (!visibleIds.has(id)) this.processedCoinMovements.delete(id);
+    }
+    return featuredMovement;
+  }
+
+  playCoinMovement(movement, { delay = 0 } = {}) {
+    const from = this.coinAnchor(movement.fromId);
+    const to = this.coinAnchor(movement.toId);
+    const amount = Math.max(0, Math.min(7, Math.floor(Number(movement.amount) || 0)));
+    if (!from || !to || !amount || from.distanceToSquared(to) < 0.01) return false;
+    const group = new THREE.Group();
+    group.name = `coin-transfer-${movement.reason}`;
+    const coins = Array.from({ length: amount }, (_, index) => {
+      const coin = createCourtCoin({ radius: 0.13, thickness: 0.038 });
+      coin.position.copy(from);
+      coin.rotation.set(0.18 + index * 0.07, index * 0.31, 0.42);
+      group.add(coin);
+      return coin;
+    });
+    this.stage.add(group);
+    this.coinTransfers.push({
+      group,
+      coins,
+      from,
+      to,
+      startedAt: this.elapsed + Math.max(0, Number(delay) || 0),
+      reducedMotion: this.stage.reducedMotion,
+    });
+    return true;
   }
 
   setTargetSeatHover(seatId) {
@@ -1984,6 +2061,23 @@ export class CoupTableScene {
       .map(Number)
       .filter((index) => Number.isInteger(index) && index >= 0 && index < seats.length)
       .map((index) => seats[index]);
+    if (act === 'coins' && seats.length >= 2) {
+      const isSteal = !['gain', 'cost'].includes(indexPart);
+      const movement =
+        indexPart === 'gain'
+          ? { fromId: null, toId: seats[0].id, amount: 3, reason: 'gain' }
+          : indexPart === 'cost'
+            ? { fromId: seats[0].id, toId: null, amount: 3, reason: 'cost' }
+            : { fromId: seats[1].id, toId: seats[0].id, amount: 2, reason: 'steal' };
+      this.cameraOverridden = true;
+      this.cameraName = 'coin-transfer';
+      this.stage.defineCameraAct(
+        this.cameraName,
+        coinTransferCameraForSeats(isSteal ? [seats[0], seats[1]] : [seats[0]], seats.length),
+      );
+      this.stage.setCameraAct(this.cameraName, { immediate: true });
+      return this.playCoinMovement(movement, { delay: 0.35 }) ? 'coins' : null;
+    }
     if (act === 'player') return this.setPlayerCamera({ immediate: true }) ? 'player' : null;
     if (act === 'pov') return this.setPovSeat(subjects[0]?.id, { immediate: true }) ? 'pov' : null;
     if (['table', 'targeting', 'overhead', 'portal'].includes(act)) {
@@ -2135,6 +2229,27 @@ export class CoupTableScene {
         this.influenceReveals.splice(index, 1);
       }
     }
+    for (let transferIndex = this.coinTransfers.length - 1; transferIndex >= 0; transferIndex -= 1) {
+      const transfer = this.coinTransfers[transferIndex];
+      let complete = true;
+      transfer.coins.forEach((coin, coinIndex) => {
+        const progress = coinTransferProgress(elapsed, transfer.startedAt, coinIndex, {
+          reducedMotion: transfer.reducedMotion,
+        });
+        const point = coinTransferPoint(transfer.from, transfer.to, progress, {
+          index: coinIndex,
+          reducedMotion: transfer.reducedMotion,
+        });
+        coin.position.set(point.x, point.y, point.z);
+        coin.rotation.x += reducedMotion ? 0 : delta * (5.2 + coinIndex * 0.3);
+        coin.rotation.z += reducedMotion ? 0 : delta * (7.1 + coinIndex * 0.24);
+        if (progress < 1) complete = false;
+      });
+      if (complete) {
+        disposeObject3D(transfer.group);
+        this.coinTransfers.splice(transferIndex, 1);
+      }
+    }
     this.layoutCenterpiece();
     const centerEase = reducedMotion ? 1 : 1 - Math.exp(-Math.max(delta, 1 / 120) * 7);
     if (this.actionCard.visible) {
@@ -2206,8 +2321,11 @@ export class CoupTableScene {
     this.closeThrowCam();
     for (const reaction of this.emojiReactions) disposeObject3D(reaction.sprite);
     for (const reaction of this.flyingReactions) disposeObject3D(reaction.group);
+    for (const transfer of this.coinTransfers) disposeObject3D(transfer.group);
     this.emojiReactions = [];
     this.flyingReactions = [];
+    this.coinTransfers = [];
+    this.processedCoinMovements.clear();
     this.selectableInfluences = [];
     this.focusableInfluences = [];
     this.exchangeCards = [];

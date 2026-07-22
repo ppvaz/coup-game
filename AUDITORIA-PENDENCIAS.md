@@ -157,7 +157,7 @@ Os módulos importáveis têm ótima cobertura, mas `app.js` e o cliente Supabas
 
 ### Valor da suíte atual
 
-Em 22/07/2026 a suíte possui 217 testes e passa junto com lint, Prettier e
+Em 22/07/2026 a suíte possui 224 testes e passa junto com lint, Prettier e
 build. A classificação antiga de 112 testes (99 relevantes e 13 de baixo
 risco) ficou obsoleta depois da autenticação, recuperação de estado, entrega
 confiável e expansão da mesa 3D. A principal lacuna não é quantidade de testes

@@ -5,6 +5,7 @@ import { projectCoupTableView } from '../src/lib/tabletop/coup-view.js';
 import {
   cameraDecisionKey,
   claimCameraForSeat,
+  coinTransferCameraForSeats,
   directCamera,
   duelCameraForSeats,
   influenceRevealCamera,
@@ -125,11 +126,16 @@ test('a geometria dirigida evita o centro da mesa e as paredes em mesas de 2 a 6
       }
       const solo = duelCameraForSeats([first], count);
       const claim = claimCameraForSeat(first, count);
+      const transfer = coinTransferCameraForSeats([first, table[(table.indexOf(first) + 1) % count]], count);
       const throne = throneCameraForSeat(first, count);
-      assert.ok(finite(solo.position) && finite(claim.position) && finite(throne.position));
+      assert.ok(
+        finite(solo.position) && finite(claim.position) && finite(transfer.position) && finite(throne.position),
+      );
       withinCourt(solo);
       withinCourt(claim);
+      withinCourt(transfer);
       withinCourt(throne);
+      assert.ok(transfer.portrait.position[1] > solo.portrait.position[1]);
       assert.deepEqual(claim.target, [0, 1.65, 0]);
       assert.deepEqual(claim.portrait.target, [0, 1.6, 0]);
     }

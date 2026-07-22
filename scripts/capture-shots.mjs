@@ -28,6 +28,7 @@ const SHOTS = [
   'duel:2',
   'evidence:1',
   'throne:3',
+  'coins:steal',
 ];
 const THEMES = ['dark', 'light'];
 

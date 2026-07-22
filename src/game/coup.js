@@ -180,6 +180,7 @@ function resolveAction(state) {
   const pending = state.pending;
   const actor = assertActor(state, pending.actorId);
   const target = pending.targetId == null ? null : state.players.find((player) => player.id === pending.targetId);
+  let coinAmount = 0;
   if (target && !isAlive(target)) {
     state.log.push({
       type: 'action_fizzled',
@@ -192,18 +193,21 @@ function resolveAction(state) {
   }
   switch (pending.action) {
     case 'income':
-      actor.coins += 1;
+      coinAmount = 1;
+      actor.coins += coinAmount;
       break;
     case 'foreign_aid':
-      actor.coins += 2;
+      coinAmount = 2;
+      actor.coins += coinAmount;
       break;
     case 'tax':
-      actor.coins += 3;
+      coinAmount = 3;
+      actor.coins += coinAmount;
       break;
     case 'steal': {
-      const amount = Math.min(2, target.coins);
-      target.coins -= amount;
-      actor.coins += amount;
+      coinAmount = Math.min(2, target.coins);
+      target.coins -= coinAmount;
+      actor.coins += coinAmount;
       break;
     }
     case 'coup':
@@ -223,6 +227,7 @@ function resolveAction(state) {
     action: pending.action,
     actorId: actor.id,
     targetId: target?.id,
+    ...(coinAmount > 0 ? { amount: coinAmount } : {}),
     at: Date.now(),
   });
   finishTurn(state);
@@ -320,9 +325,10 @@ export function dispatchGame(source, command, random = Math.random) {
     const claimedRole = state.phase === 'challenge_action' ? state.pending.claimedRole : state.pending.block.role;
     const truthful = proveRole(state, challengedId, claimedRole, random);
     const onAction = state.phase === 'challenge_action';
+    const refundedCost = onAction && !truthful ? (state.pending.paidCost ?? 0) : 0;
     if (onAction && !truthful) {
       const challenged = state.players.find((player) => player.id === challengedId);
-      challenged.coins += state.pending.paidCost ?? 0;
+      challenged.coins += refundedCost;
     }
     state.log.push({
       type: 'challenge_resolved',
@@ -330,6 +336,7 @@ export function dispatchGame(source, command, random = Math.random) {
       challengedId,
       claimedRole,
       truthful,
+      ...(refundedCost > 0 ? { refundedCost } : {}),
       at: Date.now(),
     });
     if (truthful) loseInfluence(state, actor.id, onAction ? 'continue_action' : 'action_blocked');

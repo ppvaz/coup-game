@@ -44,6 +44,8 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 - `/3d` já nasce de uma partida autoritativa real e não usa mais
   `demoGame()`.
 - A sessão de validação ocupa os seis assentos: Lorenzo e cinco bots.
+- Na home, a partida local permite escolher de um a cinco bots antes de entrar
+  no salão; a revanche conserva essa composição.
 - A camada HTML existente já envia ações, alvos, contestações, bloqueios,
   revelações e trocas ao mesmo `dispatchGame()` usado pela mesa 2D.
 - A mesa 3D é a apresentação padrão de partidas novas e retomadas. A mesma
@@ -122,6 +124,10 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
   Golpe, a composição normal usa cinco posições irregulares em até duas
   camadas; corpo, aro e selo usam `InstancedMesh`, sem uma chamada de desenho
   por moeda.
+- Ganho, gasto, roubo e reembolso produzem trajetórias de moedas derivadas do
+  log autoritativo. A quantidade do roubo é a efetivamente transferida, e a
+  câmera segura um plano de bancada até o fim do movimento; em portrait, o
+  roubo usa um plano elevado que mantém a rota entre os assentos.
 - O boneco local é visível e só desaparece quando a câmera ocupa o seu próprio
   POV.
 - Quando chega a vez local, o modo jogável escolhe automaticamente a câmera
@@ -182,7 +188,7 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 - Evitar cortes que atravessem teto, porta, cadeiras, personagens ou cartas:
   nenhum plano dirigido entra no miolo da mesa (raio ≥ 6, testado) nem sai do
   salão (raio ≤ 11,5). `npm run capture:3d` captura a matriz completa
-  (11 shots × desktop/portrait/paisagem × dia/noite) via `/3d/lab?shot=`,
+  (12 shots × desktop/portrait/paisagem × dia/noite) via `/3d/lab?shot=`,
   headless, em `captures/`. Validação de 21/07/2026: Mesa, Jogador, POV,
   Zenital, Portal, vítima e duelos desktop aprovados; em portrait o duelo usa
   over-the-shoulder vertical (o eixo horizontal não cabia no quadro).
@@ -204,7 +210,9 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 ### 4. Tornar a bancada individual funcional
 
 - [Concluído] Destacar cartas selecionáveis sem alterar sua identidade visual.
-- Animar gasto, recebimento, roubo e transferência de moedas.
+- [Concluído] Animar gasto, recebimento, roubo, transferência e reembolso de
+  moedas a partir dos eventos autoritativos, sem repetir o histórico ao montar
+  ou retomar a cena.
 - [Concluído] Mostrar com clareza influência ativa, revelada e escolhida.
 - [Concluído] Reservar áreas estáveis para mão, tesouro, nome e ações em
   portrait e landscape; a mão padrão agora usa a mesma posição central nos
@@ -223,7 +231,8 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
 - Entrada e saída da carta/efígie pública no centro.
 - [Parcial] Emojis e objetos arremessáveis entre assentos; faltam reações
   corporais dos bonecos a alegação, desafio, bloqueio e derrota.
-- Movimento de moedas ligado ao evento autoritativo já resolvido.
+- [Concluído] Movimento de moedas ligado ao evento autoritativo já resolvido,
+  com quantidade real, cascata curta e plano de câmera preservado.
 - Integrar as falas existentes com os atos visuais, sem repetir áudio em
   snapshots equivalentes.
 - Som ambiente do salão (velas, lareira, murmúrio da cidade nas janelas, com
@@ -231,7 +240,8 @@ estado autoritativo e as regras continuam pertencendo ao motor existente.
   animações: moedas, cartas viradas, arremessos. Regras: os assets de áudio 3D
   só carregam ao entrar no salão, respeitam os mutes de sons/vozes existentes
   e usam loops curtos para não inflar o orçamento.
-- Criar variantes discretas para `prefers-reduced-motion`.
+- [Parcial] As moedas usam transferência curta e direta em
+  `prefers-reduced-motion`; ainda faltam variantes para as demais atuações.
 
 ### 6. Customização dos cortesãos
 
@@ -294,8 +304,8 @@ de La Corte fora do núcleo comum.
 2. [Seleção de alvos concluída] Levar contestações e bloqueios para objetos do
    palco. A camada HTML continua disponível, mas o fluxo principal não deve
    depender dela.
-3. Animar gasto, recebimento, roubo e transferência de moedas a partir dos
-   eventos autoritativos já resolvidos.
+3. [Concluído] Animar gasto, recebimento, roubo, reembolso e transferência de
+   moedas a partir dos eventos autoritativos já resolvidos.
 4. Exercitar multiplayer 3D ponta a ponta: troca 2D/3D, chat, reações,
    reconexão, handover e perda seletiva de Broadcasts. O incidente terminal
    anterior está encerrado e só deve ser reaberto com nova evidência.
