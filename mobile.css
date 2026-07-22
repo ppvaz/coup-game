@@ -1947,3 +1947,65 @@ html[data-theme='light'] .chat-taunts button {
     font-size: 16px;
   }
 }
+
+/* Vitrine de modelos: a trilha lateral e a leitura não cabem lado a lado com o
+   palco. A trilha vira uma faixa rolável no topo e a leitura perde a descrição,
+   que é a parte dispensável quando o modelo já está na tela. */
+@media (max-width: 800px) {
+  .gallery-rail {
+    top: 84px;
+    right: 8px;
+    left: 8px;
+    display: flex;
+    gap: 4px;
+    width: auto;
+    max-height: none;
+    padding: 5px 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .gallery-group {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 2px;
+    align-items: center;
+  }
+  .gallery-group h2 {
+    margin: 0 4px 0 0;
+    white-space: nowrap;
+  }
+  .gallery-entry {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    border-left: 0;
+    border-bottom: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .gallery-entry.active {
+    border-left-color: transparent;
+    border-bottom-color: #d9b56b;
+  }
+  .gallery-readout {
+    top: auto;
+    right: 8px;
+    bottom: max(120px, calc(env(safe-area-inset-bottom) + 112px));
+    width: auto;
+    max-width: 60vw;
+    padding: 7px 10px;
+  }
+  .gallery-readout p {
+    display: none;
+  }
+  .gallery-params {
+    left: 8px;
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 6px;
+  }
+  .gallery-param {
+    padding: 5px 7px;
+  }
+  .model-gallery .tabletop-hint {
+    display: none;
+  }
+}

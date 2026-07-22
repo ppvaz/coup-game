@@ -49,7 +49,8 @@ não inicializa o salão. Depois de carregada, a cena é preservada entre
 atualizações da partida e descartada ao voltar ao 2D. Dia e noite usam a mesma
 preferência da interface 2D.
 
-O laboratório técnico fica em `/lab` e não avança uma partida. Para liberar
+A vitrine de modelos fica em `/lab/modelos` e mostra uma peça por vez, com os
+parâmetros de cada uma. O laboratório técnico fica em `/lab` e não avança uma partida. Para liberar
 seu botão, configure `VITE_CORTE_3D_LAB_KEY` e visite uma vez:
 
 ```text

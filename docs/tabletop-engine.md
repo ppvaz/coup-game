@@ -23,10 +23,31 @@ local, consumido por `@la-corte/tabletop-stage`. `TabletopStage` coordena os
 subsistemas sem concentrar suas implementações:
 
 - `camera-rig.js`: câmera, atos, transição e controle por arrasto/roda;
+- `gesture-track.js`: duração, atropelo e avaliação de gestos por quadro;
 - `render-pipeline.js`: renderer, render target e pós-processo retrô;
 - `inset-camera.js`: segunda câmera e composição PiP;
 - `scene-utils.js`: texturas de canvas e limpeza de objetos Three.js;
 - `index.js`: cena, loop, resize, instrumentação e ciclo de vida público.
+
+## Gestos: encaixes em vez de esqueleto
+
+`gesture-track.js` não tem vocabulário. Cada jogo declara o seu com
+`defineGestureVocabulary({ nome: { duration, priority, pose } })` — o de La
+Corte vive em `coup-table/gestures.js` — e o motor resolve só o que é comum a
+qualquer mesa: quanto dura, quem atropela quem e qual é a pose no quadro atual.
+
+Uma pose é **aditiva** e endereça _encaixes_ nomeados, não um esqueleto. O
+modelo publica os encaixes que possui (`createNoble` devolve `sockets`), e a
+composição descarta silenciosamente o que ele não tiver. É isso que permite
+trazer um gesto de outro motor sem trazer o boneco junto: um soco escrito para
+`handRight` ainda lê no cortesão, que só tem `body` — perde o detalhe da mão e
+mantém o tronco. Enquanto a figura não ganhar o encaixe, escrever a mão na pose
+é documentação da intenção, não código morto.
+
+`priority` existe porque a mesa dispara gestos concorrentes: um tomate chegando
+não pode apagar a queda de uma influência. Um gesto só cede a outro de
+prioridade igual ou maior — igual inclusive, senão dois golpes seguidos viram
+um só.
 
 `src/lib/tabletop/coup-table.js` é deliberadamente específico e coordena os
 apresentadores de La Corte em `src/lib/tabletop/coup-table/`: cartas, figuras,
@@ -73,6 +94,13 @@ real contra bots ou multiplayer reutiliza o mesmo `dispatchGame()` do 2D e pode
 alternar de apresentação sem perder estado. O compositor WebGL é carregado sob
 demanda quando uma partida 3D começa, preservado entre renders e descartado ao
 voltar para a mesa 2D.
+
+`http://localhost:5173/lab/modelos` é a vitrine de modelos: uma peça por vez
+sobre um prato neutro, com os parâmetros de cada uma em botões. O endereço
+carrega a seleção inteira — `?modelo=influencia&papel=Duque&estado=propria&theme=dark`
+reabre exatamente aquela carta, que é como uma captura automática a pede. O
+catálogo fica em `src/lib/tabletop/model-catalog.js` e só guarda metadado: a
+construção é `import()` tardio, porque metade das fábricas importa texturas.
 
 `http://localhost:5173/lab` é o laboratório técnico. Ele mantém uma cena
 estática para testar ambiente e câmeras sem bots avançando a partida. Benchmark,

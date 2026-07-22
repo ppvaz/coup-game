@@ -4,10 +4,12 @@
 
 const ROOM_PATH = /^\/sala\/([A-Z2-9]{5})\/?$/i;
 const LAB_PATH = /^\/lab\/?$/;
+const MODELS_PATH = /^\/lab\/modelos\/?$/;
 
-export const LAB_ROUTES = Object.freeze(['lab']);
+export const LAB_ROUTES = Object.freeze(['lab', 'models']);
 
 export function routeFromPath(pathname) {
+  if (MODELS_PATH.test(pathname)) return Object.freeze({ name: 'models' });
   if (LAB_PATH.test(pathname)) return Object.freeze({ name: 'lab' });
   const room = pathname.match(ROOM_PATH);
   if (room) return Object.freeze({ name: 'room', code: room[1].toUpperCase() });

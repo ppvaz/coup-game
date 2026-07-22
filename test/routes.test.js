@@ -18,10 +18,17 @@ test('a sala aceita apenas códigos de cinco caracteres e devolve em maiúsculas
   assert.equal(routeFromPath('/sala/AB2C9X').name, 'home');
 });
 
-test('o laboratório é a única rota que exige liberação', () => {
+test('o laboratório tem duas ferramentas e ambas exigem liberação', () => {
   assert.deepEqual(routeFromPath('/lab'), { name: 'lab' });
   assert.deepEqual(routeFromPath('/lab/'), { name: 'lab' });
+  assert.deepEqual(routeFromPath('/lab/modelos'), { name: 'models' });
+  assert.deepEqual(routeFromPath('/lab/modelos/'), { name: 'models' });
+  // Uma sub-rota inexistente do lab não pode virar a mesa por acidente: cai na
+  // raiz como qualquer outro endereço desconhecido.
+  assert.equal(routeFromPath('/lab/inexistente').name, 'home');
+
   assert.equal(isLabRoute(routeFromPath('/lab')), true);
+  assert.equal(isLabRoute(routeFromPath('/lab/modelos')), true);
   assert.equal(isLabRoute(routeFromPath('/')), false);
   assert.equal(isLabRoute(routeFromPath('/sala/AB2C9')), false);
 });

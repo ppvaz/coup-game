@@ -124,6 +124,7 @@ const requestedRoute = routeFromPath(location.pathname);
 if (isLabRoute(requestedRoute) && !labAccess.allowed) history.replaceState(history.state, '', '/');
 const route = isLabRoute(requestedRoute) && !labAccess.allowed ? routeFromPath('/') : requestedRoute;
 const isTabletopLab = route.name === 'lab';
+const isModelGallery = route.name === 'models';
 const inviteCode = (route.code || new URLSearchParams(location.search).get('room') || '')
   .toUpperCase()
   .replace(/[^A-Z2-9]/g, '')
@@ -198,6 +199,7 @@ let reconnectingSince = 0;
 let lastTabletopReactionAt = 0;
 let tableExperimentController = null;
 let tableExperimentMount = null;
+let modelGalleryMount = null;
 // A sessão de validação do laboratório senta seis cadeiras; a revanche
 // precisa saber qual mesa local recriar quando a partida foi aberta pelo
 // fluxo comum.
@@ -1569,6 +1571,19 @@ function disposeTabletopPresentation() {
 
 function renderApp() {
   const root = $('#app');
+  // A vitrine não tem partida, HUD nem estado a repintar: monta uma vez e
+  // vive por conta própria até a navegação sair da rota.
+  if (isModelGallery) {
+    if (modelGalleryMount) return;
+    modelGalleryMount = import('./src/ui/model-gallery.js').then(async (module) => {
+      root.innerHTML = module.modelGalleryHTML();
+      return module.mountModelGallery({
+        canvas: $('#gallery-canvas'),
+        theme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark',
+      });
+    });
+    return;
+  }
   const restoreChatFocus = document.activeElement?.id === 'chat-input';
   if (isTabletopLab && !state.game) resetTabletopLabScene();
   syncMusic();
