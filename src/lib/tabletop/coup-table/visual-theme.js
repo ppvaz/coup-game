@@ -11,8 +11,6 @@ import exchangeArt from '../../../../assets/actions/exchange.webp';
 import assassinateArt from '../../../../assets/actions/assassinate.webp';
 import coupArt from '../../../../assets/actions/coup.webp';
 
-export const ROBES = [0x52252c, 0x1e3a45, 0x3e3821, 0x352547, 0x23372b, 0x473221];
-
 export const ROLE_COLORS = {
   Duque: '#b69255',
   Assassina: '#8f2930',

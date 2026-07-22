@@ -37,6 +37,7 @@ import {
   createDecisionHourglass,
 } from './coup-table/decision-props.js';
 import { COLORS, mesh, standardMaterial } from './coup-table/primitives.js';
+import { nobleAppearance } from './coup-table/appearance.js';
 import { ACTION_ART, ROLE_CARD_ACCENTS, THEME_PROFILES } from './coup-table/visual-theme.js';
 
 export { ACTION_ART } from './coup-table/visual-theme.js';
@@ -283,7 +284,7 @@ export class CoupTableScene {
       const angle = seatView.azimuthRad;
       const radiusX = count <= 3 ? 5.15 : 5.55;
       const radiusZ = count <= 3 ? 4.25 : 4.65;
-      const noble = createNoble(seatView.index);
+      const noble = createNoble(nobleAppearance(seatView.index));
       noble.group.position.set(Math.sin(angle) * radiusX, 0, Math.cos(angle) * radiusZ);
       noble.group.rotation.y = angle + Math.PI;
 

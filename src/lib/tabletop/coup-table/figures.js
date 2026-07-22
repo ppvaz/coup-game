@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { COLORS, mesh, standardMaterial } from './primitives.js';
-import { ROBES, ROLE_COLORS } from './visual-theme.js';
+import { NOBLE_SKINS, ROBES, nobleAppearance } from './appearance.js';
+import { ROLE_COLORS } from './visual-theme.js';
 
-export function createNoble(index) {
+export function createNoble({ robe: robeColor = ROBES[0], skin: skinColor = NOBLE_SKINS[0] } = nobleAppearance(0)) {
   const group = new THREE.Group();
-  const robeColor = ROBES[index % ROBES.length];
   const robe = standardMaterial(robeColor, { roughness: 0.92, emissive: robeColor, emissiveIntensity: 0.035 });
-  const skin = standardMaterial(index % 3 === 0 ? 0xa46f55 : index % 3 === 1 ? 0x6e4939 : 0xc19171);
+  const skin = standardMaterial(skinColor);
   const dark = standardMaterial(0x28201b, { roughness: 0.9 });
   const gold = standardMaterial(COLORS.gold, { metalness: 0.72, roughness: 0.28 });
   const chairWood = standardMaterial(COLORS.wood, { roughness: 0.76 });
