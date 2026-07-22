@@ -81,6 +81,21 @@ test('no Conselho as peças deitadas leem para o dono', () => {
   assert.deepEqual(SALON_SEAT_RING.facing, { plaque: Math.PI, influences: Math.PI });
 });
 
+test('o POV Conselho enquadra as próprias cartas sem precisar arrastar', () => {
+  const pov = councilPovCameraForSeat({ azimuthRad: 0 }, 6);
+  const eyeRadius = Math.hypot(pov.position[0], pov.position[2]);
+  const run = Math.hypot(pov.position[0] - pov.target[0], pov.position[2] - pov.target[2]);
+  const pitch = Math.atan2(pov.position[1] - pov.target[1], run);
+  const halfFov = ((pov.fov / 2) * Math.PI) / 180;
+
+  const [, cardY, cardZ] = COUNCIL_SEAT_RING.props.influences;
+  const borda = (edge) => Math.atan2(pov.position[1] - cardY, eyeRadius - (SEAT_RADIUS + cardZ + edge));
+  assert.ok(borda(0.442) <= pitch + halfFov, 'a carta mais próxima cai fora do quadro');
+  assert.ok(borda(-0.442) > pitch, 'a mira baixou demais e passou das próprias cartas');
+  // O arrasto ainda precisa alcançar a carta que o repouso deixa na beirada.
+  assert.ok(Math.PI / 2 + borda(0.442) <= pov.navigation.maxPolar);
+});
+
 test('o POV Conselho nasce nos olhos do assento e mira radialmente o centro', () => {
   const north = councilPovCameraForSeat({ azimuthRad: 0 }, 6);
   assert.deepEqual(north.position, [0, 2.08, 5.3]);

@@ -10,9 +10,11 @@ function seatFrame(seat, seatCount) {
 export function councilPovCameraForSeat(seat, seatCount) {
   const frame = seatFrame(seat, seatCount);
   const position = [frame.seatX + frame.inwardX * 0.2, 2.08, frame.seatZ + frame.inwardZ * 0.2];
-  // A mira nasce na altura das cabeças do outro lado (a esfera do rosto fica em
-  // y ≈ 2.08). Mirar o tampo enchia dois terços do quadro com feltro vazio.
-  const target = [position[0] + frame.inwardX * 8.2, 1.94, position[2] + frame.inwardZ * 8.2];
+  // A mira desce à altura do tampo: seis graus abaixo do horizonte bastam para
+  // as próprias cartas entrarem no terço inferior do quadro — antes ficavam
+  // debaixo da lente — sem tirar do enquadramento os rostos do outro lado, que
+  // continuam acima do centro.
+  const target = [position[0] + frame.inwardX * 8.2, 1.22, position[2] + frame.inwardZ * 8.2];
   return {
     position,
     target,
@@ -22,7 +24,10 @@ export function councilPovCameraForSeat(seat, seatCount) {
       mode: 'first-person',
       maxYaw: Math.PI * 0.39,
       minPolar: 0.72,
-      maxPolar: 1.92,
+      // O teto antigo travava o olhar vinte graus abaixo do horizonte, e a
+      // carta mais próxima do dono está a trinta e dois: quem quisesse conferir
+      // a própria influência esbarrava no limite do arrasto.
+      maxPolar: 2.15,
     },
     portrait: {
       position,
