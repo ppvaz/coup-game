@@ -3,11 +3,11 @@ import { COLORS, mesh, standardMaterial } from './primitives.js';
 import { NOBLE_SKINS, ROBES, nobleAppearance } from './appearance.js';
 import { ROLE_COLORS } from './visual-theme.js';
 
-export function createNoble({ robe: robeColor = ROBES[0], skin: skinColor = NOBLE_SKINS[0] } = nobleAppearance(0)) {
-  const group = new THREE.Group();
-  const robe = standardMaterial(robeColor, { roughness: 0.92, emissive: robeColor, emissiveIntensity: 0.035 });
-  const skin = standardMaterial(skinColor);
-  const dark = standardMaterial(0x28201b, { roughness: 0.9 });
+/**
+ * A cadeira da corte. Extraída para que o cultista se sente na mesma peça e
+ * para que um único ponto troque a cadeira procedural pelo trono do Blender.
+ */
+export function createCourtChair(robeColor = ROBES[0]) {
   const gold = standardMaterial(COLORS.gold, { metalness: 0.72, roughness: 0.28 });
   const chairWood = standardMaterial(COLORS.wood, { roughness: 0.76 });
   const chairWoodLight = standardMaterial(COLORS.woodLight, { roughness: 0.72 });
@@ -18,6 +18,7 @@ export function createNoble({ robe: robeColor = ROBES[0], skin: skinColor = NOBL
   });
 
   const chair = new THREE.Group();
+  chair.name = 'seat-chair';
   chair.add(mesh(new THREE.BoxGeometry(1.42, 1.75, 0.18), chairWood, { position: [0, 1.05, 0.42] }));
   chair.add(mesh(new THREE.BoxGeometry(1.15, 0.18, 1.18), chairWoodLight, { position: [0, 0.56, 0.05] }));
   chair.add(
@@ -49,14 +50,58 @@ export function createNoble({ robe: robeColor = ROBES[0], skin: skinColor = NOBL
       );
     }
   }
-  group.add(chair);
+  return chair;
+}
+
+// Adornos cosméticos e deliberadamente neutros: nenhum imita coroa, adaga,
+// dragonas, carta lacrada ou gola alta que insinue um dos cinco papéis.
+function addNobleAdorno(body, adorno, gold) {
+  if (adorno === 'sash') {
+    body.add(
+      mesh(new THREE.BoxGeometry(0.15, 1.16, 0.1), gold, {
+        position: [0, 1.24, 0.33],
+        rotation: [0, 0, 0.52],
+        cast: false,
+      }),
+    );
+  } else if (adorno === 'pendant') {
+    body.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.34, 6), gold, { position: [0, 1.9, 0.24], cast: false }));
+    body.add(mesh(new THREE.SphereGeometry(0.08, 10, 8), gold, { position: [0, 1.72, 0.3] }));
+  } else if (adorno === 'shawl') {
+    const shawl = standardMaterial(0x2a211c, { roughness: 0.95 });
+    body.add(
+      mesh(new THREE.TorusGeometry(0.5, 0.13, 8, 22, Math.PI * 1.3), shawl, {
+        position: [0, 1.74, -0.02],
+        rotation: [0, 0, -Math.PI * 0.15],
+        scale: [1, 0.85, 1],
+      }),
+    );
+  }
+}
+
+export function createNoble(
+  {
+    robe: robeColor = ROBES[0],
+    skin: skinColor = NOBLE_SKINS[0],
+    hair: hairColor = 0x1b1613,
+    adorno = 'none',
+  } = nobleAppearance(0),
+) {
+  const group = new THREE.Group();
+  const robe = standardMaterial(robeColor, { roughness: 0.92, emissive: robeColor, emissiveIntensity: 0.035 });
+  const skin = standardMaterial(skinColor);
+  const hair = standardMaterial(hairColor, { roughness: 0.9 });
+  const gold = standardMaterial(COLORS.gold, { metalness: 0.72, roughness: 0.28 });
+
+  group.add(createCourtChair(robeColor));
 
   const body = new THREE.Group();
   body.name = 'noble-body';
   body.add(mesh(new THREE.CylinderGeometry(0.44, 0.72, 1.3, 8), robe, { position: [0, 1.2, 0] }));
   body.add(mesh(new THREE.SphereGeometry(0.34, 12, 8), skin, { position: [0, 2.08, -0.03], scale: [0.9, 1.08, 0.88] }));
-  body.add(mesh(new THREE.SphereGeometry(0.35, 12, 8), dark, { position: [0, 2.31, 0.04], scale: [1.03, 0.55, 1] }));
+  body.add(mesh(new THREE.SphereGeometry(0.35, 12, 8), hair, { position: [0, 2.31, 0.04], scale: [1.03, 0.55, 1] }));
   body.add(mesh(new THREE.TorusGeometry(0.42, 0.055, 7, 16), gold, { position: [0, 1.82, 0.22], scale: [1, 0.52, 1] }));
+  addNobleAdorno(body, adorno, gold);
   for (const x of [-0.31, 0.31]) {
     body.add(
       mesh(new THREE.SphereGeometry(0.045, 6, 5), new THREE.MeshBasicMaterial({ color: 0x130b08 }), {
