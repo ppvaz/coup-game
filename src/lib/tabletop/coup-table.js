@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TabletopStage, disposeObject3D } from '@la-corte/tabletop-stage';
+import { PropLibrary, fitPropToFootprint } from '@la-corte/tabletop-stage/prop-library';
 import {
   PROJECTILE_CAM,
   bezierDirection,
@@ -49,6 +50,12 @@ export { ACTION_ART } from './coup-table/visual-theme.js';
 const THROWABLE_TYPES = new Set(TABLETOP_THROWABLES.map((item) => item.id));
 const INFLUENCE_REVEAL_HOLD_MS = 1900;
 const TARGET_PICK_LAYER = 1;
+const TRIBUNAL_PROPS_MANIFEST_URL = '/mesa/props/tribunal-v1/1/manifest.json';
+// Dos dois assentos do acervo, o trono é o que fala a língua do Coup: quem
+// senta ali disputa poder. A largura vem da cadeira procedural que ele
+// substitui, para não mexer no espaçamento do anel nem no alvo de toque.
+const THRONE_PROP = 'throne';
+const SEAT_CHAIR_WIDTH = 1.42;
 
 function faceCameraYaw(object, camera, delta, offset = 0) {
   const target = Math.atan2(camera.position.x - object.position.x, camera.position.z - object.position.z) + offset;
@@ -133,6 +140,15 @@ export class CoupTableScene {
     this.seatLayer = this.stage.add(new THREE.Group());
     this.seatLayer.name = 'coup-seats';
     this.seats = new Map();
+    this.disposed = false;
+    // O trono esculpido é um luxo opcional: a cadeira procedural já deixa a
+    // mesa jogável, então o GLB entra sob demanda e, se falhar, ninguém fica
+    // sem assento. Pode chegar antes ou depois dos assentos existirem.
+    this.propLibrary = new PropLibrary();
+    this.propLibrary.load(TRIBUNAL_PROPS_MANIFEST_URL).then((ready) => {
+      if (!ready || this.disposed) return;
+      for (const seat of this.seats.values()) this.seatThrone(seat);
+    });
     this.seatSignature = '';
     this.view = null;
     this.autoCameraKey = '';
@@ -266,7 +282,13 @@ export class CoupTableScene {
     // Algumas figuras pintam texturas que não ficam presas a materiais vivos da
     // cena (os rostos alternativos do cultista); o descarte de malha não as
     // alcança, então cada figura limpa o que pintou antes de a camada sumir.
-    for (const seat of this.seats.values()) seat.dispose?.();
+    for (const seat of this.seats.values()) {
+      seat.dispose?.();
+      // O trono é um clone que compartilha geometria e material com a
+      // biblioteca. Descartar a camada com ele dentro destruiria o trono de
+      // todos os assentos e dos próximos clones — então ele sai antes.
+      if (seat.throned) seat.group.getObjectByName('seat-chair')?.removeFromParent();
+    }
     disposeObject3D(this.seatLayer);
     this.seatLayer = this.stage.add(new THREE.Group());
     this.seatLayer.name = 'coup-seats';
@@ -329,7 +351,7 @@ export class CoupTableScene {
       influenceGroup.position.fromArray(props.influences);
       figure.group.add(influenceGroup);
       this.seatLayer.add(figure.group);
-      this.seats.set(seatView.id, {
+      const seat = {
         ...figure,
         plaque,
         targetHitbox,
@@ -341,8 +363,30 @@ export class CoupTableScene {
         coinCount: -1,
         baseY: figure.group.position.y,
         seed: seatView.index * 1.71,
-      });
+        throned: false,
+      };
+      this.seats.set(seatView.id, seat);
+      this.seatThrone(seat);
     }
+  }
+
+  /**
+   * Troca a cadeira procedural do assento pelo trono do acervo. Idempotente: um
+   * assento já entronizado é ignorado, então tanto faz o GLB chegar antes ou
+   * depois de os assentos existirem.
+   */
+  seatThrone(seat) {
+    if (!this.propLibrary?.ready || seat.throned) return;
+    const chair = seat.group.getObjectByName('seat-chair');
+    const throne = this.propLibrary.create(THRONE_PROP);
+    if (!chair || !throne) return;
+    // O acervo declara frente +Z; o cortesão da corte olha para -Z.
+    fitPropToFootprint(throne, { width: SEAT_CHAIR_WIDTH, faceForward: true });
+    throne.name = 'seat-chair';
+    chair.removeFromParent();
+    disposeObject3D(chair);
+    seat.group.add(throne);
+    seat.throned = true;
   }
 
   povSelection() {
@@ -1708,7 +1752,9 @@ export class CoupTableScene {
   }
 
   dispose() {
+    this.disposed = true;
     this.closeThrowCam();
+    this.propLibrary?.dispose();
     for (const seat of this.seats.values()) seat.dispose?.();
     for (const reaction of this.emojiReactions) disposeObject3D(reaction.sprite);
     for (const reaction of this.flyingReactions) disposeObject3D(reaction.group);

@@ -8,6 +8,7 @@
     ".": "./index.js",
     "./gesture-track": "./gesture-track.js",
     "./model-registry": "./model-registry.js",
+    "./prop-library": "./prop-library.js",
     "./performance": "./performance.js",
     "./projectile-cam": "./projectile-cam.js"
   },
