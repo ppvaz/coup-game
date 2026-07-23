@@ -587,7 +587,7 @@ export async function mountTableExperiment({
   };
 
   const frozenLabView = (game) => {
-    const view = projectCoupTableView(game, currentState.myId);
+    const view = projectCoupTableView(game, currentState.myId, { appearances: currentContext.appearances });
     return {
       ...view,
       id: `lab:${view.id}`,
@@ -766,6 +766,7 @@ export async function mountTableExperiment({
         exchangePicks: currentState.exchangePicks,
         targetAction: currentState.targetAction,
         selectedTargetId,
+        appearances: currentContext.appearances,
       }),
     );
     playPendingReactions();

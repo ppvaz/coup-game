@@ -1,5 +1,6 @@
 import { ACTIONS, isAlive, validActionTargets } from '../../game/coup.js';
 import { projectTabletopDecision } from './coup-intents.js';
+import { characterForSeat } from './coup-table/character.js';
 
 const FULL_TURN = Math.PI * 2;
 
@@ -102,7 +103,7 @@ export function projectTabletopEvents(game) {
 export function projectCoupTableView(
   game,
   myId,
-  { exchangePicks = [], targetAction = null, selectedTargetId = null } = {},
+  { exchangePicks = [], targetAction = null, selectedTargetId = null, appearances = {} } = {},
 ) {
   if (!game) throw new Error('A mesa 3D precisa de uma partida.');
   // A geografia da sala é pública e compartilhada. O jogador local pode estar
@@ -132,6 +133,9 @@ export function projectCoupTableView(
       name: player.name,
       index,
       azimuthRad: (FULL_TURN * index) / ordered.length,
+      // Cosmético e público: a aparência escolhida pode viajar para o palco sem
+      // nunca revelar influência. Rivais sem escolha caem no padrão do assento.
+      appearance: appearances[player.id] ?? characterForSeat(index),
       isSelf: self,
       isCurrent: player.id === game.currentPlayerId,
       isActor: player.id === pending.actorId,

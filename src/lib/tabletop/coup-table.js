@@ -28,7 +28,9 @@ import { TABLETOP_THROWABLES } from './reactions.js';
 import { actionCaptionTexture, createInfluenceCard, imageTexture, plaqueTexture } from './coup-table/cards.js';
 import { playerCameraForSeat, povCameraForSeat } from './coup-table/seat-cameras.js';
 import { SALON_SEAT_RING, seatRingPoint } from './coup-table/seat-ring.js';
-import { ROLE_VISUALS, createNoble, createRoleFigure } from './coup-table/figures.js';
+import { ROLE_VISUALS, createRoleFigure } from './coup-table/figures.js';
+import { createFigure } from './coup-table/figure.js';
+import { expressionForGesture } from './coup-table/cultist-expressions.js';
 import { createEmojiSprite, createThrowable } from './coup-table/reaction-models.js';
 import { COURT_GESTURES, impactGesture } from './coup-table/gestures.js';
 import { createCoinTreasury, createCourtCoin, createTreasureLabel } from './coup-table/coins.js';
@@ -40,7 +42,6 @@ import {
   createDecisionHourglass,
 } from './coup-table/decision-props.js';
 import { COLORS, mesh, standardMaterial } from './coup-table/primitives.js';
-import { nobleAppearance } from './coup-table/appearance.js';
 import { ACTION_ART, ROLE_CARD_ACCENTS, THEME_PROFILES } from './coup-table/visual-theme.js';
 
 export { ACTION_ART } from './coup-table/visual-theme.js';
@@ -262,6 +263,10 @@ export class CoupTableScene {
     this.exchangeSignature = '';
     this.hoveredExchangeId = null;
     if (this.decisionGroup) disposeObject3D(this.decisionGroup);
+    // Algumas figuras pintam texturas que não ficam presas a materiais vivos da
+    // cena (os rostos alternativos do cultista); o descarte de malha não as
+    // alcança, então cada figura limpa o que pintou antes de a camada sumir.
+    for (const seat of this.seats.values()) seat.dispose?.();
     disposeObject3D(this.seatLayer);
     this.seatLayer = this.stage.add(new THREE.Group());
     this.seatLayer.name = 'coup-seats';
@@ -287,9 +292,9 @@ export class CoupTableScene {
     for (const seatView of view.seats) {
       const angle = seatView.azimuthRad;
       const anchor = seatRingPoint(this.seatRing, seatView, count);
-      const noble = createNoble(nobleAppearance(seatView.index));
-      noble.group.position.set(anchor.x, 0, anchor.z);
-      noble.group.rotation.y = angle + Math.PI;
+      const figure = createFigure(seatView.appearance, { name: seatView.name });
+      figure.group.position.set(anchor.x, 0, anchor.z);
+      figure.group.rotation.y = angle + Math.PI;
 
       const plaque = mesh(
         new THREE.PlaneGeometry(1.65, 0.41),
@@ -303,7 +308,7 @@ export class CoupTableScene {
           cast: false,
         },
       );
-      noble.group.add(plaque);
+      figure.group.add(plaque);
 
       // Uma cadeira inteira funciona como alvo. A caixa invisível inclui o
       // cortesão e a bancada para que touch não dependa de acertar uma placa
@@ -315,17 +320,17 @@ export class CoupTableScene {
       );
       targetHitbox.name = `target-seat-${seatView.id}`;
       targetHitbox.layers.set(TARGET_PICK_LAYER);
-      noble.group.add(targetHitbox);
+      figure.group.add(targetHitbox);
 
       const coinGroup = new THREE.Group();
       coinGroup.position.fromArray(props.coins);
-      noble.group.add(coinGroup);
+      figure.group.add(coinGroup);
       const influenceGroup = new THREE.Group();
       influenceGroup.position.fromArray(props.influences);
-      noble.group.add(influenceGroup);
-      this.seatLayer.add(noble.group);
+      figure.group.add(influenceGroup);
+      this.seatLayer.add(figure.group);
       this.seats.set(seatView.id, {
-        ...noble,
+        ...figure,
         plaque,
         targetHitbox,
         coinGroup,
@@ -334,7 +339,7 @@ export class CoupTableScene {
         influenceSignature: '',
         influenceStates: [],
         coinCount: -1,
-        baseY: noble.group.position.y,
+        baseY: figure.group.position.y,
         seed: seatView.index * 1.71,
       });
     }
@@ -1690,6 +1695,9 @@ export class CoupTableScene {
       seat.body.rotation.x = rotationX;
       seat.body.rotation.z = rotationZ;
       seat.body.scale.setScalar(1);
+      // A face das figuras que reagem acompanha o beat ativo; sem gesto, volta
+      // ao neutro. Só troca a textura, então é barato chamar todo quadro.
+      seat.setExpression?.(expressionForGesture(seat.gesture));
       if (!seat.gesture) continue;
       if (reducedMotion || gestureProgress(seat.gesture, elapsed) >= 1) {
         seat.gesture = null;
@@ -1701,6 +1709,7 @@ export class CoupTableScene {
 
   dispose() {
     this.closeThrowCam();
+    for (const seat of this.seats.values()) seat.dispose?.();
     for (const reaction of this.emojiReactions) disposeObject3D(reaction.sprite);
     for (const reaction of this.flyingReactions) disposeObject3D(reaction.group);
     for (const transfer of this.coinTransfers) disposeObject3D(transfer.group);
