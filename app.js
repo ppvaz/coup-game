@@ -63,7 +63,7 @@ import {
 import { awaitedPlayerId, botCommand, timeoutCommand } from './src/game/ai.js';
 import { DEFAULT_LOCAL_BOT_COUNT, localBotSeats, normalizeLocalBotCount } from './src/game/local-bots.js';
 import { mountTableExperiment, tableExperimentHTML } from './src/ui/table-experiment.js';
-import { loadCharacter } from './src/lib/tabletop/coup-table/character.js';
+import { loadCharacter, saveCharacter, normalizeCharacter } from './src/lib/tabletop/coup-table/character.js';
 import duquePortrait from './assets/characters/duque.webp';
 import assassinaPortrait from './assets/characters/assassina.webp';
 import capitaoPortrait from './assets/characters/capitao.webp';
@@ -141,6 +141,9 @@ let state = {
   // Cenário 3D escolhido na entrada (Salão × Conselho). É apresentação, não
   // regra; por ora vale nas partidas locais.
   scenario: 'classic',
+  // Personagem escolhido na home; persiste entre sessões e alimenta a aparência
+  // do jogador local ao começar a partida.
+  character: loadCharacter(),
   // Cosmético e local: a aparência do jogador entra no palco pela view, sem
   // tocar o estado autoritativo nem a rede. Rivais sem escolha caem no padrão.
   appearances: {},
@@ -707,7 +710,7 @@ function startLocal() {
   const previousWinnerId = state.game?.winnerId;
   const seats = localBotSeats(state.name, state.botCount);
   state.myId = 'me';
-  state.appearances = { [state.myId]: loadCharacter() };
+  state.appearances = { [state.myId]: state.character };
   state.tabletopReactions = [];
   state.game = createGame(seats, { stopWhenHumansEliminated: true, startingPlayerId: previousWinnerId });
   announceGameState(null, state.game);
@@ -724,7 +727,7 @@ function resetTabletopLocalGame() {
   const previousWinnerId = state.game?.winnerId;
   state.name ||= 'Lorenzo';
   state.myId = 'me';
-  state.appearances = { [state.myId]: loadCharacter() };
+  state.appearances = { [state.myId]: state.character };
   state.tabletopReactions = [];
   state.game = createGame(
     [
@@ -749,7 +752,7 @@ function resetTabletopLabScene() {
   warnedClockKey = '';
   state.name ||= 'Lorenzo';
   state.myId = 'me';
-  state.appearances = { [state.myId]: loadCharacter() };
+  state.appearances = { [state.myId]: state.character };
   state.tabletopReactions = [];
   state.game = createGame(
     [
@@ -1682,6 +1685,27 @@ function bindLobby() {
     (button) =>
       (button.onclick = () => {
         state.scenario = button.dataset.scenario === 'council' ? 'council' : 'classic';
+        render();
+      }),
+  );
+  document.querySelectorAll('[data-char-figure]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        state.character = normalizeCharacter({ ...state.character, figure: button.dataset.charFigure });
+        saveCharacter(state.character);
+        render();
+      }),
+  );
+  document.querySelectorAll('[data-char-key]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        const figure = state.character.figure;
+        const { charKey, charValue } = button.dataset;
+        state.character = normalizeCharacter({
+          ...state.character,
+          [figure]: { ...state.character[figure], [charKey]: charValue },
+        });
+        saveCharacter(state.character);
         render();
       }),
   );

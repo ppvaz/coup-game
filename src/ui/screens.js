@@ -1,11 +1,46 @@
 import { CHAT_MAX_LENGTH } from '../rooms/chat.js';
 import { LOCAL_BOT_COUNTS, normalizeLocalBotCount } from '../game/local-bots.js';
 import { TABLETOP_COMPOSITIONS } from '../lib/tabletop/scene-compositions.js';
+import {
+  CHARACTER_FIGURES,
+  CHARACTER_FIGURE_LABELS,
+  CHARACTER_GROUPS,
+  normalizeCharacter,
+} from '../lib/tabletop/coup-table/character.js';
 
 const SCENARIO_HINTS = {
   classic: 'Salão palaciano clássico',
   council: 'Mesa redonda do Conselho',
 };
+
+function characterOptionHTML(groupKey, groupLabel, option, active) {
+  const pressed = active ? 'true' : 'false';
+  if (option.swatch) {
+    return `<button type="button" class="character-swatch ${active ? 'active' : ''}" data-char-key="${groupKey}" data-char-value="${option.value}" style="--swatch:${option.swatch}" title="${escapeHTML(option.label)}" aria-label="${escapeHTML(`${groupLabel}: ${option.label}`)}" aria-pressed="${pressed}"></button>`;
+  }
+  return `<button type="button" class="character-chip ${active ? 'active' : ''}" data-char-key="${groupKey}" data-char-value="${option.value}" aria-pressed="${pressed}">${escapeHTML(option.label)}</button>`;
+}
+
+function characterFieldHTML(state) {
+  if (state.mode !== 'bots') return '';
+  const character = normalizeCharacter(state.character);
+  const figure = character.figure;
+  const figureButtons = CHARACTER_FIGURES.map(
+    (value) =>
+      `<button type="button" class="bot-count-option ${value === figure ? 'active' : ''}" data-char-figure="${value}" aria-pressed="${value === figure}">${CHARACTER_FIGURE_LABELS[value]}</button>`,
+  ).join('');
+  const groups = CHARACTER_GROUPS[figure]
+    .map((group) => {
+      const options = group.options
+        .map((option) =>
+          characterOptionHTML(group.key, group.label, option, character[figure][group.key] === option.value),
+        )
+        .join('');
+      return `<div class="character-group"><span>${escapeHTML(group.label)}</span><div class="character-options">${options}</div></div>`;
+    })
+    .join('');
+  return `<div class="field character-select"><label id="character-label">Seu personagem</label><div class="pick-grid" role="group" aria-labelledby="character-label">${figureButtons}</div><div class="character-groups">${groups}</div></div>`;
+}
 
 const CHAT_TAUNTS = [
   'A corte está observando.',
@@ -82,7 +117,7 @@ export function lobbyHTML(state) {
   const scenario = state.scenario === 'council' ? 'council' : 'classic';
   const scenarioField =
     state.mode === 'bots'
-      ? `<div class="field bot-count"><label id="scenario-label">Cenário</label><div class="bot-count-grid" role="group" aria-labelledby="scenario-label">${Object.values(
+      ? `<div class="field bot-count"><label id="scenario-label">Cenário</label><div class="pick-grid" role="group" aria-labelledby="scenario-label">${Object.values(
           TABLETOP_COMPOSITIONS,
         )
           .map(
@@ -91,7 +126,8 @@ export function lobbyHTML(state) {
           )
           .join('')}</div><small>${SCENARIO_HINTS[scenario]}</small></div>`
       : '';
-  return `<main class="shell"><nav class="topbar"><div class="brand">LA <span>CORTE</span></div></nav><section class="landing"><div><div class="eyebrow">Um jogo de poder e influência</div><h1>Toda verdade<br>é um <em>risco.</em></h1><p class="lead">Blefe, negocie e elimine seus rivais. Na corte, a confiança é a moeda mais rara.</p><div class="feature-row"><div><b>2–6</b> jogadores</div><div><b>15 min</b> por partida</div><div><b>∞</b> intrigas</div></div></div><div class="glass"><h2>Entre na corte</h2><div class="sub">Escolha como deseja disputar o poder.</div><div class="mode-grid"><button class="mode ${state.mode === 'bots' ? 'active' : ''}" data-mode="bots"><span class="mode-icon">♞</span><span><strong>Contra bots</strong><small>Partida rápida contra a corte</small></span></button><button class="mode ${state.mode === 'create' ? 'active' : ''}" data-mode="create"><span class="mode-icon">♜</span><span><strong>Criar sala</strong><small>Abra uma mesa e compartilhe o código</small></span></button><button class="mode ${state.mode === 'join' ? 'active' : ''}" data-mode="join"><span class="mode-icon">⌁</span><span><strong>Entrar em sala</strong><small>Use o código enviado pelo anfitrião</small></span></button></div>${botCountField}${scenarioField}<div class="field"><label>Seu nome na corte</label><input id="name" maxlength="18" value="${escapeHTML(state.name)}" placeholder="Digite seu nome" /></div>${state.mode === 'join' ? `<div class="field"><label>Código da sala</label><input id="room-code" maxlength="5" value="${escapeHTML(state.joinCode || '')}" placeholder="ABCDE" autocomplete="off" /></div>` : ''}${state.error ? `<p class="form-error">${escapeHTML(state.error)}</p>` : ''}<button class="primary" id="enter">${state.mode === 'bots' ? 'Jogar contra bots' : state.mode === 'create' ? 'Criar sala privada' : 'Entrar na sala'} →</button><p class="fine">Nenhum cadastro necessário · Salas privadas por convite</p></div></section></main>`;
+  const characterField = characterFieldHTML(state);
+  return `<main class="shell"><nav class="topbar"><div class="brand">LA <span>CORTE</span></div></nav><section class="landing"><div><div class="eyebrow">Um jogo de poder e influência</div><h1>Toda verdade<br>é um <em>risco.</em></h1><p class="lead">Blefe, negocie e elimine seus rivais. Na corte, a confiança é a moeda mais rara.</p><div class="feature-row"><div><b>2–6</b> jogadores</div><div><b>15 min</b> por partida</div><div><b>∞</b> intrigas</div></div></div><div class="glass"><h2>Entre na corte</h2><div class="sub">Escolha como deseja disputar o poder.</div><div class="mode-grid"><button class="mode ${state.mode === 'bots' ? 'active' : ''}" data-mode="bots"><span class="mode-icon">♞</span><span><strong>Contra bots</strong><small>Partida rápida contra a corte</small></span></button><button class="mode ${state.mode === 'create' ? 'active' : ''}" data-mode="create"><span class="mode-icon">♜</span><span><strong>Criar sala</strong><small>Abra uma mesa e compartilhe o código</small></span></button><button class="mode ${state.mode === 'join' ? 'active' : ''}" data-mode="join"><span class="mode-icon">⌁</span><span><strong>Entrar em sala</strong><small>Use o código enviado pelo anfitrião</small></span></button></div>${botCountField}${scenarioField}${characterField}<div class="field"><label>Seu nome na corte</label><input id="name" maxlength="18" value="${escapeHTML(state.name)}" placeholder="Digite seu nome" /></div>${state.mode === 'join' ? `<div class="field"><label>Código da sala</label><input id="room-code" maxlength="5" value="${escapeHTML(state.joinCode || '')}" placeholder="ABCDE" autocomplete="off" /></div>` : ''}${state.error ? `<p class="form-error">${escapeHTML(state.error)}</p>` : ''}<button class="primary" id="enter">${state.mode === 'bots' ? 'Jogar contra bots' : state.mode === 'create' ? 'Criar sala privada' : 'Entrar na sala'} →</button><p class="fine">Nenhum cadastro necessário · Salas privadas por convite</p></div></section></main>`;
 }
 
 // A tela da sala precisa renderizar antes de a sala existir: o convidado entra
