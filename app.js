@@ -138,6 +138,9 @@ let state = {
   presentation: DEFAULT_GAME_PRESENTATION,
   mode: inviteCode.length === 5 ? 'join' : 'bots',
   botCount: DEFAULT_LOCAL_BOT_COUNT,
+  // Cenário 3D escolhido na entrada (Salão × Conselho). É apresentação, não
+  // regra; por ora vale nas partidas locais.
+  scenario: 'classic',
   // Cosmético e local: a aparência do jogador entra no palco pela view, sem
   // tocar o estado autoritativo nem a rede. Rivais sem escolha caem no padrão.
   appearances: {},
@@ -1617,6 +1620,7 @@ function renderApp() {
         switchTo2D,
         exitTable: leaveTable,
         testMode: isTabletopLab,
+        composition: isTabletopLab ? null : state.scenario,
       }).then((controller) => {
         // O jogador pode ter voltado ao 2D antes de a cena terminar de abrir.
         if (tableExperimentMount !== mount) {
@@ -1671,6 +1675,13 @@ function bindLobby() {
     (button) =>
       (button.onclick = () => {
         state.botCount = normalizeLocalBotCount(button.dataset.botCount);
+        render();
+      }),
+  );
+  document.querySelectorAll('[data-scenario]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        state.scenario = button.dataset.scenario === 'council' ? 'council' : 'classic';
         render();
       }),
   );

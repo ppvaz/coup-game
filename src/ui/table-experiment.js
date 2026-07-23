@@ -14,6 +14,7 @@ import {
 import { TABLETOP_QUALITY_KEY, initialTabletopQuality, nextTabletopQuality } from '../lib/tabletop/quality-profiles.js';
 import { TABLETOP_EMOJIS, TABLETOP_THROWABLES } from '../lib/tabletop/reactions.js';
 import {
+  TABLETOP_COMPOSITIONS,
   loadTabletopComposition,
   nextTabletopComposition,
   tabletopCompositionFromSearch,
@@ -338,6 +339,7 @@ export async function mountTableExperiment({
   switchTo2D,
   exitTable,
   testMode,
+  composition: requestedComposition = null,
 }) {
   document.body.classList.add('is-tabletop-lab');
   const root = document.querySelector('.tabletop-experiment');
@@ -371,7 +373,11 @@ export async function mountTableExperiment({
   const processedReactions = new Set();
   const requestedTheme = new URLSearchParams(location.search).get('theme');
   const labShot = testMode ? new URLSearchParams(location.search).get('shot') : null;
-  const composition = tabletopCompositionFromSearch(location.search, { allowExperimental: Boolean(testMode) });
+  // A escolha vinda da entrada (seletor de cenário) libera o Conselho fora do
+  // laboratório; sem escolha explícita, o comportamento por URL do lab decide.
+  const composition =
+    TABLETOP_COMPOSITIONS[requestedComposition] ??
+    tabletopCompositionFromSearch(location.search, { allowExperimental: Boolean(testMode) });
   root.dataset.composition = composition.id;
   let theme = ['light', 'dark'].includes(requestedTheme)
     ? requestedTheme
